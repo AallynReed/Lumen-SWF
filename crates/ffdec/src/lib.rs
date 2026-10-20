@@ -7,6 +7,7 @@ pub mod info;
 pub mod io;
 pub mod swf;
 pub mod tags;
+pub mod tree;
 pub mod types;
 
 pub use container::Compression;
