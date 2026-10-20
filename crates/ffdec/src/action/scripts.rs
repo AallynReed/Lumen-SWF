@@ -47,6 +47,34 @@ impl Source {
         let end = self.end.min(body.len());
         super::read_action_list(body, self.start.min(end), end, swf.header.version)
     }
+
+    /// Stores `list` in place of these actions, updating the record's size field.
+    pub fn set_actions(&self, swf: &mut Swf, list: &ActionList) -> crate::error::Result<()> {
+        let tag = swf.tag(&self.tag).ok_or_else(|| crate::error::Error::Other("script tag not found".into()))?;
+        let bytes = list.to_bytes();
+        let mut body = tag.body.clone();
+        if self.end > body.len() || self.start > self.end {
+            return Err(crate::error::Error::Other("script range is outside its tag".into()));
+        }
+        match self.kind {
+            Kind::ButtonCond => {
+                let at = self.start - 4;
+                if u16::from_le_bytes([body[at], body[at + 1]]) != 0 {
+                    let size = u16::try_from(bytes.len() + 4).map_err(|_| crate::error::Error::Other("button actions are too large".into()))?;
+                    body[at..at + 2].copy_from_slice(&size.to_le_bytes());
+                }
+            }
+            Kind::ClipAction => {
+                let (_, _, recs) = clip_actions(tag, swf.header.version).unwrap_or_default();
+                let key = recs.iter().find(|r| r.2 == self.start).is_some_and(|r| r.0 & (1 << (31 - 22)) != 0) as usize;
+                let at = self.start - key - 4;
+                body[at..at + 4].copy_from_slice(&((bytes.len() + key) as u32).to_le_bytes());
+            }
+            _ => {}
+        }
+        body.splice(self.start..self.end, bytes);
+        swf.set_tag_body(&self.tag, body)
+    }
 }
 
 /// A script tree node: a folder (package, sprite, frame, button) or a source.

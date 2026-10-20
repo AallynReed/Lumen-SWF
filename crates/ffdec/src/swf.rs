@@ -123,84 +123,58 @@ impl Swf {
         Some(tag)
     }
 
-    pub fn tag_mut(&mut self, path: &[usize]) -> Option<&mut Tag> {
-        self.timeline.tag_mut(path)
+    /// Replaces a tag's body, re-reading it if it is a sprite and rewriting the sprites that
+    /// contain it.
+    pub fn set_tag_body(&mut self, path: &[usize], body: Vec<u8>) -> Result<()> {
+        let code = self.tag(path).map_or(0, |t| t.code);
+        self.set_tag(path, code, body)
     }
 
-    pub fn replace_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
-        self.timeline.replace_tag(path, tag)
-    }
-
-    pub fn remove_tag(&mut self, path: &[usize]) -> Result<Tag> {
-        self.timeline.remove_tag(path)
-    }
-
-    pub fn insert_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
-        self.timeline.insert_tag(path, tag)
-    }
-
-    pub fn replace_tag_body(&mut self, path: &[usize], new_body: &[u8]) -> Result<()> {
-        let tag = self.tag_mut(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
-        tag.body = new_body.to_vec();
-        if tag.code == code::DEFINE_SPRITE {
-            let mut sr = Reader::new(&tag.body);
-            if sr.skip(4).is_ok() {
-                tag.sprite = Some(Timeline::parse(&mut sr, tag.offset + tag.header_len() + 4, 1));
+    /// `set_tag_body` that may also change the tag's type.
+    pub fn set_tag(&mut self, path: &[usize], code: u16, body: Vec<u8>) -> Result<()> {
+        fn go(tl: &mut Timeline, path: &[usize], code: u16, body: Vec<u8>) -> Option<()> {
+            let (first, rest) = path.split_first()?;
+            let tag = tl.tags.get_mut(*first)?;
+            if rest.is_empty() {
+                tag.code = code;
+                tag.body = body;
+                tag.declared_len = None;
+                tag.error = None;
+                if tag.code == code::DEFINE_SPRITE {
+                    let mut r = Reader::new(&tag.body);
+                    tag.sprite = r.skip(4).ok().map(|_| Timeline::parse(&mut r, tag.offset + tag.header_len() + 4, 1));
+                }
+                return Some(());
             }
+            go(tag.sprite.as_mut()?, rest, code, body)?;
+            let mut w = Writer::new();
+            w.bytes(tag.body.get(..4)?);
+            tag.sprite.as_ref()?.write(&mut w);
+            tag.body = w.data;
+            tag.declared_len = None;
+            Some(())
         }
-        if path.len() > 1 {
-            self.timeline.sync_sprites();
-        }
-        Ok(())
+        go(&mut self.timeline, path, code, body).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))
     }
 
-    pub fn sync_sprites(&mut self) {
-        self.timeline.sync_sprites();
-    }
-
-    pub fn replace_as3_script(&mut self, path: &[usize], abc_bytes: &[u8]) -> Result<()> {
-        let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
-        let new_body = match tag.code {
-            code::DO_ABC => abc_bytes.to_vec(),
-            code::DO_ABC2 => {
-                let mut r = Reader::new(&tag.body);
-                let flags = r.u32().unwrap_or(0);
-                let name = r.string().unwrap_or_default();
-                let mut w = Writer::new();
-                w.u32(flags);
-                w.string(&name);
-                w.bytes(abc_bytes);
-                w.data
-            }
-            _ => return Err(crate::error::Error::Other(format!("tag 0x{:x} is not a DoABC tag", tag.code))),
-        };
-        self.replace_tag_body(path, &new_body)
-    }
-
-    pub fn replace_as2_script(&mut self, path: &[usize], actions: &crate::action::ActionList) -> Result<()> {
-        let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
-        let bytes = actions.to_bytes();
-        let new_body = match tag.code {
-            code::DO_ACTION => bytes,
-            code::DO_INIT_ACTION => {
-                let char_id = tag.character_id().unwrap_or(0);
-                let mut b = char_id.to_le_bytes().to_vec();
-                b.extend_from_slice(&bytes);
-                b
-            }
-            _ => bytes,
-        };
-        self.replace_tag_body(path, &new_body)
-    }
-
+    /// Path of the tag defining a character.
     pub fn find_character(&self, id: u16) -> Option<Vec<usize>> {
         let mut found = None;
-        self.walk(|path, tag| {
-            if found.is_none() && crate::tags::defines_character(tag.code) && tag.character_id() == Some(id) {
+        self.walk(|path, t| {
+            if found.is_none() && crate::tags::defines_character(t.code) && t.character_id() == Some(id) {
                 found = Some(path.to_vec());
             }
         });
         found
+    }
+
+    /// Stores an ABC in its DoABC/DoABC2 tag, keeping a DoABC2's flags and name.
+    pub fn set_abc(&mut self, path: &[usize], abc: &crate::abc::Abc) -> Result<()> {
+        let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))?;
+        let (data, _) = crate::abc::tag_abc(tag).ok_or_else(|| crate::error::Error::Other("not an ABC tag".into()))?;
+        let mut body = tag.body[..tag.body.len() - data.len()].to_vec();
+        body.extend(abc.to_bytes());
+        self.set_tag_body(path, body)
     }
 
     pub fn walk<'a>(&'a self, mut f: impl FnMut(&[usize], &'a Tag)) {

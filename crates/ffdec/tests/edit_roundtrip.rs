@@ -154,3 +154,39 @@ fn as3_pcode_assembles_to_itself() {
     report("as3_asm", total, &bad);
     assert!(bad.is_empty(), "{} methods differ", bad.len());
 }
+
+/// Storing every script back in its tag with an action added, and saving, must keep every
+/// record of the file readable as what was stored.
+#[test]
+fn as2_scripts_store_in_place() {
+    let (mut total, mut bad) = (0, Vec::new());
+    let v = |swf: &ffdec::Swf| swf.header.version;
+    for (f, mut swf) in swfs() {
+        let sources = |swf: &ffdec::Swf| scripts::export_paths(&scripts::tree(swf));
+        let count = sources(&swf).len();
+        let mut expected = Vec::new();
+        for i in 0..count {
+            let (_, src) = sources(&swf).swap_remove(i);
+            let list = action::asm::parse_pcode(&format!("Push 1
+Pop
+{}", action::pcode::to_pcode(&src.actions(&swf))), v(&swf)).unwrap();
+            let bytes = list.to_bytes();
+            expected.push(action::pcode::to_pcode(&action::read_action_list(&bytes, 0, bytes.len(), v(&swf))));
+            src.set_actions(&mut swf, &list).unwrap();
+        }
+        let saved = ffdec::Swf::parse(&swf.save(&ffdec::SaveOptions { compression: ffdec::Compression::None, encrypt: false }).unwrap()).unwrap();
+        let after = sources(&saved);
+        total += count;
+        if after.len() != count {
+            bad.push(format!("{}: {count} scripts became {}", f.display(), after.len()));
+            continue;
+        }
+        for ((n, s), e) in after.iter().zip(&expected) {
+            if action::pcode::to_pcode(&s.actions(&saved)) != *e {
+                bad.push(format!("{} {n}: differs", f.display()));
+            }
+        }
+    }
+    report("as2_store", total, &bad);
+    assert!(bad.is_empty(), "{} scripts differ", bad.len());
+}
