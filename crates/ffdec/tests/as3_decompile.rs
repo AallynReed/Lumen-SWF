@@ -120,7 +120,9 @@ fn as3_decompile_fixtures() {
         eprintln!("JPEXS test corpus not found; skipping");
         return;
     }
-    std::panic::set_hook(Box::new(|_| {}));
+    if std::env::var("AS3_DEBUG").is_err() {
+        std::panic::set_hook(Box::new(|_| {}));
+    }
     let filter = std::env::var("AS3_CASE").ok();
     let mut swfs: HashMap<String, (u8, Vec<Abc>)> = HashMap::new();
     let (mut pass, mut total) = (0, 0);
@@ -156,7 +158,6 @@ fn as3_decompile_fixtures() {
             report.push('\n');
         }
     }
-    let _ = std::panic::take_hook();
     let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("as3_decompile_report.txt");
     std::fs::write(&out, &report).unwrap();
     eprintln!("AS3 decompile fixtures: {pass}/{total} pass (report: {})", out.display());
