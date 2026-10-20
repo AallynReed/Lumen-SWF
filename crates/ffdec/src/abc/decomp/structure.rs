@@ -210,8 +210,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                         None => first_code.borrow_mut().insert(pos, mk(K::Label { name: label.clone() }, None, ld.line_start, prec::PRIMARY, None)),
                     }
                     let g = mk(K::Goto { name: label, target: None }, None, ld.line_start, prec::PRIMARY, None);
-                    ret.borrow_mut().push(g.clone());
-                    pc.found_gotos.push(g);
+                    ret.borrow_mut().push(g);
                     ld.gotos_used.set(true);
                     break 'main;
                 } else {
