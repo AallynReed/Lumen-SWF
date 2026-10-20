@@ -53,6 +53,11 @@ ffdec-cli as3 movie.swf com.example.Main
 ffdec-cli as2 movie.swf frame_1/DoAction
 ffdec-cli decompress in.swf out.swf
 ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
+ffdec-cli replace-tag movie.swf 12 body.bin [--out out.swf]
+ffdec-cli replace-image movie.swf id:4 image.png [--out out.swf]
+ffdec-cli replace-sound movie.swf id:5 sound.mp3 [--out out.swf]
+ffdec-cli replace-binary movie.swf id:6 data.bin [--out out.swf]
+ffdec-cli replace-script movie.swf frame_1/DoAction script.pcode [--out out.swf]
 ```
 
 A tag path is the tag's index in the root timeline, then its index inside each nested sprite.

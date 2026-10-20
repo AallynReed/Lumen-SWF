@@ -88,6 +88,46 @@ enum Cmd {
         #[arg(long)]
         encrypt: bool,
     },
+    /// Replace the raw body of one tag
+    ReplaceTag {
+        file: PathBuf,
+        path: String,
+        body: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Replace an image asset (target can be a tag path like 12 or character ID like 4 or id:4)
+    ReplaceImage {
+        file: PathBuf,
+        target: String,
+        image: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Replace a sound asset (MP3, WAV, or raw sound data)
+    ReplaceSound {
+        file: PathBuf,
+        target: String,
+        sound: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Replace a binary data asset
+    ReplaceBinary {
+        file: PathBuf,
+        target: String,
+        binary: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Replace a script (AS1/2 p-code or AS3 bytecode/p-code)
+    ReplaceScript {
+        file: PathBuf,
+        name: String,
+        script: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 fn open(path: &PathBuf) -> Result<Swf> {
@@ -123,6 +163,36 @@ fn print_tree(nodes: &[Node], depth: usize) {
 fn tag_at<'a>(swf: &'a Swf, path: &str) -> Result<&'a ffdec::Tag> {
     let p = tree::parse_path(path).ok_or_else(|| anyhow!("bad tag path '{path}'"))?;
     swf.tag(&p).ok_or_else(|| anyhow!("no tag at '{path}'"))
+}
+
+fn resolve_target_path(swf: &Swf, target: &str) -> Result<Vec<usize>> {
+    if let Some(id_str) = target.strip_prefix("id:").or_else(|| target.strip_prefix("ID:")) {
+        let id: u16 = id_str.parse().context("parsing character ID")?;
+        return swf.find_character(id).ok_or_else(|| anyhow!("character ID {id} not found"));
+    }
+    if let Some(p) = tree::parse_path(target) {
+        if swf.tag(&p).is_some() {
+            return Ok(p);
+        }
+    }
+    if let Ok(id) = target.parse::<u16>() {
+        if let Some(p) = swf.find_character(id) {
+            return Ok(p);
+        }
+    }
+    Err(anyhow!("could not resolve target '{target}' to a tag path or character ID"))
+}
+
+fn save_swf(swf: &Swf, default_path: &PathBuf, out: Option<PathBuf>) -> Result<()> {
+    let target = out.as_ref().unwrap_or(default_path);
+    let opts = SaveOptions {
+        compression: swf.header.compression,
+        encrypt: swf.header.encrypted,
+    };
+    let bytes = swf.save(&opts)?;
+    std::fs::write(target, bytes)?;
+    println!("Saved to {}", target.display());
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -264,6 +334,104 @@ fn main() -> Result<()> {
         Cmd::Compress { input, output, format, encrypt } => {
             let compression = Compression::parse(&format).ok_or_else(|| anyhow!("unknown format '{format}'"))?;
             std::fs::write(&output, open(&input)?.save(&SaveOptions { compression, encrypt })?)?;
+        }
+        Cmd::ReplaceTag { file, path, body, out } => {
+            let mut swf = open(&file)?;
+            let p = tree::parse_path(&path).ok_or_else(|| anyhow!("bad tag path '{path}'"))?;
+            let body_bytes = std::fs::read(&body).with_context(|| format!("reading {}", body.display()))?;
+            swf.replace_tag_body(&p, &body_bytes)?;
+            save_swf(&swf, &file, out)?;
+        }
+        Cmd::ReplaceImage { file, target, image, out } => {
+            let mut swf = open(&file)?;
+            let p = resolve_target_path(&swf, &target)?;
+            let img_bytes = std::fs::read(&image).with_context(|| format!("reading {}", image.display()))?;
+            ffdec::replace::replace_image(&mut swf, &p, &img_bytes)?;
+            save_swf(&swf, &file, out)?;
+        }
+        Cmd::ReplaceSound { file, target, sound, out } => {
+            let mut swf = open(&file)?;
+            let p = resolve_target_path(&swf, &target)?;
+            let snd_bytes = std::fs::read(&sound).with_context(|| format!("reading {}", sound.display()))?;
+            ffdec::replace::replace_sound(&mut swf, &p, &snd_bytes)?;
+            save_swf(&swf, &file, out)?;
+        }
+        Cmd::ReplaceBinary { file, target, binary, out } => {
+            let mut swf = open(&file)?;
+            let p = resolve_target_path(&swf, &target)?;
+            let bin_bytes = std::fs::read(&binary).with_context(|| format!("reading {}", binary.display()))?;
+            ffdec::replace::replace_binary(&mut swf, &p, &bin_bytes)?;
+            save_swf(&swf, &file, out)?;
+        }
+        Cmd::ReplaceScript { file, name, script, out } => {
+            let mut swf = open(&file)?;
+            let script_data = std::fs::read(&script).with_context(|| format!("reading {}", script.display()))?;
+            let mut found = false;
+
+            // Check AS1/2 scripts
+            for (n, src) in as2_scripts(&swf) {
+                if n == name || n.trim_start_matches("scripts/") == name.trim_start_matches("scripts/") {
+                    let script_text = String::from_utf8_lossy(&script_data);
+                    let list = ffdec::action::asm::parse_pcode(&script_text, swf.header.version)?;
+                    swf.replace_as2_script(&src.tag, &list)?;
+                    found = true;
+                    break;
+                }
+            }
+
+            // Check AS3 scripts if not found
+            if !found {
+                for (p, abc) in abcs(&swf) {
+                    // If script is a raw .abc binary
+                    if script.extension().is_some_and(|e| e.eq_ignore_ascii_case("abc")) {
+                        swf.replace_as3_script(&p, &script_data)?;
+                        found = true;
+                        break;
+                    }
+                    for e in ffdec::abc::scripts::entries(&abc) {
+                        if e.full_name() == name {
+                            let script_text = String::from_utf8_lossy(&script_data);
+                            let code = ffdec::abc::asm::assemble_instructions(&script_text, &abc)?;
+                            let mut new_abc = abc.clone();
+                            if let Some(trait_idx) = e.trait_index {
+                                let tr = &new_abc.scripts[e.script].traits[trait_idx];
+                                let method_opt = match &tr.data {
+                                    ffdec::abc::TraitData::Function { method, .. }
+                                    | ffdec::abc::TraitData::Method { method, .. }
+                                    | ffdec::abc::TraitData::Getter { method, .. }
+                                    | ffdec::abc::TraitData::Setter { method, .. } => Some(*method),
+                                    ffdec::abc::TraitData::Class { class, .. } => Some(new_abc.instances[*class].iinit),
+                                    _ => None,
+                                };
+                                if let Some(m) = method_opt {
+                                    if let Some(b_idx) = new_abc.body_of.get(m).copied().flatten() {
+                                        new_abc.bodies[b_idx].code = code;
+                                        swf.replace_as3_script(&p, &new_abc.to_bytes())?;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                let init = new_abc.scripts[e.script].init;
+                                if let Some(b_idx) = new_abc.body_of.get(init).copied().flatten() {
+                                    new_abc.bodies[b_idx].code = code;
+                                    swf.replace_as3_script(&p, &new_abc.to_bytes())?;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if found {
+                        break;
+                    }
+                }
+            }
+
+            if !found {
+                return Err(anyhow!("no script named '{name}'"));
+            }
+            save_swf(&swf, &file, out)?;
         }
     }
     Ok(())
