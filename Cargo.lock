@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "ffdec"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes",
  "cbc",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "ffdec-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2847,7 +2847,7 @@ dependencies = [
 
 [[package]]
 name = "rust-ffdec"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ffdec",
  "parking_lot",
