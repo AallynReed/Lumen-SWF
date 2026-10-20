@@ -233,6 +233,7 @@ impl MorphShape {
                     no_close: l.no_close,
                     no_h_scale: l.no_h_scale,
                     no_v_scale: l.no_v_scale,
+                    pixel_hinting: false,
                     fill: l.fill.as_ref().map(|f| fill_at(f, t)),
                 })
                 .collect(),

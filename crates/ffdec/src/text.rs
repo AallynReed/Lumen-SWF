@@ -45,11 +45,7 @@ fn fb(r: &mut Reader, n: u32) -> Result<f32> {
 }
 
 fn bits_s(cur: u32, v: i32) -> u32 {
-    if v == 0 {
-        return cur;
-    }
-    let m = if v < 0 { !v } else { v } as u32;
-    cur.max(33 - m.leading_zeros())
+    cur.max(crate::io::bits_s(&[v]))
 }
 
 fn bits_u(cur: u32, v: u32) -> u32 {

@@ -1,7 +1,7 @@
 //! Shapes: style arrays, shape records, and the glyph contours fonts are built from.
 
 use crate::error::{Error, Result};
-use crate::io::Reader;
+use crate::io::{bits_s, Reader, Writer};
 use crate::tags::{code::*, Tag};
 use crate::types::{Matrix, Rect, Rgba};
 
@@ -44,12 +44,13 @@ pub struct LineStyle {
     pub no_close: bool,
     pub no_h_scale: bool,
     pub no_v_scale: bool,
+    pub pixel_hinting: bool,
     pub fill: Option<Fill>,
 }
 
 impl LineStyle {
     pub fn simple(width: u16, color: Rgba) -> LineStyle {
-        LineStyle { width, color, start_cap: 0, end_cap: 0, join: 0, miter_limit: 3.0, no_close: false, no_h_scale: false, no_v_scale: false, fill: None }
+        LineStyle { width, color, start_cap: 0, end_cap: 0, join: 0, miter_limit: 3.0, no_close: false, no_h_scale: false, no_v_scale: false, pixel_hinting: false, fill: None }
     }
 }
 
@@ -126,7 +127,7 @@ fn read_line(r: &mut Reader, shape_num: u8) -> Result<LineStyle> {
     let has_fill = r.bit()?;
     let no_h_scale = r.bit()?;
     let no_v_scale = r.bit()?;
-    r.bit()?;
+    let pixel_hinting = r.bit()?;
     r.ub(5)?;
     let no_close = r.bit()?;
     let end_cap = r.ub(2)? as u8;
@@ -137,7 +138,7 @@ fn read_line(r: &mut Reader, shape_num: u8) -> Result<LineStyle> {
     } else {
         (Rgba::read_rgba(r)?, None)
     };
-    Ok(LineStyle { width, color, start_cap, end_cap, join, miter_limit, no_close, no_h_scale, no_v_scale, fill })
+    Ok(LineStyle { width, color, start_cap, end_cap, join, miter_limit, no_close, no_h_scale, no_v_scale, pixel_hinting, fill })
 }
 
 pub fn read_styles(r: &mut Reader, shape_num: u8) -> Result<Styles> {
@@ -241,6 +242,9 @@ pub struct ShapeTag {
     pub shape: Shape,
     /// DefineShape4's fill-winding flag: non-zero instead of even-odd.
     pub nonzero: bool,
+    /// DefineShape4's edge bounds and flags byte.
+    pub edge_bounds: Rect,
+    pub flags: u8,
 }
 
 impl ShapeTag {
@@ -249,16 +253,220 @@ impl ShapeTag {
         let mut r = Reader::new(&tag.body);
         let id = r.u16()?;
         let bounds = Rect::read(&mut r)?;
-        let mut nonzero = false;
+        let (mut edge_bounds, mut flags) = (Rect::default(), 0);
         if shape_num == 4 {
-            Rect::read(&mut r)?;
-            nonzero = r.u8()? & 0x04 != 0;
+            edge_bounds = Rect::read(&mut r)?;
+            flags = r.u8()?;
         }
+        let nonzero = flags & 0x04 != 0;
         let styles = read_styles(&mut r, shape_num)?;
         let fill_bits = r.ub(4)?;
         let line_bits = r.ub(4)?;
         let records = read_records(&mut r, shape_num, fill_bits, line_bits)?;
-        Ok(ShapeTag { id, bounds, shape_num, shape: Shape { styles, records }, nonzero })
+        Ok(ShapeTag { id, bounds, shape_num, shape: Shape { styles, records }, nonzero, edge_bounds, flags })
+    }
+
+    pub fn write(&self) -> Vec<u8> {
+        let mut w = Writer::new();
+        w.u16(self.id);
+        self.bounds.write(&mut w);
+        if self.shape_num == 4 {
+            self.edge_bounds.write(&mut w);
+            w.u8(self.flags);
+        }
+        self.shape.write(&mut w, self.shape_num);
+        w.data
+    }
+}
+
+fn bits_u(v: u32) -> u32 {
+    32 - v.leading_zeros()
+}
+
+fn write_color(w: &mut Writer, c: Rgba, alpha: bool) {
+    w.bytes(&[c.r, c.g, c.b]);
+    if alpha {
+        w.u8(c.a);
+    }
+}
+
+fn write_gradient(w: &mut Writer, g: &Gradient, shape_num: u8, focal: bool) {
+    w.ub(2, g.spread as u32);
+    w.ub(2, g.interpolation as u32);
+    w.ub(4, g.records.len() as u32);
+    for r in &g.records {
+        w.u8(r.ratio);
+        write_color(w, r.color, shape_num >= 3);
+    }
+    if focal {
+        w.i16((g.focal as f32 * 256.0) as i32 as i16);
+    }
+}
+
+pub fn write_fill(w: &mut Writer, f: &Fill, shape_num: u8) {
+    match f {
+        Fill::Solid(c) => {
+            w.u8(0x00);
+            write_color(w, *c, shape_num >= 3);
+        }
+        Fill::Linear(g) | Fill::Radial(g) | Fill::Focal(g) => {
+            let kind = match f {
+                Fill::Linear(_) => 0x10,
+                Fill::Radial(_) => 0x12,
+                _ => 0x13,
+            };
+            w.u8(kind);
+            g.matrix.write(w);
+            write_gradient(w, g, shape_num, kind == 0x13);
+        }
+        Fill::Bitmap { id, matrix, repeat, smooth } => {
+            w.u8(match (repeat, smooth) {
+                (true, true) => 0x40,
+                (false, true) => 0x41,
+                (true, false) => 0x42,
+                (false, false) => 0x43,
+            });
+            w.u16(*id);
+            matrix.write(w);
+        }
+    }
+}
+
+fn write_count(w: &mut Writer, n: usize, extended: bool) {
+    if extended && n >= 0xff {
+        w.u8(0xff);
+        w.u16(n as u16);
+    } else {
+        w.u8(n as u8);
+    }
+}
+
+fn write_line(w: &mut Writer, l: &LineStyle, shape_num: u8) {
+    w.u16(l.width);
+    if shape_num < 4 {
+        write_color(w, l.color, shape_num >= 3);
+        return;
+    }
+    w.ub(2, l.start_cap as u32);
+    w.ub(2, l.join as u32);
+    w.ub(1, l.fill.is_some() as u32);
+    w.ub(1, l.no_h_scale as u32);
+    w.ub(1, l.no_v_scale as u32);
+    w.ub(1, l.pixel_hinting as u32);
+    w.ub(5, 0);
+    w.ub(1, l.no_close as u32);
+    w.ub(2, l.end_cap as u32);
+    if l.join == 2 {
+        w.u16((l.miter_limit as f32 * 256.0) as i32 as u16);
+    }
+    match &l.fill {
+        Some(f) => write_fill(w, f, shape_num),
+        None => write_color(w, l.color, true),
+    }
+}
+
+pub fn write_styles(w: &mut Writer, s: &Styles, shape_num: u8) {
+    write_count(w, s.fills.len(), shape_num > 1);
+    for f in &s.fills {
+        write_fill(w, f, shape_num);
+    }
+    write_count(w, s.lines.len(), true);
+    for l in &s.lines {
+        write_line(w, l, shape_num);
+    }
+}
+
+/// Style index bits for the records up to the first new style arrays, as FFDec counts them.
+pub fn index_bits(records: &[Record]) -> (u32, u32) {
+    let (mut fb, mut lb) = (0, 0);
+    for r in records {
+        if let Record::StyleChange { fill0, fill1, line, new_styles, .. } = r {
+            for f in [fill0, fill1].into_iter().flatten() {
+                fb = fb.max(bits_u(*f));
+            }
+            if let Some(l) = line {
+                lb = lb.max(bits_u(*l));
+            }
+            if new_styles.is_some() {
+                break;
+            }
+        }
+    }
+    (fb, lb)
+}
+
+/// Writes records and the end record, like FFDec's writeSHAPERECORDS.
+pub fn write_records(w: &mut Writer, records: &[Record], mut fill_bits: u32, mut line_bits: u32, shape_num: u8) {
+    for r in records {
+        match *r {
+            Record::Curved { cdx, cdy, adx, ady } => {
+                let n = bits_s(&[cdx, cdy, adx, ady]).saturating_sub(2);
+                w.ub(2, 0b10);
+                w.ub(4, n);
+                for v in [cdx, cdy, adx, ady] {
+                    w.sb(n + 2, v);
+                }
+            }
+            Record::Straight { dx, dy } => {
+                let n = bits_s(&[dx, dy]).saturating_sub(2);
+                w.ub(2, 0b11);
+                w.ub(4, n);
+                let general = dx != 0 && dy != 0;
+                w.ub(1, general as u32);
+                if !general {
+                    w.ub(1, (dx == 0) as u32);
+                }
+                if general || dx != 0 {
+                    w.sb(n + 2, dx);
+                }
+                if general || dx == 0 {
+                    w.sb(n + 2, dy);
+                }
+            }
+            Record::StyleChange { move_to, fill0, fill1, line, ref new_styles } => {
+                w.ub(1, 0);
+                w.ub(1, new_styles.is_some() as u32);
+                w.ub(1, line.is_some() as u32);
+                w.ub(1, fill1.is_some() as u32);
+                w.ub(1, fill0.is_some() as u32);
+                w.ub(1, move_to.is_some() as u32);
+                if let Some((x, y)) = move_to {
+                    let n = bits_s(&[x, y]);
+                    w.ub(5, n);
+                    w.sb(n, x);
+                    w.sb(n, y);
+                }
+                if let Some(f) = fill0 {
+                    w.ub(fill_bits, f);
+                }
+                if let Some(f) = fill1 {
+                    w.ub(fill_bits, f);
+                }
+                if let Some(l) = line {
+                    w.ub(line_bits, l);
+                }
+                if let Some(s) = new_styles {
+                    write_styles(w, s, shape_num);
+                    fill_bits = bits_u(s.fills.len() as u32);
+                    line_bits = bits_u(s.lines.len() as u32);
+                    w.ub(4, fill_bits);
+                    w.ub(4, line_bits);
+                }
+            }
+        }
+    }
+    w.ub(6, 0);
+    w.flush_bits();
+}
+
+impl Shape {
+    /// SHAPEWITHSTYLE: styles, index bit counts, records.
+    pub fn write(&self, w: &mut Writer, shape_num: u8) {
+        write_styles(w, &self.styles, shape_num);
+        let (fb, lb) = index_bits(&self.records);
+        w.ub(4, fb);
+        w.ub(4, lb);
+        write_records(w, &self.records, fb, lb, shape_num);
     }
 }
 

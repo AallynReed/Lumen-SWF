@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::error::Result;
-use crate::io::{bits_needed_signed, Reader, Writer};
+use crate::io::{bits_s, Reader, Writer};
 
 /// A rectangle in twips (1/20 px).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
@@ -22,7 +22,7 @@ impl Rect {
     }
 
     pub fn write(&self, w: &mut Writer) {
-        let n = bits_needed_signed(&[self.x_min, self.x_max, self.y_min, self.y_max]);
+        let n = bits_s(&[self.x_min, self.x_max, self.y_min, self.y_max]);
         w.ub(5, n);
         for v in [self.x_min, self.x_max, self.y_min, self.y_max] {
             w.sb(n, v);
@@ -103,6 +103,33 @@ impl Matrix {
         m.ty = r.sb(n)? as f64;
         r.align();
         Ok(m)
+    }
+
+    /// Writes the matrix with the smallest fields, as FFDec's writeMatrix does.
+    pub fn write(&self, w: &mut Writer) {
+        let fx = |v: f64| (v * 65536.0) as i64 as i32;
+        let scale = self.a != 1.0 || self.d != 1.0;
+        w.ub(1, scale as u32);
+        if scale {
+            let n = bits_s(&[fx(self.a), fx(self.d)]);
+            w.ub(5, n);
+            w.sb(n, fx(self.a));
+            w.sb(n, fx(self.d));
+        }
+        let rotate = self.b != 0.0 || self.c != 0.0;
+        w.ub(1, rotate as u32);
+        if rotate {
+            let n = bits_s(&[fx(self.b), fx(self.c)]);
+            w.ub(5, n);
+            w.sb(n, fx(self.b));
+            w.sb(n, fx(self.c));
+        }
+        let (tx, ty) = (self.tx as i32, self.ty as i32);
+        let n = bits_s(&[tx, ty]);
+        w.ub(5, n);
+        w.sb(n, tx);
+        w.sb(n, ty);
+        w.flush_bits();
     }
 
     pub fn translate(tx: f64, ty: f64) -> Self {
