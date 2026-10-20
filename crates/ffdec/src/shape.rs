@@ -1,18 +1,168 @@
-//! Shape records (SHAPE). Style arrays come in phase 3; glyph shapes need none.
+//! Shapes: style arrays, shape records, and the glyph contours fonts are built from.
 
 use crate::error::{Error, Result};
 use crate::io::Reader;
+use crate::tags::{code::*, Tag};
+use crate::types::{Matrix, Rect, Rgba};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GradRecord {
+    pub ratio: u8,
+    pub color: Rgba,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Gradient {
+    pub matrix: Matrix,
+    /// 0 pad, 1 reflect, 2 repeat.
+    pub spread: u8,
+    /// 0 sRGB, 1 linear RGB.
+    pub interpolation: u8,
+    pub records: Vec<GradRecord>,
+    pub focal: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fill {
+    Solid(Rgba),
+    Linear(Gradient),
+    Radial(Gradient),
+    Focal(Gradient),
+    Bitmap { id: u16, matrix: Matrix, repeat: bool, smooth: bool },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LineStyle {
+    pub width: u16,
+    pub color: Rgba,
+    /// 0 round, 1 none, 2 square.
+    pub start_cap: u8,
+    pub end_cap: u8,
+    /// 0 round, 1 bevel, 2 miter.
+    pub join: u8,
+    pub miter_limit: f64,
+    pub no_close: bool,
+    pub no_h_scale: bool,
+    pub no_v_scale: bool,
+    pub fill: Option<Fill>,
+}
+
+impl LineStyle {
+    pub fn simple(width: u16, color: Rgba) -> LineStyle {
+        LineStyle { width, color, start_cap: 0, end_cap: 0, join: 0, miter_limit: 3.0, no_close: false, no_h_scale: false, no_v_scale: false, fill: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Styles {
+    pub fills: Vec<Fill>,
+    pub lines: Vec<LineStyle>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Record {
-    StyleChange { move_to: Option<(i32, i32)>, fill0: Option<u32>, fill1: Option<u32>, line: Option<u32> },
+    StyleChange {
+        move_to: Option<(i32, i32)>,
+        fill0: Option<u32>,
+        fill1: Option<u32>,
+        line: Option<u32>,
+        new_styles: Option<Box<Styles>>,
+    },
     Straight { dx: i32, dy: i32 },
     Curved { cdx: i32, cdy: i32, adx: i32, ady: i32 },
 }
 
-/// Reads records up to the end record. A style change carrying new style arrays, which only
-/// SHAPEWITHSTYLE (never a glyph) contains, is an error for now.
-pub fn read_records(r: &mut Reader, fill_bits: u32, line_bits: u32) -> Result<Vec<Record>> {
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Shape {
+    pub styles: Styles,
+    pub records: Vec<Record>,
+}
+
+fn color(r: &mut Reader, alpha: bool) -> Result<Rgba> {
+    if alpha { Rgba::read_rgba(r) } else { Rgba::read_rgb(r) }
+}
+
+fn gradient(r: &mut Reader, matrix: Matrix, shape_num: u8, focal: bool) -> Result<Gradient> {
+    let spread = r.ub(2)? as u8;
+    let interpolation = r.ub(2)? as u8;
+    let n = r.ub(4)?;
+    let mut records = Vec::with_capacity(n as usize);
+    for _ in 0..n {
+        records.push(GradRecord { ratio: r.u8()?, color: color(r, shape_num >= 3)? });
+    }
+    let focal = if focal { r.fixed8()? as f64 } else { 0.0 };
+    Ok(Gradient { matrix, spread, interpolation, records, focal })
+}
+
+pub fn read_fill(r: &mut Reader, shape_num: u8) -> Result<Fill> {
+    let kind = r.u8()?;
+    Ok(match kind {
+        0x00 => Fill::Solid(color(r, shape_num >= 3)?),
+        0x10 | 0x12 | 0x13 => {
+            let m = Matrix::read(r)?;
+            let g = gradient(r, m, shape_num, kind == 0x13)?;
+            match kind {
+                0x10 => Fill::Linear(g),
+                0x12 => Fill::Radial(g),
+                _ => Fill::Focal(g),
+            }
+        }
+        0x40..=0x43 => {
+            let id = r.u16()?;
+            let matrix = Matrix::read(r)?;
+            Fill::Bitmap { id, matrix, repeat: kind == 0x40 || kind == 0x42, smooth: kind <= 0x41 }
+        }
+        k => return Err(Error::Other(format!("unknown fill style type 0x{k:02x}"))),
+    })
+}
+
+fn read_line(r: &mut Reader, shape_num: u8) -> Result<LineStyle> {
+    let width = r.u16()?;
+    if shape_num < 4 {
+        return Ok(LineStyle::simple(width, color(r, shape_num >= 3)?));
+    }
+    let start_cap = r.ub(2)? as u8;
+    let join = r.ub(2)? as u8;
+    let has_fill = r.bit()?;
+    let no_h_scale = r.bit()?;
+    let no_v_scale = r.bit()?;
+    r.bit()?;
+    r.ub(5)?;
+    let no_close = r.bit()?;
+    let end_cap = r.ub(2)? as u8;
+    let miter_limit = if join == 2 { r.u16()? as f64 / 256.0 } else { 3.0 };
+    let (color, fill) = if has_fill {
+        let f = read_fill(r, shape_num)?;
+        (if let Fill::Solid(c) = &f { *c } else { Rgba::BLACK }, Some(f))
+    } else {
+        (Rgba::read_rgba(r)?, None)
+    };
+    Ok(LineStyle { width, color, start_cap, end_cap, join, miter_limit, no_close, no_h_scale, no_v_scale, fill })
+}
+
+pub fn read_styles(r: &mut Reader, shape_num: u8) -> Result<Styles> {
+    let mut n = r.u8()? as usize;
+    if shape_num > 1 && n == 0xff {
+        n = r.u16()? as usize;
+    }
+    let mut fills = Vec::with_capacity(n);
+    for _ in 0..n {
+        fills.push(read_fill(r, shape_num)?);
+    }
+    let mut n = r.u8()? as usize;
+    if n == 0xff {
+        n = r.u16()? as usize;
+    }
+    let mut lines = Vec::with_capacity(n);
+    for _ in 0..n {
+        lines.push(read_line(r, shape_num)?);
+    }
+    Ok(Styles { fills, lines })
+}
+
+/// Reads records up to the end record. `shape_num` 0 means a glyph or morph edge list,
+/// which may not carry new style arrays.
+pub fn read_records(r: &mut Reader, shape_num: u8, mut fill_bits: u32, mut line_bits: u32) -> Result<Vec<Record>> {
     let mut out = Vec::new();
     loop {
         if r.bit()? {
@@ -44,10 +194,18 @@ pub fn read_records(r: &mut Reader, fill_bits: u32, line_bits: u32) -> Result<Ve
         let fill0 = if flags & 2 != 0 { Some(r.ub(fill_bits)?) } else { None };
         let fill1 = if flags & 4 != 0 { Some(r.ub(fill_bits)?) } else { None };
         let line = if flags & 8 != 0 { Some(r.ub(line_bits)?) } else { None };
-        if flags & 16 != 0 {
-            return Err(Error::Other("new styles inside a glyph shape".into()));
-        }
-        out.push(Record::StyleChange { move_to, fill0, fill1, line });
+        let new_styles = if flags & 16 != 0 {
+            if shape_num == 0 {
+                return Err(Error::Other("new styles inside a glyph or morph shape".into()));
+            }
+            let s = read_styles(r, shape_num)?;
+            fill_bits = r.ub(4)?;
+            line_bits = r.ub(4)?;
+            Some(Box::new(s))
+        } else {
+            None
+        };
+        out.push(Record::StyleChange { move_to, fill0, fill1, line, new_styles });
     }
     r.align();
     Ok(out)
@@ -58,7 +216,50 @@ pub fn read_glyph(data: &[u8]) -> Result<Vec<Record>> {
     let mut r = Reader::new(data);
     let fill_bits = r.ub(4)?;
     let line_bits = r.ub(4)?;
-    read_records(&mut r, fill_bits, line_bits)
+    read_records(&mut r, 0, fill_bits, line_bits)
+}
+
+pub fn shape_num(code: u16) -> Option<u8> {
+    Some(match code {
+        DEFINE_SHAPE => 1,
+        DEFINE_SHAPE2 => 2,
+        DEFINE_SHAPE3 => 3,
+        DEFINE_SHAPE4 => 4,
+        _ => return None,
+    })
+}
+
+pub fn is_shape(code: u16) -> bool {
+    shape_num(code).is_some()
+}
+
+/// A parsed DefineShape/2/3/4.
+pub struct ShapeTag {
+    pub id: u16,
+    pub bounds: Rect,
+    pub shape_num: u8,
+    pub shape: Shape,
+    /// DefineShape4's fill-winding flag: non-zero instead of even-odd.
+    pub nonzero: bool,
+}
+
+impl ShapeTag {
+    pub fn read(tag: &Tag) -> Result<ShapeTag> {
+        let shape_num = shape_num(tag.code).ok_or_else(|| Error::Other(format!("{} is not a shape", tag.name())))?;
+        let mut r = Reader::new(&tag.body);
+        let id = r.u16()?;
+        let bounds = Rect::read(&mut r)?;
+        let mut nonzero = false;
+        if shape_num == 4 {
+            Rect::read(&mut r)?;
+            nonzero = r.u8()? & 0x04 != 0;
+        }
+        let styles = read_styles(&mut r, shape_num)?;
+        let fill_bits = r.ub(4)?;
+        let line_bits = r.ub(4)?;
+        let records = read_records(&mut r, shape_num, fill_bits, line_bits)?;
+        Ok(ShapeTag { id, bounds, shape_num, shape: Shape { styles, records }, nonzero })
+    }
 }
 
 /// Point on a contour; `on == false` marks a quadratic control point.
@@ -122,7 +323,6 @@ mod tests {
         let mut w = Writer::new();
         w.ub(4, 1);
         w.ub(4, 0);
-        // move to (0,0) with fill1 = 1
         w.ub(1, 0);
         w.ub(5, 0b00101);
         w.ub(5, 1);
