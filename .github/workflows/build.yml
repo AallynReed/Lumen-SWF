@@ -1,0 +1,59 @@
+name: Build
+# Tests the core against the JPEXS corpus and bundles the MSI. Tags named v* publish a release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch JPEXS test corpus
+        uses: actions/checkout@v4
+        with:
+          repository: jindrapetrik/jpexs-decompiler
+          path: jpexs-decompiler
+          sparse-checkout: libsrc/ffdec_lib/testdata
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - name: Test
+        run: cargo test --release -p ffdec
+
+      - name: Bundle MSI
+        run: npx tauri build --bundles msi
+
+      - name: Build CLI
+        run: cargo build --release -p ffdec-cli
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-ffdec
+          path: |
+            target/release/bundle/msi/*.msi
+            target/release/ffdec-cli.exe
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/bundle/msi/*.msi
+            target/release/ffdec-cli.exe
