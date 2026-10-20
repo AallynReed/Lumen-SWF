@@ -216,6 +216,17 @@ fn append_no_quotes(it: &It, w: &mut Writer, ld: LD) {
     }
 }
 
+/// `toStringNoQuotes(LocalData.empty)` of a literal name.
+pub fn plain_no_quotes(it: &It) -> String {
+    match &it.borrow().k {
+        K::ADirect { v: AVal::Str(s), .. } => s.clone(),
+        K::ADirect { v: AVal::Int(i), .. } => i.to_string(),
+        K::ADirect { v: AVal::Double(d), .. } => number(*d),
+        K::ADirect { v: AVal::Float(f), .. } => number(*f as f64),
+        _ => String::new(),
+    }
+}
+
 /// `stripQuotes`.
 fn strip_quotes(it: &It, w: &mut Writer, ld: LD) {
     if let Some(s) = direct_string(it) {

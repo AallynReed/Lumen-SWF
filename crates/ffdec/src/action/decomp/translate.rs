@@ -66,6 +66,8 @@ pub struct ActTr {
     pub removed_goto_labels: RefCell<std::collections::HashSet<String>>,
     /// `localData.loops.size()` while final processing.
     pub loop_count: std::cell::Cell<i64>,
+    /// Fields to add to detected classes (`uninitializedClassTraits`).
+    pub uninit: Rc<super::uninit::Uninitialized>,
 }
 
 impl ActTr {
@@ -83,6 +85,7 @@ impl ActTr {
             second_pass: None,
             removed_goto_labels: Default::default(),
             loop_count: Default::default(),
+            uninit: Default::default(),
         }
     }
 

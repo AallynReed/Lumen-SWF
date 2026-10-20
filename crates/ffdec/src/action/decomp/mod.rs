@@ -5,6 +5,7 @@ pub mod graph;
 pub mod items;
 pub mod print;
 pub mod translate;
+pub mod uninit;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -127,7 +128,7 @@ pub fn translate_via_graph(mut tr: ActTr, start_ip: usize) -> Result<List, Strin
 }
 
 /// `Action.actionsToTree` for a whole action record.
-pub fn actions_to_tree(list: &ActionList, inside_do_init: bool, path: &str) -> Result<List, String> {
+pub fn actions_to_tree(list: &ActionList, inside_do_init: bool, path: &str, uninit: &Rc<uninit::Uninitialized>) -> Result<List, String> {
     let actions = Rc::new(list.actions.clone());
     let len = actions.len();
     let vars = Rc::new(RefCell::new(JMap::default()));
@@ -135,7 +136,11 @@ pub fn actions_to_tree(list: &ActionList, inside_do_init: bool, path: &str) -> R
     let ctx = Rc::new(SpCtx::default());
     ctx.collecting.set(true);
     SP.with(|c| *c.borrow_mut() = Some(ctx.clone()));
-    let mk = || ActTr::new(actions.clone(), len, list.version, path.to_string(), inside_do_init, false, HashMap::new(), vars.clone(), funcs.clone());
+    let mk = || {
+        let mut t = ActTr::new(actions.clone(), len, list.version, path.to_string(), inside_do_init, false, HashMap::new(), vars.clone(), funcs.clone());
+        t.uninit = uninit.clone();
+        t
+    };
     let _ = translate_via_graph(mk(), 0);
     *vars.borrow_mut() = JMap::default();
     *funcs.borrow_mut() = JMap::default();
@@ -156,9 +161,10 @@ fn error_comment(w: &mut Writer, kind: &str) {
 
 /// `Action.actionsToSource`: decompiled ActionScript of an action record, wrapped in its
 /// `on(...)`/`onClipEvent(...)` header when it has one.
-pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option<&str>, path: &str) -> String {
+pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option<&str>, path: &str, uninit: &uninit::Uninitialized) -> String {
     crate::abc::decomp::with_big_stack(|| {
-        let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| actions_to_tree(list, inside_do_init, path)));
+        let uninit = Rc::new(uninit.clone());
+        let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| actions_to_tree(list, inside_do_init, path, &uninit)));
         let abc = Abc::empty();
         let ctx = Ctx::new(&abc, Config::default());
         let mut ld = LocalData::new(&ctx);
@@ -191,5 +197,38 @@ pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option
             w.append_no_hilight("}").new_line();
         }
         w.finish()
+    })
+}
+
+/// Whether a source is an AS2 class initializer (`needsCalculatingAS2UninitializeClassTraits`).
+pub fn is_class_source(swf: &crate::Swf, names: &crate::names::Names, s: &super::scripts::Source) -> bool {
+    if s.kind != super::scripts::Kind::DoInitAction {
+        return false;
+    }
+    let id = swf.tag(&s.tag).and_then(|t| t.character_id());
+    id.and_then(|id| names.export.get(&id)).is_some_and(|e| e.starts_with("__Packages."))
+}
+
+/// `SWF.calculateAs2UninitializedClassTraits`: decompiles every script once to find the fields
+/// AS2 classes use without declaring.
+pub fn swf_uninitialized(swf: &crate::Swf) -> uninit::Uninitialized {
+    let names = crate::names::Names::new(swf);
+    let sources: Vec<super::scripts::Source> = super::scripts::export_paths(&super::scripts::tree(swf)).into_iter().map(|(_, s)| s).collect();
+    if !sources.iter().any(|s| is_class_source(swf, &names, s)) {
+        return Default::default();
+    }
+    let lists: Vec<(bool, bool, ActionList)> = sources.iter().map(|s| (is_class_source(swf, &names, s), s.kind == super::scripts::Kind::DoInitAction, s.actions(swf))).collect();
+    crate::abc::decomp::with_big_stack(|| {
+        let empty = Rc::new(uninit::Uninitialized::default());
+        let (mut classes, mut others) = (Vec::new(), Vec::new());
+        for (is_class, init, list) in &lists {
+            let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| actions_to_tree(list, *init, "", &empty))).ok().and_then(|r| r.ok()).unwrap_or_else(empty_list);
+            if *is_class {
+                classes.push(tree);
+            } else {
+                others.push(tree);
+            }
+        }
+        uninit::detect(&classes, &others)
     })
 }

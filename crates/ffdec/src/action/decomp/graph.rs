@@ -619,6 +619,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         }
         ld.in_get_loops = false;
         self.do_not_process_ifs = spd.is_none();
+        self.act().loop_count.set(loops.len() as i64);
         let mut pc = Pc { has_empty_stack_pops: false, found_gotos: Vec::new(), part_codes: Vec::new(), part_code_pos: Vec::new(), all_parts, loops, throw_states: Vec::new(), static_operation: 0 };
         let mut visited: Vec<P> = Vec::new();
         let ret = self.print_graph(&mut pc, &mut visited, ld, &stack, None, Some(heads[0]), None, None, 0);
@@ -638,7 +639,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         handle_set_temporary_declarations(&ret);
         let act = self.act();
         if act.inside_do_init && !act.inside_function {
-            super::class::check_class(&ret, &act.vars);
+            super::class::check_class(&ret, &act.vars, &act.uninit);
         }
         let defined: HashSet<i32> = act.reg_names.borrow().keys().copied().collect();
         make_define_registers_up(&ret, &mut defined.clone());

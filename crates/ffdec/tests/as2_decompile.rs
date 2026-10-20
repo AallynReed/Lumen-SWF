@@ -42,6 +42,7 @@ fn as2_decompile_fixtures() {
     };
     let swf = ffdec::Swf::parse(&data).unwrap();
     let names = ffdec::names::Names::new(&swf);
+    let uninit = decomp::swf_uninitialized(&swf);
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(root.join("tests/fixtures/as2_decompile.json")).unwrap()).unwrap();
     let only = std::env::var("AS2_CASE").ok();
     let (mut pass, mut total) = (0, 0);
@@ -81,7 +82,9 @@ fn as2_decompile_fixtures() {
         };
         let body = tag_actions(tag.code, &tag.body).unwrap();
         let list = read_action_list(body, 0, body.len(), swf.header.version);
-        let actual = decomp::actions_to_source(&list, tag.code == DO_INIT_ACTION, None, "");
+        let empty = Default::default();
+        let u = if tag.code == DO_INIT_ACTION { &uninit } else { &empty };
+        let actual = decomp::actions_to_source(&list, tag.code == DO_INIT_ACTION, None, "", u);
         if clean(&actual) == clean(expected) {
             pass += 1;
         } else {
