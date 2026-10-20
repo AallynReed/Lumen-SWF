@@ -31,7 +31,7 @@ impl Swf {
         let body = decoded.body;
         let mut r = Reader::new(&body);
         let frame_rect = Rect::read(&mut r)?;
-        let frame_rate = r.fixed8()?;
+        let frame_rate = r.u16()? as f32 / 256.0;
         let frame_count = r.u16()?;
         let header_end = r.pos();
         let timeline = Timeline::parse(&mut r, 8 + header_end, 0);
@@ -74,7 +74,7 @@ impl Swf {
             w.bytes(&self.movie_header_raw);
         } else {
             self.frame_rect.write(&mut w);
-            w.i16((self.frame_rate * 256.0).round() as i16);
+            w.u16((self.frame_rate * 256.0).round() as u16);
             w.u16(self.frame_count);
         }
         self.timeline.write(&mut w);
@@ -84,7 +84,7 @@ impl Swf {
     fn movie_header_unchanged(&self) -> bool {
         let mut r = Reader::new(&self.movie_header_raw);
         let _ = Rect::read(&mut r);
-        r.fixed8().ok() == Some(self.frame_rate) && r.u16().ok() == Some(self.frame_count)
+        r.u16().ok().map(|v| v as f32 / 256.0) == Some(self.frame_rate) && r.u16().ok() == Some(self.frame_count)
     }
 
     /// The decompressed file: an `FWS`/`GFX` header followed by the body.
