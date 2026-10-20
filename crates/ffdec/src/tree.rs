@@ -149,7 +149,7 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
         match cat {
             "frames" => {}
             "scripts" if t.code == DO_ABC || t.code == DO_ABC2 => as3.push((path, t)),
-            "scripts" => scripts.push(script_node(t, &path, &names, swf)),
+            "scripts" => {}
             "others" => others.push(tag_node(t, &path, &names)),
             _ => {
                 let mut node = tag_node(t, &path, &names);
@@ -199,6 +199,7 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
     }
     let mut as3_nodes = packages.into_nodes();
     as3_nodes.extend(scripts);
+    as3_nodes.extend(as2_nodes(&crate::action::scripts::tree(swf)));
     let scripts = as3_nodes;
     if !scripts.is_empty() {
         root.push(Node::folder("scripts", "scripts", scripts));
@@ -206,34 +207,14 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
     root
 }
 
-fn script_node(t: &Tag, path: &[usize], names: &HashMap<u16, String>, swf: &Swf) -> Node {
-    let mut node = tag_node(t, path, names);
-    match t.code {
-        DO_ABC2 => {
-            let mut r = crate::io::Reader::new(&t.body);
-            if r.skip(4).is_ok() {
-                if let Ok(n) = r.string() {
-                    if !n.is_empty() {
-                        node.label = format!("DoABC2 ({n})");
-                    }
-                }
-            }
-        }
-        DO_ACTION => {
-            let frame = swf.timeline.tags[..path[0]].iter().filter(|x| x.code == SHOW_FRAME).count() + 1;
-            node.label = format!("frame {frame} (DoAction)");
-        }
-        DO_INIT_ACTION => {
-            if let Some(id) = t.character_id() {
-                node.label = match names.get(&id) {
-                    Some(n) => format!("{n} (DoInitAction {id})"),
-                    None => format!("sprite {id} (DoInitAction)"),
-                };
-            }
-        }
-        _ => {}
-    }
-    node
+fn as2_nodes(nodes: &[crate::action::scripts::Node]) -> Vec<Node> {
+    nodes
+        .iter()
+        .map(|n| match &n.source {
+            Some(s) => Node { label: n.label.clone(), kind: "script", category: "scripts", path: Some(path_str(&s.tag)), script: Some(format!("as2:{}", s.index)), children: vec![] },
+            None => Node { label: n.label.clone(), kind: "folder", category: if n.label.starts_with("frame ") { "frames" } else { "package" }, path: None, script: None, children: as2_nodes(&n.children) },
+        })
+        .collect()
 }
 
 pub fn tag_list(swf: &Swf) -> Vec<Node> {
