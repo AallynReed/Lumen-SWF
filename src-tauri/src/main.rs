@@ -291,6 +291,23 @@ impl From<String> for EditError {
     }
 }
 
+/// Compiles edited ActionScript into the script.
+#[tauri::command]
+async fn apply_source(docs: State<'_, Docs>, id: u32, path: String, script: String, text: String) -> Result<(), EditError> {
+    let p = tag_path(&path)?;
+    let mut failure = None;
+    let r = with_doc_mut(&docs, id, |d| {
+        d.edit(|swf| {
+            ffdec::edit::set_script_source(swf, &p, &script, &text).map_err(|e| {
+                let m = e.message.clone();
+                failure = Some(e);
+                m
+            })
+        })
+    });
+    r.map_err(|m| failure.map_or_else(|| EditError::from(m), EditError::from))
+}
+
 #[tauri::command]
 fn script_methods(docs: State<'_, Docs>, id: u32, path: String, script: String) -> Res<Vec<String>> {
     let p = tag_path(&path)?;
@@ -503,6 +520,7 @@ fn main() {
             script_methods,
             script_pcode,
             apply_pcode,
+            apply_source,
             confirm_discard,
             preview_info,
             preview_data,

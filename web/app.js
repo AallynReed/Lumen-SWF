@@ -410,7 +410,8 @@ async function renderCode(el, info) {
     const methods = pcode && n.kind === 'script' ? await call('script_methods', { id: sel.docId, path: n.path, script: n.script }).catch(() => []) : [];
     if (state.selected !== sel) return;
     if (!methods.includes(state.method)) state.method = null;
-    const editable = pcode && n.kind === 'script' && (!methods.length || state.method !== null);
+    const asEditable = !pcode && n.kind === 'script' && n.script.startsWith('as2:');
+    const editable = asEditable || (pcode && n.kind === 'script' && (!methods.length || state.method !== null));
     let text = (pcode ? info.alt_text : info.text) || '';
     if (editable && methods.length) text = await call('script_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method });
     if (state.selected !== sel) return;
@@ -419,7 +420,7 @@ async function renderCode(el, info) {
         + `<button class="seg-btn${pcode ? ' active' : ''}" data-view="pcode" role="tab">P-code</button></div>`;
     const pick = methods.length ? `<select class="method" aria-label="Method"><option value="">Whole script</option>`
         + methods.map((m) => `<option${m === state.method ? ' selected' : ''}>${esc(m)}</option>`).join('') + '</select>' : '';
-    const edit = editable ? '<button class="btn" data-act="edit" title="Edit this p-code">Edit</button>' : '';
+    const edit = editable ? `<button class="btn" data-act="edit" title="Edit this ${pcode ? 'p-code' : 'ActionScript'}">Edit</button>` : '';
     const hint = pcode && methods.length && !editable ? '<span class="code-hint">Pick a method to edit it.</span>' : '';
     el.innerHTML = `<div class="code-bar">${seg}${pick}${edit}${hint}</div><pre class="code-view">${esc(text)}</pre>`;
     el.querySelectorAll('.seg-btn').forEach((b) => b.addEventListener('click', () => {
@@ -430,17 +431,18 @@ async function renderCode(el, info) {
         state.method = e.target.value || null;
         renderCode(el, info);
     });
-    el.querySelector('[data-act="edit"]')?.addEventListener('click', () => openEditor(el, info, text));
+    el.querySelector('[data-act="edit"]')?.addEventListener('click', () => openEditor(el, info, text, pcode));
 }
 
-function openEditor(el, info, text) {
+function openEditor(el, info, text, pcode) {
     const sel = state.selected;
     state.editor = { original: text };
-    el.innerHTML = `<div class="code-bar"><span class="code-title">${esc(state.method ? `Editing ${state.method}` : 'Editing p-code')}</span>`
-        + '<button class="btn primary" data-act="apply" title="Assemble and store (Ctrl+Enter)">Apply</button>'
+    const what = !pcode ? 'Editing ActionScript' : state.method ? `Editing ${state.method}` : 'Editing p-code';
+    el.innerHTML = `<div class="code-bar"><span class="code-title">${esc(what)}</span>`
+        + `<button class="btn primary" data-act="apply" title="${pcode ? 'Assemble' : 'Compile'} and store (Ctrl+Enter)">Apply</button>`
         + '<button class="btn" data-act="cancel" title="Discard these edits (Esc)">Cancel</button></div>'
         + '<p class="code-error" hidden></p>'
-        + `<textarea class="code-edit" spellcheck="false" wrap="off" aria-label="P-code">${esc(text)}</textarea>`;
+        + `<textarea class="code-edit" spellcheck="false" wrap="off" aria-label="${pcode ? 'P-code' : 'ActionScript'}">${esc(text)}</textarea>`;
     const area = el.querySelector('textarea');
     area.focus();
     const cancel = () => {
@@ -450,7 +452,8 @@ function openEditor(el, info, text) {
     const apply = async () => {
         const n = sel.node;
         try {
-            await invoke('apply_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method, text: area.value });
+            if (pcode) await invoke('apply_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method, text: area.value });
+            else await invoke('apply_source', { id: sel.docId, path: n.path, script: n.script, text: area.value });
         } catch (e) {
             showEditError(el, area, e);
             return;
@@ -460,7 +463,7 @@ function openEditor(el, info, text) {
         doc.modified = true;
         await loadTree(doc);
         render();
-        status(state.method ? `Updated ${state.method}` : 'Updated the script');
+        status(pcode && state.method ? `Updated ${state.method}` : 'Updated the script');
         showSelection();
     };
     el.querySelector('[data-act="apply"]').addEventListener('click', apply);
@@ -493,7 +496,7 @@ function leaveEditor() {
     const ed = state.editor;
     const area = document.querySelector('.code-edit');
     if (!ed || !area || area.value === ed.original) return true;
-    if (!window.confirm('Discard your p-code edits?')) return false;
+    if (!window.confirm('Discard your edits?')) return false;
     state.editor = null;
     return true;
 }
