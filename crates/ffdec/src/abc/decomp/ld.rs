@@ -73,6 +73,7 @@ pub struct Ld {
     pub in_get_loops: bool,
     pub bottom_set_locals: Shared<Vec<It>>,
     pub this_has_default_to_primitive: bool,
+    pub local_reg_assignment_ips: Shared<HashMap<i32, i32>>,
 }
 
 impl Ld {
@@ -107,6 +108,7 @@ impl Ld {
             in_get_loops: false,
             bottom_set_locals: shared(Vec::new()),
             this_has_default_to_primitive: false,
+            local_reg_assignment_ips: shared(HashMap::new()),
         }
     }
 

@@ -299,7 +299,7 @@ pub enum K {
     NameValuePair { name: It },
     NewActivation,
     NewArray { values: List },
-    NewFunction { name: String, path: String, is_static: bool, script: i32, class: i32, method: usize },
+    NewFunction { name: String, path: String, is_static: bool, script: i32, class: i32, method: usize, scope: Vec<It> },
     NewObject { pairs: List },
     NextName { index: It, obj: It, local_reg: Option<It> },
     NextValue { index: It, obj: It, local_reg: Option<It> },
