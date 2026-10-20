@@ -21,6 +21,10 @@ impl<'a> Reader<'a> {
         self.data.len().saturating_sub(self.pos)
     }
 
+    pub fn remaining_bits(&self) -> usize {
+        self.remaining() * 8 + self.bit_pos as usize
+    }
+
     pub fn is_empty(&self) -> bool {
         self.remaining() == 0
     }
