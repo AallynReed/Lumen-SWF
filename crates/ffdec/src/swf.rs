@@ -158,6 +158,22 @@ impl Swf {
         self.timeline.sync_sprites();
     }
 
+    pub fn replace_as2_script(&mut self, path: &[usize], actions: &crate::action::ActionList) -> Result<()> {
+        let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
+        let bytes = actions.to_bytes();
+        let new_body = match tag.code {
+            code::DO_ACTION => bytes,
+            code::DO_INIT_ACTION => {
+                let char_id = tag.character_id().unwrap_or(0);
+                let mut b = char_id.to_le_bytes().to_vec();
+                b.extend_from_slice(&bytes);
+                b
+            }
+            _ => bytes,
+        };
+        self.replace_tag_body(path, &new_body)
+    }
+
     pub fn find_character(&self, id: u16) -> Option<Vec<usize>> {
         let mut found = None;
         self.walk(|path, tag| {
