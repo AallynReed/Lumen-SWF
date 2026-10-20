@@ -22,18 +22,9 @@ pub fn write_u32v(w: &mut Writer, mut v: u32) {
     }
 }
 
-pub fn write_s32v(w: &mut Writer, mut v: i32) {
-    loop {
-        let mut b = (v & 0x7f) as u8;
-        v >>= 7;
-        if (v == 0 && (b & 0x40) == 0) || (v == -1 && (b & 0x40) != 0) {
-            w.u8(b);
-            break;
-        } else {
-            b |= 0x80;
-            w.u8(b);
-        }
-    }
+/// s32 as its u32 bit pattern, as FFDec's `ABCOutputStream.writeS32`.
+pub fn write_s32v(w: &mut Writer, v: i32) {
+    write_u32v(w, v as u32);
 }
 
 fn write_pool<T>(w: &mut Writer, items: &[T], mut write_item: impl FnMut(&mut Writer, &T)) {
