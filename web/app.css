@@ -288,6 +288,7 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     font: inherit;
 }
 
+.code-switch { width: max-content; margin-bottom: 8px; }
 .code-view {
     margin: 0;
     padding: 10px 12px;

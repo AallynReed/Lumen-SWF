@@ -13,6 +13,7 @@ const state = {
     tabPref: 'preview',
     player: null,
     exportable: false,
+    codeView: 'as',
 };
 
 const ICONS = {
@@ -311,7 +312,7 @@ async function showSelection() {
 
     const hasPreview = !!preview;
     document.querySelector('.tab[data-tab="preview"]').hidden = !hasPreview;
-    state.exportable = !!(preview && preview.exportable && n.kind === 'tag');
+    state.exportable = !!(preview && ((preview.exportable && n.kind === 'tag') || n.kind === 'script'));
     updateButtons();
     if (hasPreview) {
         state.player = { docId: doc.id, path: target.path, info: preview };
@@ -386,8 +387,21 @@ function renderPreview(info, data) {
     } else if (info.kind === 'text') {
         el.innerHTML = info.text ? `<pre class="text-preview">${esc(info.text)}</pre>` : '<p class="preview-empty">No text.</p>';
     } else if (info.kind === 'code') {
-        el.innerHTML = `<pre class="code-view">${esc(info.text || '')}</pre>`;
+        renderCode(el, info);
     }
+}
+
+// Decompiled ActionScript, with a switch to p-code when the preview carries both.
+function renderCode(el, info) {
+    const pcode = state.codeView === 'pcode' && info.alt_text != null;
+    const seg = info.alt_text == null ? '' : `<div class="seg code-switch" role="tablist" aria-label="Code view">`
+        + `<button class="seg-btn${pcode ? '' : ' active'}" data-view="as" role="tab">ActionScript</button>`
+        + `<button class="seg-btn${pcode ? ' active' : ''}" data-view="pcode" role="tab">P-code</button></div>`;
+    el.innerHTML = seg + `<pre class="code-view">${esc((pcode ? info.alt_text : info.text) || '')}</pre>`;
+    el.querySelectorAll('.code-switch .seg-btn').forEach((b) => b.addEventListener('click', () => {
+        state.codeView = b.dataset.view;
+        renderCode(el, info);
+    }));
 }
 
 // ---- frame player ----
@@ -565,7 +579,7 @@ $('btn-export').addEventListener('click', async () => {
     const sel = state.selected;
     if (!sel || !sel.node.path) return;
     const out = state.exportable
-        ? await call('export_asset', { id: sel.docId, path: sel.node.path, script: sel.node.script || null, options: exportOptions() })
+        ? await call('export_asset', { id: sel.docId, path: sel.node.path, script: sel.node.script || null, options: { ...exportOptions(), pcode: sel.node.script ? state.codeView === 'pcode' : $('opt-pcode').checked } })
         : await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
 });
@@ -585,6 +599,7 @@ function exportOptions() {
         framesSvg: $('opt-frames-svg').checked,
         textsSvg: $('opt-texts-svg').checked,
         zoom: parseFloat($('opt-zoom').value) || 1,
+        pcode: $('opt-pcode').checked,
     };
 }
 

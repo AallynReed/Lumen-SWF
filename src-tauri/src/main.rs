@@ -213,6 +213,7 @@ struct PreviewInfo {
     kind: &'static str,
     mime: &'static str,
     text: Option<String>,
+    alt_text: Option<String>,
     note: Option<String>,
     size: usize,
     exportable: bool,
@@ -237,6 +238,7 @@ async fn preview_info(docs: State<'_, Docs>, id: u32, path: String, frame: usize
                     kind: pv.kind,
                     mime: pv.mime,
                     text: pv.text,
+                    alt_text: pv.alt_text,
                     note: pv.note,
                     size: pv.data.len(),
                     exportable,
@@ -272,11 +274,12 @@ struct ExportOpts {
     frames_svg: bool,
     texts_svg: bool,
     zoom: f32,
+    pcode: bool,
 }
 
 impl From<ExportOpts> for Options {
     fn from(o: ExportOpts) -> Options {
-        Options { png_only: o.png, wav_only: o.wav, shapes_png: o.shapes_png, frames_svg: o.frames_svg, texts_svg: o.texts_svg, zoom: o.zoom }
+        Options { png_only: o.png, wav_only: o.wav, shapes_png: o.shapes_png, frames_svg: o.frames_svg, texts_svg: o.texts_svg, zoom: o.zoom, scripts_pcode: o.pcode }
     }
 }
 
@@ -285,7 +288,7 @@ impl From<ExportOpts> for Options {
 async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, script: Option<String>, options: ExportOpts) -> Res<Option<String>> {
     let p = tree::parse_path(&path).ok_or("bad tag path")?;
     let files = with_doc(&docs, id, |d| match &script {
-        Some(s) => d.exporter().export_script(&p, s).map(|f| vec![f]).map_err(|e| e.to_string()),
+        Some(s) => d.exporter().export_script(&p, s, options.pcode).map(|f| vec![f]).map_err(|e| e.to_string()),
         None => d.exporter().export(&p, options.into()).map_err(|e| e.to_string()),
     })?;
     match files.len() {
