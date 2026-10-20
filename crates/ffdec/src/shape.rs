@@ -459,6 +459,67 @@ pub fn write_records(w: &mut Writer, records: &[Record], mut fill_bits: u32, mut
     w.flush_bits();
 }
 
+/// SHAPERECORD.getBounds: the records' extent, widened by half the current line width unless
+/// `edge` (edge bounds).
+pub fn bounds(records: &[Record], lines: &[LineStyle], shape_num: u8, edge: bool) -> Rect {
+    let _ = shape_num;
+    let (mut x, mut y) = (0i32, 0i32);
+    let (mut max_x, mut max_y, mut min_x, mut min_y) = (0, 0, i32::MAX, i32::MAX);
+    let mut started = false;
+    let mut lines: Vec<LineStyle> = lines.to_vec();
+    let mut half = 0;
+    let grow = |x: i32, y: i32, half: i32, started: bool, max_x: &mut i32, max_y: &mut i32, min_x: &mut i32, min_y: &mut i32| {
+        *max_x = (*max_x).max(x);
+        *max_y = (*max_y).max(y);
+        if !edge {
+            *max_x = (*max_x).max(x + half);
+            *max_y = (*max_y).max(y + half);
+        }
+        if started {
+            *min_y = (*min_y).min(y);
+            *min_x = (*min_x).min(x);
+            if !edge {
+                *min_y = (*min_y).min(y - half);
+                *min_x = (*min_x).min(x - half);
+            }
+        }
+    };
+    for r in records {
+        let mut is_move = false;
+        match r {
+            Record::StyleChange { move_to, line, new_styles, .. } => {
+                if !edge {
+                    if let Some(s) = new_styles {
+                        lines = s.lines.clone();
+                    }
+                    if let Some(l) = line {
+                        let w = if *l == 0 { 0 } else { lines.get(*l as usize - 1).map_or(0, |s| s.width as i32) };
+                        half = w / 2;
+                    }
+                }
+                if let Some((mx, my)) = move_to {
+                    (x, y) = (*mx, *my);
+                    is_move = true;
+                }
+            }
+            Record::Straight { dx, dy } => {
+                x += dx;
+                y += dy;
+            }
+            Record::Curved { cdx, cdy, adx, ady } => {
+                grow(x + cdx, y + cdy, half, started, &mut max_x, &mut max_y, &mut min_x, &mut min_y);
+                x += cdx + adx;
+                y += cdy + ady;
+            }
+        }
+        if is_move {
+            started = true;
+        }
+        grow(x, y, half, started, &mut max_x, &mut max_y, &mut min_x, &mut min_y);
+    }
+    Rect { x_min: if min_x == i32::MAX { 0 } else { min_x }, x_max: max_x, y_min: if min_y == i32::MAX { 0 } else { min_y }, y_max: max_y }
+}
+
 impl Shape {
     /// SHAPEWITHSTYLE: styles, index bit counts, records.
     pub fn write(&self, w: &mut Writer, shape_num: u8) {

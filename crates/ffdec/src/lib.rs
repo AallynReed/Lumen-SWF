@@ -14,6 +14,7 @@ pub mod io;
 pub mod morph;
 pub mod names;
 pub mod render;
+pub mod svg_import;
 pub mod swf;
 pub mod shape;
 pub mod tags;

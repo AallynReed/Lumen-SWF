@@ -1,5 +1,5 @@
-//! Asset importers: FFDec's `ImageImporter`, `SoundImporter` (DefineSound),
-//! `BinaryDataImporter` and the plain-text path of `TextImporter` for edit texts.
+//! Asset importers: FFDec's `ImageImporter`, `SoundImporter` (DefineSound), `BinaryDataImporter`,
+//! `ShapeImporter` (images, and SVG through svg_import) and `TextImporter`.
 
 use std::io::Write;
 
@@ -112,23 +112,31 @@ fn edge(records: &mut Vec<Record>, dx: i32, dy: i32) {
     records.push(Record::Straight { dx, dy });
 }
 
+/// `ShapeImporter.addImage` without the insertion: the next character id, and a
+/// DefineBitsJPEG2 for JPEG data or a DefineBitsLossless2 for anything else.
+pub fn new_image(swf: &Swf, data: &[u8]) -> Result<(u16, u16, Vec<u8>)> {
+    let data = to_png(data)?;
+    let id = swf.next_character_id();
+    let mut body = id.to_le_bytes().to_vec();
+    let code = if is_jpeg(&data) {
+        decode(&data)?;
+        body.extend_from_slice(&data);
+        DEFINE_BITS_JPEG2
+    } else {
+        body.extend(lossless(&decode(&data)?, true)?);
+        DEFINE_BITS_LOSSLESS2
+    };
+    Ok((id, code, body))
+}
+
 /// `ShapeImporter.importImage`: the image goes into a new DefineBitsJPEG2 (JPEG) or
 /// DefineBitsLossless2 tag before the shape, which becomes a rectangle filled with it, stretched
 /// over the shape's bounds when `fill`, else at the image's own size.
 pub fn shape_image(swf: &mut Swf, path: &[usize], data: &[u8], fill: bool) -> Result<()> {
     let tag = swf.tag(path).ok_or_else(|| Error::Other(format!("no tag at {path:?}")))?;
     let mut shape = crate::shape::ShapeTag::read(tag)?;
-    let data = to_png(data)?;
-    let img = decode(&data)?;
-    let id = swf.next_character_id();
-    let mut body = id.to_le_bytes().to_vec();
-    let code = if is_jpeg(&data) {
-        body.extend_from_slice(&data);
-        DEFINE_BITS_JPEG2
-    } else {
-        body.extend(lossless(&img, true)?);
-        DEFINE_BITS_LOSSLESS2
-    };
+    let (id, code, body) = new_image(swf, data)?;
+    let img = decode(&to_png(data)?)?;
     let (iw, ih) = (img.width() as i32 * 20, img.height() as i32 * 20);
     let mut rect = shape.bounds;
     if !fill {
@@ -352,12 +360,19 @@ impl Asset {
     /// File extensions the importer reads.
     pub fn extensions(self) -> &'static [&'static str] {
         match self {
-            Asset::Image | Asset::Shape => &["png", "jpg", "jpeg", "gif", "bmp", "webp"],
+            Asset::Image => &["png", "jpg", "jpeg", "gif", "bmp", "webp"],
+            Asset::Shape => &["svg", "png", "jpg", "jpeg", "gif", "bmp", "webp"],
             Asset::Sound => &["mp3", "wav"],
             Asset::Binary => &[],
             Asset::Text => &["txt"],
         }
     }
+}
+
+fn is_svg(data: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&data[..data.len().min(4096)]);
+    let head = head.trim_start_matches('\u{feff}').trim_start();
+    head.starts_with('<') && head.contains("<svg")
 }
 
 /// Replaces the asset at `path` with the contents of a file.
@@ -367,6 +382,7 @@ pub fn import(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
         Some(Asset::Image) => image(swf, path, data),
         Some(Asset::Sound) => sound(swf, path, data),
         Some(Asset::Binary) => binary(swf, path, data),
+        Some(Asset::Shape) if is_svg(data) => crate::svg_import::import(swf, path, &String::from_utf8_lossy(data), true),
         Some(Asset::Shape) => shape_image(swf, path, data, true),
         Some(Asset::Text) if code == DEFINE_EDIT_TEXT => edit_text(swf, path, &String::from_utf8_lossy(data)),
         Some(Asset::Text) => crate::text::import(swf, path, &String::from_utf8_lossy(data)).map_err(|e| Error::Other(e.to_string())),
