@@ -96,3 +96,59 @@ pub fn set_text_source(swf: &mut Swf, path: &[usize], text: &str) -> Result<(), 
         _ => Err(fail("not a text tag")),
     }
 }
+
+/// The header fields the app edits: version, frame rate, stage size in pixels and the
+/// SetBackgroundColor colour.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct HeaderEdit {
+    pub version: u8,
+    pub frame_rate: f32,
+    pub width: f64,
+    pub height: f64,
+    /// `#rrggbb`, or None without a SetBackgroundColor tag.
+    pub background: Option<String>,
+}
+
+pub fn header(swf: &Swf) -> HeaderEdit {
+    let bg = swf.timeline.tags.iter().find(|t| t.code == crate::tags::code::SET_BACKGROUND_COLOR).and_then(|t| t.body.get(..3)).map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]));
+    HeaderEdit { version: swf.header.version, frame_rate: swf.frame_rate, width: swf.frame_rect.width_px(), height: swf.frame_rect.height_px(), background: bg }
+}
+
+/// Stores edited header fields. The stage keeps its origin; a new background colour goes into
+/// the existing SetBackgroundColor tag, or a new one after FileAttributes.
+pub fn set_header(swf: &mut Swf, h: &HeaderEdit) -> Result<(), String> {
+    use crate::tags::code::{FILE_ATTRIBUTES, METADATA, SET_BACKGROUND_COLOR};
+    if h.version == 0 {
+        return Err("the SWF version must be at least 1".into());
+    }
+    if !(0.0..256.0).contains(&h.frame_rate) {
+        return Err("the frame rate must be from 0 to 255.99".into());
+    }
+    let twips = |px: f64| -> Result<i32, String> {
+        let t = (px * 20.0).round();
+        if px > 0.0 && t < (1 << 30) as f64 { Ok(t as i32) } else { Err("the stage size must be positive".into()) }
+    };
+    let (w, hgt) = (twips(h.width)?, twips(h.height)?);
+    let color = match h.background.as_deref() {
+        Some(c) => {
+            let hex = c.trim().trim_start_matches('#');
+            let v = (hex.len() == 6).then(|| u32::from_str_radix(hex, 16).ok()).flatten().ok_or_else(|| format!("\"{c}\" is not a #rrggbb colour"))?;
+            Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+        }
+        None => None,
+    };
+    swf.header.version = h.version;
+    swf.frame_rate = (h.frame_rate * 256.0).round() / 256.0;
+    swf.frame_rect.x_max = swf.frame_rect.x_min + w;
+    swf.frame_rect.y_max = swf.frame_rect.y_min + hgt;
+    if let Some(c) = color {
+        match swf.timeline.tags.iter().position(|t| t.code == SET_BACKGROUND_COLOR) {
+            Some(i) => swf.set_tag_body(&[i], c.to_vec()).map_err(|e| e.to_string())?,
+            None => {
+                let at = swf.timeline.tags.iter().take_while(|t| t.code == FILE_ATTRIBUTES || t.code == METADATA).count();
+                swf.insert_tag(&[at], crate::tags::Tag::new(SET_BACKGROUND_COLOR, c.to_vec())).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}

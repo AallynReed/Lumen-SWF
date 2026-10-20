@@ -179,6 +179,31 @@ impl Swf {
         go(&mut self.timeline, path, tag).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))
     }
 
+    /// Removes the tag at `path`, keeping the frame counts of the timelines it was in.
+    pub fn remove_tag(&mut self, path: &[usize]) -> Result<Tag> {
+        fn go(tl: &mut Timeline, path: &[usize]) -> Option<Tag> {
+            let (first, rest) = path.split_first()?;
+            if rest.is_empty() {
+                return (*first < tl.tags.len()).then(|| tl.tags.remove(*first));
+            }
+            let parent = tl.tags.get_mut(*first)?;
+            let removed = go(parent.sprite.as_mut()?, rest)?;
+            let sprite = parent.sprite.as_ref()?;
+            let mut w = Writer::new();
+            w.bytes(parent.body.get(..2)?);
+            w.u16(sprite.frame_count() as u16);
+            sprite.write(&mut w);
+            parent.body = w.data;
+            parent.declared_len = None;
+            Some(removed)
+        }
+        let removed = go(&mut self.timeline, path).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))?;
+        if path.len() == 1 && removed.code == code::SHOW_FRAME {
+            self.frame_count = self.timeline.frame_count() as u16;
+        }
+        Ok(removed)
+    }
+
     /// One more than the highest character id defined or imported, as FFDec picks new ids.
     pub fn next_character_id(&self) -> u16 {
         let mut max = 0;
