@@ -3,6 +3,7 @@
 
 pub mod display;
 pub mod paths;
+pub mod raster;
 pub mod svg;
 
 pub use display::Renderer;
