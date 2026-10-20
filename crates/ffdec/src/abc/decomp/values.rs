@@ -111,6 +111,9 @@ fn basic_xml(s: &str) -> bool {
                 Some(p) => i += rest[..p + 3].chars().count(),
                 None => return false,
             }
+            if stack.is_empty() {
+                roots += 1;
+            }
             continue;
         }
         if rest.starts_with("<![CDATA[") {
@@ -118,12 +121,18 @@ fn basic_xml(s: &str) -> bool {
                 Some(p) => i += rest[..p + 3].chars().count(),
                 None => return false,
             }
+            if stack.is_empty() {
+                roots += 1;
+            }
             continue;
         }
         if rest.starts_with("<?") {
             match rest.find("?>") {
                 Some(p) => i += rest[..p + 2].chars().count(),
                 None => return false,
+            }
+            if stack.is_empty() {
+                roots += 1;
             }
             continue;
         }
