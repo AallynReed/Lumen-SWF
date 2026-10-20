@@ -277,7 +277,7 @@ impl Asset {
             DEFINE_BITS | DEFINE_BITS_JPEG2 | DEFINE_BITS_JPEG3 | DEFINE_BITS_JPEG4 | DEFINE_BITS_LOSSLESS | DEFINE_BITS_LOSSLESS2 => Asset::Image,
             DEFINE_SOUND => Asset::Sound,
             DEFINE_BINARY_DATA => Asset::Binary,
-            DEFINE_EDIT_TEXT => Asset::Text,
+            DEFINE_TEXT | DEFINE_TEXT2 | DEFINE_EDIT_TEXT => Asset::Text,
             _ => return None,
         })
     }
@@ -300,7 +300,8 @@ pub fn import(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
         Some(Asset::Image) => image(swf, path, data),
         Some(Asset::Sound) => sound(swf, path, data),
         Some(Asset::Binary) => binary(swf, path, data),
-        Some(Asset::Text) => edit_text(swf, path, &String::from_utf8_lossy(data)),
+        Some(Asset::Text) if code == DEFINE_EDIT_TEXT => edit_text(swf, path, &String::from_utf8_lossy(data)),
+        Some(Asset::Text) => crate::text::import(swf, path, &String::from_utf8_lossy(data)).map_err(|e| Error::Other(e.to_string())),
         None => err(format!("{} tags cannot be replaced yet", crate::tags::display_name(code))),
     }
 }

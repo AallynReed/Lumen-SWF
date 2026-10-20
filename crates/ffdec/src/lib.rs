@@ -17,6 +17,7 @@ pub mod render;
 pub mod swf;
 pub mod shape;
 pub mod tags;
+pub mod text;
 pub mod tree;
 pub mod types;
 

@@ -6,7 +6,7 @@ use resvg::{tiny_skia, usvg};
 
 use crate::error::{Error, Result};
 
-fn fonts() -> Arc<usvg::fontdb::Database> {
+pub fn fonts() -> Arc<usvg::fontdb::Database> {
     static DB: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
     DB.get_or_init(|| {
         let mut db = usvg::fontdb::Database::new();

@@ -24,6 +24,8 @@ pub struct Font {
     pub descent: Option<u16>,
     pub leading: Option<i16>,
     pub glyphs: Vec<Glyph>,
+    /// Layout kerning pairs: first code, second code, adjustment.
+    pub kerning: Vec<(u16, u16, i16)>,
 }
 
 pub struct Glyph {
@@ -130,6 +132,7 @@ fn read_v1(id: u16, r: &mut Reader, swf: &Swf) -> Result<Font> {
         descent: None,
         leading: None,
         glyphs,
+        kerning: Vec::new(),
     };
     swf.walk(|_, t| {
         if (t.code == DEFINE_FONT_INFO || t.code == DEFINE_FONT_INFO2) && t.character_id() == Some(id) {
@@ -198,6 +201,7 @@ fn read_v2(id: u16, r: &mut Reader, v3: bool) -> Result<Font> {
         descent: None,
         leading: None,
         glyphs,
+        kerning: Vec::new(),
     };
     let mut cr = Reader::new(body.get(code_table..).unwrap_or(&[]));
     for g in font.glyphs.iter_mut() {
@@ -210,6 +214,19 @@ fn read_v2(id: u16, r: &mut Reader, v3: bool) -> Result<Font> {
         for g in font.glyphs.iter_mut() {
             g.advance = Some(cr.u16()?);
         }
+        let kerning = (|| -> Result<Vec<(u16, u16, i16)>> {
+            for _ in 0..n {
+                crate::types::Rect::read(&mut cr)?;
+            }
+            let k = cr.u16()?;
+            (0..k)
+                .map(|_| {
+                    let (a, b) = if wide_codes { (cr.u16()?, cr.u16()?) } else { (cr.u8()? as u16, cr.u8()? as u16) };
+                    Ok((a, b, cr.i16()?))
+                })
+                .collect()
+        })();
+        font.kerning = kerning.unwrap_or_default();
     }
     Ok(font)
 }
