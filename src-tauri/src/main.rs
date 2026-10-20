@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::mem::ManuallyDrop;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -12,10 +13,38 @@ use serde::Serialize;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
+/// An open file and its exporter, whose render caches survive between calls.
 struct Doc {
     id: u32,
     path: PathBuf,
-    swf: Swf,
+    swf_ptr: &'static Swf,
+    exporter: ManuallyDrop<Exporter<'static>>,
+}
+
+impl Doc {
+    fn new(id: u32, path: PathBuf, swf: Swf) -> Doc {
+        let swf_ptr: &'static Swf = Box::leak(Box::new(swf));
+        Doc { id, path, swf_ptr, exporter: ManuallyDrop::new(Exporter::new(swf_ptr)) }
+    }
+
+    fn swf(&self) -> &Swf {
+        self.swf_ptr
+    }
+
+    fn exporter(&self) -> &Exporter<'_> {
+        &self.exporter
+    }
+}
+
+impl Drop for Doc {
+    fn drop(&mut self) {
+        // SAFETY: the exporter is the only holder of `swf_ptr` beyond `self`, and neither is
+        // handed out past a `&self` borrow, so freeing the exporter first leaves no users.
+        unsafe {
+            ManuallyDrop::drop(&mut self.exporter);
+            drop(Box::from_raw(self.swf_ptr as *const Swf as *mut Swf));
+        }
+    }
 }
 
 #[derive(Default)]
@@ -70,7 +99,7 @@ fn load(docs: &Docs, path: PathBuf) -> Res<Opened> {
         path: path.display().to_string(),
         warnings: swf.warnings.clone(),
     };
-    docs.open.lock().push(Doc { id, path, swf });
+    docs.open.lock().push(Doc::new(id, path, swf));
     Ok(opened)
 }
 
@@ -102,13 +131,13 @@ fn close_doc(docs: State<'_, Docs>, id: u32) {
 
 #[tauri::command]
 fn get_tree(docs: State<'_, Docs>, id: u32, raw: bool) -> Res<Vec<Node>> {
-    with_doc(&docs, id, |d| Ok(if raw { tree::tag_list(&d.swf) } else { tree::resource_tree(&d.swf) }))
+    with_doc(&docs, id, |d| Ok(if raw { tree::tag_list(d.swf()) } else { tree::resource_tree(d.swf()) }))
 }
 
 #[tauri::command]
 fn header_info(docs: State<'_, Docs>, id: u32) -> Res<Vec<Field>> {
     with_doc(&docs, id, |d| {
-        let s = &d.swf;
+        let s = d.swf();
         let h = &s.header;
         let f = |name: &str, value: String| Field { name: name.into(), value };
         let mut out = vec![
@@ -136,7 +165,7 @@ fn header_info(docs: State<'_, Docs>, id: u32) -> Res<Vec<Field>> {
 #[tauri::command]
 fn tag_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<TagInfo> {
     with_doc(&docs, id, |d| {
-        let t = find_tag(&d.swf, &path)?;
+        let t = find_tag(d.swf(), &path)?;
         Ok(TagInfo { fields: describe(t), size: t.body.len() })
     })
 }
@@ -144,7 +173,7 @@ fn tag_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<TagInfo> {
 #[tauri::command]
 fn tag_bytes(docs: State<'_, Docs>, id: u32, path: String, offset: usize, len: usize) -> Res<Bytes> {
     with_doc(&docs, id, |d| {
-        let t = find_tag(&d.swf, &path)?;
+        let t = find_tag(d.swf(), &path)?;
         let start = offset.min(t.body.len());
         let end = (start + len.min(1 << 20)).min(t.body.len());
         Ok(Bytes { offset: start, data: t.body[start..end].to_vec(), total: t.body.len() })
@@ -158,7 +187,7 @@ fn save_dialog(app: &tauri::AppHandle, name: &str, filter: (&str, &[&str])) -> O
 #[tauri::command]
 async fn export_tag(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<String>> {
     let (body, name) = with_doc(&docs, id, |d| {
-        let t = find_tag(&d.swf, &path)?;
+        let t = find_tag(d.swf(), &path)?;
         let stem = d.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         Ok((t.body.clone(), format!("{stem}_{}_{}.bin", path.replace('/', "-"), t.name())))
     })?;
@@ -171,7 +200,7 @@ async fn export_tag(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path:
 async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compression: String, encrypt: bool) -> Res<Option<String>> {
     let compression = Compression::parse(&compression).ok_or("unknown compression")?;
     let (bytes, name) = with_doc(&docs, id, |d| {
-        let bytes = d.swf.save(&SaveOptions { compression, encrypt }).map_err(|e| e.to_string())?;
+        let bytes = d.swf().save(&SaveOptions { compression, encrypt }).map_err(|e| e.to_string())?;
         Ok((bytes, d.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()))
     })?;
     let Some(out) = save_dialog(&app, &name, ("SWF", &["swf"])) else { return Ok(None) };
@@ -187,15 +216,32 @@ struct PreviewInfo {
     note: Option<String>,
     size: usize,
     exportable: bool,
+    frames: usize,
+    frame: usize,
+    frame_rate: f32,
 }
 
+/// A preview of a tag, or of the root timeline when `path` is empty.
 #[tauri::command]
-async fn preview_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<PreviewInfo>> {
-    let p = tree::parse_path(&path).ok_or("bad tag path")?;
+async fn preview_info(docs: State<'_, Docs>, id: u32, path: String, frame: usize) -> Res<Option<PreviewInfo>> {
+    let p = if path.is_empty() { Vec::new() } else { tree::parse_path(&path).ok_or("bad tag path")? };
     let (info, data) = with_doc(&docs, id, |d| {
-        let exportable = d.swf.tag(&p).is_some_and(|t| Kind::of(t.code).is_some());
-        match Exporter::new(&d.swf).preview(&p).map_err(|e| e.to_string())? {
-            Some(pv) => Ok((Some(PreviewInfo { kind: pv.kind, mime: pv.mime, text: pv.text, note: pv.note, size: pv.data.len(), exportable }), pv.data)),
+        let exportable = d.swf().tag(&p).is_some_and(|t| Kind::of(t.code).is_some());
+        match d.exporter().preview(&p, frame).map_err(|e| e.to_string())? {
+            Some(pv) => Ok((
+                Some(PreviewInfo {
+                    kind: pv.kind,
+                    mime: pv.mime,
+                    text: pv.text,
+                    note: pv.note,
+                    size: pv.data.len(),
+                    exportable,
+                    frames: pv.frames,
+                    frame: pv.frame,
+                    frame_rate: pv.frame_rate,
+                }),
+                pv.data,
+            )),
             None => Ok((None, Vec::new())),
         }
     })?;
@@ -213,17 +259,49 @@ fn preview_data(docs: State<'_, Docs>, id: u32, path: String) -> tauri::ipc::Res
     tauri::ipc::Response::new(data)
 }
 
+#[derive(serde::Deserialize, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct ExportOpts {
+    png: bool,
+    wav: bool,
+    shapes_png: bool,
+    frames_svg: bool,
+    texts_svg: bool,
+    zoom: f32,
+}
+
+impl From<ExportOpts> for Options {
+    fn from(o: ExportOpts) -> Options {
+        Options { png_only: o.png, wav_only: o.wav, shapes_png: o.shapes_png, frames_svg: o.frames_svg, texts_svg: o.texts_svg, zoom: o.zoom }
+    }
+}
+
+/// Exports one asset: a save dialog for a single file, a folder for several.
 #[tauri::command]
-async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, png: bool, wav: bool) -> Res<Option<String>> {
+async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, options: ExportOpts) -> Res<Option<String>> {
     let p = tree::parse_path(&path).ok_or("bad tag path")?;
-    let file = with_doc(&docs, id, |d| {
-        Exporter::new(&d.swf).export(&p, Options { png_only: png, wav_only: wav }).map_err(|e| e.to_string())
-    })?
-    .ok_or("this tag is not an exportable asset")?;
-    let ext = file.name.rsplit('.').next().unwrap_or("bin").to_string();
-    let Some(out) = save_dialog(&app, &file.name, (&ext.to_uppercase(), &[&ext])) else { return Ok(None) };
-    std::fs::write(&out, &file.data).map_err(|e| e.to_string())?;
-    Ok(Some(out.display().to_string()))
+    let files = with_doc(&docs, id, |d| d.exporter().export(&p, options.into()).map_err(|e| e.to_string()))?;
+    match files.len() {
+        0 => Err("this tag is not an exportable asset".into()),
+        1 => {
+            let file = &files[0];
+            let ext = file.name.rsplit('.').next().unwrap_or("bin").to_string();
+            let Some(out) = save_dialog(&app, &file.name, (&ext.to_uppercase(), &[&ext])) else { return Ok(None) };
+            std::fs::write(&out, &file.data).map_err(|e| e.to_string())?;
+            Ok(Some(out.display().to_string()))
+        }
+        n => {
+            let Some(dir) = app.dialog().file().blocking_pick_folder().and_then(|d| d.into_path().ok()) else { return Ok(None) };
+            for f in &files {
+                let target = dir.join(&f.name);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
+                std::fs::write(&target, &f.data).map_err(|e| e.to_string())?;
+            }
+            Ok(Some(format!("{n} files to {}", dir.display())))
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -234,14 +312,14 @@ struct ExportReport {
 }
 
 #[tauri::command]
-async fn export_all(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, kinds: Vec<String>, png: bool, wav: bool) -> Res<Option<ExportReport>> {
+async fn export_all(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, kinds: Vec<String>, options: ExportOpts) -> Res<Option<ExportReport>> {
     let kinds: Vec<Kind> = kinds.iter().filter_map(|k| Kind::parse(k)).collect();
     if kinds.is_empty() {
         return Err("choose at least one asset type".into());
     }
     let Some(dir) = app.dialog().file().blocking_pick_folder().and_then(|d| d.into_path().ok()) else { return Ok(None) };
     with_doc(&docs, id, |d| {
-        let (written, errors) = Exporter::new(&d.swf).write_all(&dir, &kinds, Options { png_only: png, wav_only: wav });
+        let (written, errors) = d.exporter().write_all(&dir, &kinds, options.into());
         Ok(Some(ExportReport { dir: dir.display().to_string(), written: written.len(), errors }))
     })
 }
