@@ -382,7 +382,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let mut i = 0;
         while i < list.borrow().len() {
             let x = list.borrow()[i].clone();
-            if let K::With { scope, .. } = &x.borrow().k.clone() {
+            let xk = x.borrow().k.clone();
+            if let K::With { scope, .. } = &xk {
                 if is::set_local(scope) {
                     let ip = scope.borrow().src.map_or(-1, |s| s as i32);
                     if fd.usage(ip).is_empty() {
@@ -685,7 +686,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             } else {
                 (t.clone(), f.clone())
             };
-            if let Some(first) = body.borrow().first().cloned().filter(is_set_type) {
+            let first_set = body.borrow().first().cloned().filter(is_set_type);
+            if let Some(first) = first_set {
                 let gti = not_coerced(&value(&first));
                 let is_value = matches!(gti.borrow().k, K::NextValue { .. });
                 let is_name = matches!(gti.borrow().k, K::NextName { .. });

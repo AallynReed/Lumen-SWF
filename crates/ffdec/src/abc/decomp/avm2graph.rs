@@ -123,7 +123,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let Some(target) = self.fj_get(ld, prev) else { return Some(part) };
         let mut switched_reg = -1;
         for &gp in &self.parts[target].refs {
-            let found = ld.ignored_switches.borrow().iter().find(|(_, &v)| v == gp).map(|(k, _)| *k);
+            let found = ld.ignored_switches.borrow().iter().find(|&(_, &v)| v == gp).map(|(k, _)| *k);
             if self.map_has_value(&ld.ignored_switches.borrow(), gp) {
                 let fi = found.unwrap_or(-1);
                 switched_reg = ld.switched_regs.borrow().get(&fi).copied().unwrap_or(-1);
@@ -620,7 +620,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 }
                 cmds.borrow_mut().remove(pos);
             }
-            'with: while let Some(first) = cmds.borrow().first().cloned() {
+            'with: loop {
+                let first_cmd = cmds.borrow().first().cloned();
+                let Some(first) = first_cmd else { break };
                 let scope = match &first.borrow().k {
                     K::With { scope, .. } => scope.clone(),
                     _ => break,

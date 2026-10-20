@@ -283,7 +283,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         for &l in loops {
             let lp = &self.arena[l];
             if lp.phase == 1 {
-                conts.push(lp.cont.expect("loop continue"));
+                if let Some(c) = lp.cont {
+                    conts.push(c);
+                }
                 if let Some(pc) = lp.pre_cont {
                     conts.push(pc);
                 }

@@ -764,9 +764,10 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let mut back_edges: Vec<Edge> = Vec::new();
         for &l in &pc.loops {
             let lp = &self.arena[l];
-            let cont = lp.cont.expect("loop continue");
-            for be in lp.back_edges.iter() {
-                edges_insert(&self.parts, &mut back_edges, Edge { from: Some(be), to: cont });
+            if let Some(cont) = lp.cont {
+                for be in lp.back_edges.iter() {
+                    edges_insert(&self.parts, &mut back_edges, Edge { from: Some(be), to: cont });
+                }
             }
             if lp.phase == 1 {
                 if let Some(c) = lp.cont {
@@ -1006,7 +1007,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     body = Some(t.clone());
                 }
                 if let Some(body) = body {
-                    if let Some(index) = ll.ret.borrow().iter().position(|x| same(x, &ll.loop_item)) {
+                    let found = ll.ret.borrow().iter().position(|x| same(x, &ll.loop_item));
+                    if let Some(index) = found {
                         ll.ret.borrow_mut().remove(index);
                         let mut expr = if_expr(&last);
                         if inverted {
