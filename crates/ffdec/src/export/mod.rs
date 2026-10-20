@@ -11,6 +11,7 @@ pub mod ttf;
 pub mod video;
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use serde::Serialize;
 
@@ -114,6 +115,8 @@ pub struct Options {
     pub texts_svg: bool,
     /// Raster scale; 0 means 1.
     pub zoom: f32,
+    /// AS3 scripts as p-code instead of decompiled ActionScript.
+    pub scripts_pcode: bool,
 }
 
 impl Options {
@@ -138,6 +141,8 @@ pub struct Preview {
     #[serde(skip)]
     pub data: Vec<u8>,
     pub text: Option<String>,
+    /// A second rendition of `text`, such as p-code next to decompiled ActionScript.
+    pub alt_text: Option<String>,
     pub note: Option<String>,
     /// Frames the preview can step through (sprites, buttons, the root timeline).
     pub frames: usize,
@@ -153,6 +158,13 @@ pub struct Exporter<'a> {
     names: Names,
     jpeg_tables: Option<&'a [u8]>,
     renderer: Renderer<'a>,
+    as3: OnceLock<As3>,
+}
+
+/// The SWF's parsed ABCs with their type index, built on first use.
+struct As3 {
+    abcs: Vec<(Vec<usize>, crate::abc::Abc)>,
+    index: Arc<crate::abc::decomp::index::AbcIndex>,
 }
 
 const BUTTON_FRAMES: [(u8, &str); 4] = [(BUTTON_UP, "1_up"), (BUTTON_OVER, "2_over"), (BUTTON_DOWN, "3_down"), (BUTTON_HIT, "4_hittest")];
@@ -160,7 +172,33 @@ const BUTTON_FRAMES: [(u8, &str); 4] = [(BUTTON_UP, "1_up"), (BUTTON_OVER, "2_ov
 impl<'a> Exporter<'a> {
     pub fn new(swf: &'a Swf) -> Exporter<'a> {
         let jpeg_tables = swf.timeline.tags.iter().find(|t| t.code == JPEG_TABLES).map(|t| &t.body[..]);
-        Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf) }
+        Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf), as3: OnceLock::new() }
+    }
+
+    fn as3(&self) -> &As3 {
+        self.as3.get_or_init(|| {
+            let mut abcs = Vec::new();
+            self.swf.walk(|path, t| {
+                if let Some((data, _)) = crate::abc::tag_abc(t) {
+                    if let Ok(abc) = crate::abc::Abc::parse(data) {
+                        abcs.push((path.to_vec(), abc));
+                    }
+                }
+            });
+            let refs: Vec<&crate::abc::Abc> = abcs.iter().map(|(_, a)| a).collect();
+            let index = crate::abc::decomp::index_for(&refs);
+            As3 { abcs, index }
+        })
+    }
+
+    fn abc_at(&self, path: &[usize]) -> Result<&crate::abc::Abc> {
+        self.as3().abcs.iter().find(|(p, _)| p == path).map(|(_, a)| a).ok_or_else(|| Error::Other("not an ABC tag".into()))
+    }
+
+    /// Decompiled ActionScript of a script entry of the ABC at `path`.
+    pub fn script_source(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
+        let abc = self.abc_at(path)?;
+        Ok(crate::abc::decomp::entry_source(&self.as3().index, abc, e, self.swf.header.version))
     }
 
     pub fn renderer(&self) -> &Renderer<'a> {
@@ -298,16 +336,20 @@ impl<'a> Exporter<'a> {
                 Ok(out)
             }
             Kind::Scripts => {
-                let Some((data, _)) = crate::abc::tag_abc(tag) else { return Ok(Vec::new()) };
-                let abc = crate::abc::Abc::parse(data)?;
-                Ok(crate::abc::scripts::entries(&abc)
+                if crate::abc::tag_abc(tag).is_none() {
+                    return Ok(Vec::new());
+                }
+                let abc = self.abc_at(path)?;
+                let ext = if opts.scripts_pcode { "pcode" } else { "as" };
+                crate::abc::scripts::entries(abc)
                     .iter()
                     .map(|e| {
                         let mut name: Vec<String> = if e.package.is_empty() { Vec::new() } else { e.package.split('.').map(make_file_name).collect() };
-                        name.push(make_file_name(&format!("{}.pcode", e.name)));
-                        File { name: name.join("/"), mime: "text/plain", data: crate::abc::scripts::entry_pcode(&abc, e).into_bytes() }
+                        name.push(make_file_name(&format!("{}.{ext}", e.name)));
+                        let text = if opts.scripts_pcode { crate::abc::scripts::entry_pcode(abc, e) } else { self.script_source(path, e)? };
+                        Ok(File { name: name.join("/"), mime: "text/plain", data: text.into_bytes() })
                     })
-                    .collect())
+                    .collect()
             }
             Kind::Frames => Ok(Vec::new()),
         }
@@ -326,7 +368,7 @@ impl<'a> Exporter<'a> {
     /// A preview of a tag, or of the root timeline when `path` is empty.
     pub fn preview(&self, path: &[usize], frame: usize) -> Result<Option<Preview>> {
         let r = &self.renderer;
-        let p = |kind, mime, data, text: Option<String>| Preview { kind, mime, data, text, note: None, frames: 1, frame: 0, frame_rate: self.swf.frame_rate };
+        let p = |kind, mime, data, text: Option<String>| Preview { kind, mime, data, text, alt_text: None, note: None, frames: 1, frame: 0, frame_rate: self.swf.frame_rate };
         if path.is_empty() {
             let n = r.root_frame_count();
             let f = frame.min(n - 1);
@@ -394,18 +436,18 @@ impl<'a> Exporter<'a> {
         }))
     }
 
-    /// One AS3 script entry as a `.pcode` file.
-    pub fn export_script(&self, path: &[usize], script: &str) -> Result<File> {
+    /// One AS3 script entry as an `.as` file, or `.pcode` with `pcode`.
+    pub fn export_script(&self, path: &[usize], script: &str, pcode: bool) -> Result<File> {
         let pv = self.script_preview(path, script)?;
         let name = pv.note.as_deref().and_then(|n| n.split(' ').nth(1)).unwrap_or("script").rsplit('.').next().unwrap_or("script").to_string();
-        Ok(File { name: make_file_name(&format!("{name}.pcode")), mime: "text/plain", data: pv.text.unwrap_or_default().into_bytes() })
+        let (ext, text) = if pcode { ("pcode", pv.alt_text) } else { ("as", pv.text) };
+        Ok(File { name: make_file_name(&format!("{name}.{ext}")), mime: "text/plain", data: text.unwrap_or_default().into_bytes() })
     }
 
-    /// P-code of one AS3 script entry (`script` as `script:trait`) in the DoABC tag at `path`.
+    /// Decompiled ActionScript, with p-code as `alt_text`, of one AS3 script entry (`script` as
+    /// `script:trait`) in the DoABC tag at `path`.
     pub fn script_preview(&self, path: &[usize], script: &str) -> Result<Preview> {
-        let tag = self.swf.tag(path).ok_or_else(|| Error::Other("no such tag".into()))?;
-        let (data, _) = crate::abc::tag_abc(tag).ok_or_else(|| Error::Other("not an ABC tag".into()))?;
-        let abc = crate::abc::Abc::parse(data)?;
+        let abc = self.abc_at(path)?;
         let (s, t) = crate::abc::scripts::parse_id(script).ok_or_else(|| Error::Other("bad script id".into()))?;
         let e = crate::abc::scripts::entries(&abc)
             .into_iter()
@@ -415,7 +457,8 @@ impl<'a> Exporter<'a> {
             kind: "code",
             mime: "text/plain",
             data: Vec::new(),
-            text: Some(crate::abc::scripts::entry_pcode(&abc, &e)),
+            text: Some(self.script_source(path, &e)?),
+            alt_text: Some(crate::abc::scripts::entry_pcode(abc, &e)),
             note: Some(format!("{} {}, ABC {}.{}", e.kind, e.full_name(), abc.major, abc.minor)),
             frames: 1,
             frame: 0,
