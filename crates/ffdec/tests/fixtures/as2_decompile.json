@@ -1,0 +1,494 @@
+[
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame23_Test",
+  "frame": 23,
+  "expected": "stop();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame24_unicodeTest",
+  "frame": 24,
+  "expected": "trace(\"unicodeTest\");\r\nvar k = \"היפופוטמי, או א\";\r\ntrace(k);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame25_ifWithElseTest",
+  "frame": 25,
+  "expected": "trace(\"ifWithElseTest\");\r\nvar i = 5;\r\nif(i == 258)\r\n{\r\ntrace(\"onTrue\");\r\n}\r\nelse\r\n{\r\ntrace(\"onFalse\" + i);\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame26_forTest",
+  "frame": 26,
+  "expected": "trace(\"forTest\");\r\nvar i = 0;\r\nwhile(i < 10)\r\n{\r\ntrace(\"hello:\" + i);\r\ni++;\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame27_whileTest",
+  "frame": 27,
+  "expected": "trace(\"whileTest\");\r\nvar i = 0;\r\nwhile(i < 10)\r\n{\r\ntrace(\"hello:\" + i);\r\ni++;\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame28_forWithContinueTest",
+  "frame": 28,
+  "expected": "trace(\"forWithContinueTest\");\r\nvar i = 0;\r\nfor(; i < 10; i++)\r\n{\r\ntrace(\"hello:\" + i);\r\nif(i == 5)\r\n{\r\ntrace(\"i==5\");\r\nif(i == 7)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"hawk\");\r\n}\r\ntrace(\"end of the loop\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame29_doWhileTest",
+  "frame": 29,
+  "expected": "trace(\"doWhileTest\");\r\nvar i = 0;\r\ndo\r\n{\r\ntrace(\"i=\" + i);\r\ni++;\r\n}\r\nwhile(i < 10);\r\ntrace(\"end\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame30_switchTest",
+  "frame": 30,
+  "expected": "trace(\"switchTest\");\r\nvar i = 5;\r\nswitch(i)\r\n{\r\ncase 0:\r\ncase 1:\r\ntrace(\"one\");\r\nbreak;\r\ncase 2:\r\ntrace(\"two\");\r\ncase 3:\r\ntrace(\"three\");\r\nbreak;\r\ncase 4:\r\ntrace(\"four\");\r\nbreak;\r\ndefault:\r\ntrace(\"default clause\");\r\n}\r\ntrace(\"scriptend\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame31_strictEqualsTest",
+  "frame": 31,
+  "expected": "trace(\"strictEqualsTest\");\r\nvar i = 5;\r\nif(i === 5)\r\n{\r\ntrace(\"equals strict\");\r\n}\r\nif(i !== 5)\r\n{\r\ntrace(\"not equals strict\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame32_switchForTest",
+  "frame": 32,
+  "expected": "trace(\"switchForTest\");\r\nvar i = 0;\r\nfor(; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"zero\");\r\ncontinue;\r\ncase 5:\r\ntrace(\"five\");\r\nbreak;\r\ncase 10:\r\ntrace(\"ten\");\r\nbreak;\r\ncase 1:\r\nif(i == 7)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"one\");\r\ndefault:\r\ntrace(\"def\");\r\n}\r\ntrace(\"before loop end\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame33_functionTest",
+  "frame": 33,
+  "expected": "function hello(what, second)\r\n{\r\ntrace(\"hello \" + what + \"! \" + second);\r\n}\r\ntrace(\"functionTest\");\r\nhello(\"friend\",7);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame34_multipleConditionsTest",
+  "frame": 34,
+  "expected": "trace(\"multipleConditionsTest\");\r\nvar k = 5;\r\nif(k == 7 && k == 8)\r\n{\r\ntrace(\"first\");\r\n}\r\nif(k == 9)\r\n{\r\ntrace(\"second\");\r\n}\r\ntrace(\"finish\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame35_multipleConditions2Test",
+  "frame": 35,
+  "expected": "trace(\"multipleConditions2Test\");\r\nvar k = 5;\r\nif(k == 7 && k == 8)\r\n{\r\ntrace(\"first\");\r\n}\r\nif(k == 9 || k == 6)\r\n{\r\ntrace(\"second\");\r\n}\r\ntrace(\"finish\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame36_chainedAssignmentsTest",
+  "frame": 36,
+  "expected": "trace(\"chainedAssignmentsTest\");\r\nvar a = 7;\r\nvar b = 8;\r\nvar c = 9;\r\nvar d = c = b = a = 10;\r\ntrace(d);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame37_objectsTest",
+  "frame": 37,
+  "expected": "trace(\"objectsTest\");\r\nvar flashBox = new Box(box1);\r\n_root.onEnterFrame = function()\r\n{\r\nflashBox.moveUp();\r\n};\r\nvar ship = new Ship(200);\r\nvar enemy = new Enemy(56);\r\nship.moveDown(0.5);\r\nship.moveUp(0.2);\r\nenemy.moveRight(230);\r\nenemy.moveLeft(100);\r\nvar c = new Cox(box1);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame38_doWhile2Test",
+  "frame": 38,
+  "expected": "trace(\"doWhile2Test\");\r\nvar k = 5;\r\ndo\r\n{\r\nk++;\r\nif(k == 7)\r\n{\r\nk = 5 * k;\r\n}\r\nelse\r\n{\r\nk = 5 + k;\r\n}\r\n}\r\nwhile(k < 9);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame39_whileAndTest",
+  "frame": 39,
+  "expected": "trace(\"whileAndTest\");\r\nvar a = 5;\r\nvar b = 10;\r\nwhile(a < 10 && b > 1)\r\n{\r\na++;\r\nb--;\r\n}\r\na = 7;\r\nb = 9;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame40_forInTest",
+  "frame": 40,
+  "expected": "function testForIn()\r\n{\r\nvar _loc1_ = [];\r\nfor(var _loc2_ in _loc1_)\r\n{\r\nif(_loc2_ > 3)\r\n{\r\nif(_loc2_ == 5)\r\n{\r\nreturn 7;\r\n}\r\nreturn 8;\r\n}\r\n}\r\n}\r\ntrace(\"forInTest\");\r\ntrace(testForIn());\r\nvar arr = [];\r\nfor(var a in arr)\r\n{\r\ntrace(a);\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame41_tryTest",
+  "frame": 41,
+  "expected": "trace(\"tryTest\");\r\nvar k = 5;\r\ntry\r\n{\r\nk = Infinity;\r\n}\r\ncatch(e)\r\n{\r\ntrace(\"bug \" + e);\r\n}\r\nfinally\r\n{\r\ntrace(\"huu\");\r\n}\r\ntrace(\"next\");\r\ntry\r\n{\r\nk = 6;\r\n}\r\ncatch(e)\r\n{\r\ntrace(\"bug2 \" + e);\r\n}\r\ntrace(\"next2\");\r\nvar k = 5;\r\ntry\r\n{\r\nk = Infinity;\r\n}\r\nfinally\r\n{\r\ntrace(\"final\");\r\n}\r\ntrace(\"end\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame42_indicesTest",
+  "frame": 42,
+  "expected": "trace(\"indicesTest\");\r\nvar k = [1,2,3];\r\nvar b = k[1];\r\ntrace(b);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame43_incDecTest",
+  "frame": 43,
+  "expected": "function tst()\r\n{\r\nreturn 1;\r\n}\r\ntrace(\"incDecTest\");\r\nvar i = 5;\r\nvar b = i++;\r\nvar c = --i + 5;\r\ntrace(\"a:\" + a + \" b:\" + b + \" c:\" + c);\r\nvar arr = [1,2,3];\r\nvar d = arr[tst()]++;\r\ntrace(d);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame44_chainedAssignments2Test",
+  "frame": 44,
+  "expected": "trace(\"chainedAssignments2Test\");\r\nvar a = 5;\r\nvar b = 6;\r\nvar c = 7;\r\nvar d = c = b = a = 4;\r\nif((d = c = b = a = 7) > 2)\r\n{\r\ntrace(d);\r\n}\r\ntrace(d + 1);\r\nvar i = 0;\r\nwhile(i < 5)\r\n{\r\nif(i == 7)\r\n{\r\n}\r\ni++;\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame45_function2Test",
+  "frame": 45,
+  "expected": "function a()\r\n{\r\ntrace(\"hi\");\r\nvar _loc1_ = 5;\r\nif(_loc1_ == 7)\r\n{\r\nreturn undefined;\r\n}\r\n_loc1_ *= 9;\r\ntrace(_loc1_);\r\n}\r\ntrace(\"function2Test\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame46_tryFunctionTest",
+  "frame": 46,
+  "expected": "function testtry()\r\n{\r\nvar _loc1_ = 5;\r\ntry\r\n{\r\nif(_loc1_ == 3)\r\n{\r\nreturn undefined;\r\n}\r\nif(_loc1_ == 4)\r\n{\r\nthrow new Error();\r\n}\r\n_loc1_ = 7;\r\n}\r\ncatch(e)\r\n{\r\ntrace(\"error\");\r\n}\r\nfinally\r\n{\r\ntrace(\"finally\");\r\n}\r\n}\r\ntrace(\"tryFunctionTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame47_ternarTest",
+  "frame": 47,
+  "expected": "trace(\"ternarTest\");\r\nvar a = 5;\r\nvar b = a != 4 ? 3 : 2;\r\ntrace(b);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame48_forInInTest",
+  "frame": 48,
+  "expected": "function tst()\r\n{\r\nvar _loc2_ = [];\r\n_loc2_[0] = [];\r\nfor(var _loc3_ in _loc2_)\r\n{\r\nfor(var _loc1_ in _loc3_)\r\n{\r\nif(_loc1_ == 5)\r\n{\r\nreturn 5;\r\n}\r\n}\r\nif(_loc3_ == 8)\r\n{\r\nreturn 3;\r\n}\r\n}\r\nreturn 8;\r\n}\r\ntrace(\"forInInTest\");\r\ntst();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame49_registersFuncTest",
+  "frame": 49,
+  "expected": "function tst(px)\r\n{\r\nvar _loc1_ = 57;\r\n_loc1_ *= 27;\r\n}\r\ntrace(\"registersFuncTest\");\r\ntst(5);\r\nvar s = String(5);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame50_ifFrameLoadedTest",
+  "frame": 50,
+  "expected": "trace(\"ifFrameLoadedTest\");\r\nifFrameLoaded(9)\r\n{\r\ntrace(\"loaded\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame51_function3Test",
+  "frame": 51,
+  "expected": "function tst()\r\n{\r\nvar _loc1_ = 5;\r\nc = _loc1_ = 8;\r\ntrace(\"hi\");\r\ntrace(_loc1_);\r\nif((e = d = f = c = 9) > 5)\r\n{\r\ntrace(\"dd\");\r\n}\r\n}\r\ntrace(\"function3Test\");\r\nvar c = 7;\r\nvar d = 7;\r\nvar e = 8;\r\ntst();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame52_commaOperatorTest",
+  "frame": 52,
+  "expected": "trace(\"commaOperatorTest\");\r\nvar a = 0;\r\nvar b = 0;\r\nvar c = 0;\r\nwhile(true)\r\n{\r\na++;\r\nb += 2;\r\nif(c >= 10)\r\n{\r\nbreak;\r\n}\r\ntrace(c);\r\nc++;\r\n}\r\ntrace(\"konec\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame53_commaOperator2Test",
+  "frame": 53,
+  "expected": "trace(\"commaOperator2Test\");\r\nvar k = 8;\r\ndo\r\n{\r\nif(k == 9)\r\n{\r\ntrace(\"h\");\r\nif(k == 9)\r\n{\r\ntrace(\"f\");\r\ncontinue;\r\n}\r\ntrace(\"b\");\r\n}\r\ntrace(\"gg\");\r\n}\r\nwhile(k++, k < 10);\r\ntrace(\"ss\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame54_function4Test",
+  "frame": 54,
+  "expected": "function tst()\r\n{\r\nvar _loc1_ = 5;\r\nwhile(_loc1_ < 10)\r\n{\r\nif(_loc1_ != 5)\r\n{\r\nreturn false;\r\n}\r\nif(_loc1_ == 6)\r\n{\r\nreturn true;\r\n}\r\n_loc1_ = _loc1_ + 1;\r\n}\r\n}\r\ntrace(\"function4Test\");\r\ntst();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame55_pushTest",
+  "frame": 55,
+  "expected": "trace(\"pushTest\");\r\n53;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame56_commaOperator3Test",
+  "frame": 56,
+  "expected": "trace(\"commaOperator3Test\");\r\nvar k = 1;\r\nwhile(true)\r\n{\r\nk++;\r\nif(k >= 10)\r\n{\r\nbreak;\r\n}\r\nk *= 5;\r\ntrace(k);\r\n}\r\ntrace(\"end\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame57_commaOperator4Test",
+  "frame": 57,
+  "expected": "trace(\"commaOperator4Test\");\r\nvar k = 0;\r\ndo\r\n{\r\ntrace(k);\r\nif(k == 8)\r\n{\r\ntrace(\"a\");\r\nif(k == 9)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"d\");\r\ntrace(\"b\");\r\n}\r\nk++;\r\n}\r\nwhile(k += 5, k < 20);\r\ntrace(\"end\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame58_globalFunctionsTest",
+  "frame": 58,
+  "expected": "function tst(p1)\r\n{\r\ntrace(\"test\");\r\n}\r\ntrace(\"globalFunctionsTest\");\r\nvar k = Array(1,2,3);\r\nvar a = 1;\r\nvar b = Boolean(a);\r\ncall(5);\r\nvar c = \"A\";\r\nclearInterval(5);\r\nclearTimeout(4);\r\nvar mc;\r\nduplicateMovieClip(mc,\"copy\",16389);\r\na = escape(\"how\");\r\nvar f = a;\r\nfscommand(\"alert(\\\"hi\\\");\");\r\na = getProperty(mc, _alpha);\r\na = getTimer();\r\ngetURL(\"http://localhost/\",\"wnd\",\"POST\");\r\na = getVersion();\r\ngotoAndPlay(5);\r\ngotoAndStop(8);\r\nifFrameLoaded(4)\r\n{\r\ntrace(\"loaded\");\r\n}\r\na = int(f);\r\na = isFinite(f);\r\na = isNaN(f);\r\na = length(f);\r\nloadMovie(\"http://localhost/test.swf\",a,\"GET\");\r\nloadMovieNum(\"http://localhost/test.swf\",5,\"GET\");\r\nloadVariables(\"http://localhost/vars.txt\",a,\"GET\");\r\nloadVariablesNum(\"http://localhost/vars.txt\",4,\"GET\");\r\na = mbchr(f);\r\na = mblength(f);\r\na = mbord(f);\r\na = mbsubstring(\"aaaa\",5,4);\r\nMMExecute(\"destroyPC\");\r\nnextFrame();\r\ngotoAndStop(1);\r\na = Number(f);\r\na = Object(f);\r\na = ord(f);\r\na = parseFloat(f);\r\na = parseInt(f,16);\r\nplay();\r\nprevFrame();\r\ngotoAndStop(1);\r\nprint(mc,\"bframe\");\r\nprintAsBitmap(mc,\"bframe\");\r\nprintAsBitmapNum(5,\"bframe\");\r\nprintNum(4,\"bframe\");\r\na = random(10);\r\nremoveMovieClip(mc);\r\nsetInterval(tst,5,f);\r\nsetProperty(mc, _alpha, 25);\r\nsetTimeout(ts,5,f);\r\nshowRedrawRegions(false,0);\r\nstartDrag(mc,1,5,5,6,6);\r\nstop();\r\nstopAllSounds();\r\nstopDrag();\r\na = String(f);\r\na = \"aa\";\r\ntargetPath(f);\r\ntellTarget(mc)\r\n{\r\ntrace(\"told\");\r\n}\r\ntoggleHighQuality();\r\na = unescape(f);\r\nunloadMovie(mc);\r\nunloadMovieNum(4);\r\nupdateAfterEvent();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame59_unaryOpTest",
+  "frame": 59,
+  "expected": "trace(\"unaryOpTest\");\r\nvar a = 5;\r\nvar c = ~a;\r\nvar d = ~(a + c);\r\nvar e = - c;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame60_numbersTest",
+  "frame": 60,
+  "expected": "trace(\"numbersTest\");\r\nvar x = null;\r\ntrace(\"null:\" + x);\r\nx = true;\r\ntrace(\"true:\" + x);\r\nx = false;\r\ntrace(\"false:\" + x);\r\nx = 1;\r\ntrace(\"1:\" + x);\r\nx = 2147483647;\r\ntrace(\"0x7fffffff:\" + x);\r\nx = 2147483648;\r\ntrace(\"0x80000000:\" + x);\r\nx = -2147483648;\r\ntrace(\"-0x80000000:\" + x);\r\nx = -2147483649;\r\ntrace(\"-0x80000001:\" + x);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame61_switchDefaultTest",
+  "frame": 61,
+  "expected": "trace(\"switchDefaultTest\");\r\nvar k = 5;\r\nswitch(k)\r\n{\r\ncase 5:\r\ndefault:\r\ntrace(\"default 5\");\r\ncase 6:\r\ntrace(\"default 5,6\");\r\nbreak;\r\ncase 7:\r\ntrace(\"7\");\r\n}\r\ntrace(\"afterSwitch\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame62_Test",
+  "frame": 62,
+  "expected": "trace(\"switchDefaultTest2\");\r\nvar k = 5;\r\nswitch(k)\r\n{\r\ncase 5:\r\ntrace(\"5\");\r\nbreak;\r\ndefault:\r\ntrace(\"default\");\r\ncase 6:\r\ntrace(\"default, 6\");\r\nbreak;\r\ncase 7:\r\ntrace(\"7\");\r\n}\r\ntrace(\"afterSwitch\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame63_functionVariablesTest",
+  "frame": 63,
+  "expected": "function outfunc()\r\n{\r\nvar _loc2_ = function()\r\n{\r\nvar a = 5;\r\nvar _loc3_ = 6;\r\nvar _loc2_ = function()\r\n{\r\nvar _loc1_ = a + 2;\r\ntrace(_loc1_);\r\nreturn _loc1_;\r\n};\r\nreturn _loc2_();\r\n};\r\nreturn _loc2_();\r\n}\r\ntrace(\"functionVariablesTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame64_functionInnerParametersTest",
+  "frame": 64,
+  "expected": "function outfunc()\r\n{\r\nvar _loc2_ = function(a, x)\r\n{\r\nvar _loc3_ = a + 3 + x;\r\nvar _loc2_ = function()\r\n{\r\nvar _loc1_ = a + 2;\r\ntrace(_loc1_);\r\nreturn _loc1_;\r\n};\r\nreturn _loc2_();\r\n};\r\nreturn _loc2_(5,2);\r\n}\r\ntrace(\"functionInnerParametersTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame65_loadClassesTest",
+  "frame": 65,
+  "expected": "trace(\"loadClassesTest\");\r\nvar tst = new com.jpexs.flash.test.TestLoader();\r\ntst.includeTests();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame66_forInBreakTest",
+  "frame": 66,
+  "expected": "function testFunc1()\r\n{\r\nfor(var _loc1_ in obj)\r\n{\r\ntrace(_loc1_);\r\n}\r\n}\r\nfunction testFunc2()\r\n{\r\nfor(var _loc1_ in obj)\r\n{\r\nif(_loc1_ == \"b\")\r\n{\r\ntrace(\"found\");\r\nbreak;\r\n}\r\n}\r\n}\r\nfunction testFunc3()\r\n{\r\nfor(var _loc1_ in obj)\r\n{\r\nif(_loc1_ == \"b\")\r\n{\r\ntrace(\"hi\");\r\nbreak;\r\n}\r\n}\r\ntrace(\"after\");\r\n}\r\nfunction testFunc4()\r\n{\r\nfor(var _loc1_ in obj)\r\n{\r\nif(_loc1_ == \"b\")\r\n{\r\ntrace(\"hi\");\r\nbreak;\r\n}\r\nif(_loc1_ == \"c\")\r\n{\r\ntrace(\"hello\");\r\nbreak;\r\n}\r\ntrace(\"hohoho\");\r\n}\r\ntrace(\"after\");\r\n}\r\nfunction testFunc5()\r\n{\r\nvar _loc1_ = {key1:1,key2:2,key3:3};\r\nfor(var _loc3_ in obj)\r\n{\r\nif(_loc3_ == \"a\")\r\n{\r\ntrace(\"loop1_break\");\r\nbreak;\r\n}\r\nif(_loc3_ == \"b\")\r\n{\r\ntrace(\"hello\");\r\nfor(var _loc2_ in _loc1_)\r\n{\r\nif(_loc2_ == \"key1\")\r\n{\r\ntrace(\"loop2_break\");\r\nbreak;\r\n}\r\ntrace(\"loop2_inside\");\r\n}\r\ntrace(\"after_loop2\");\r\n}\r\ntrace(\"loop1_inside\");\r\n}\r\ntrace(\"after_loop1\");\r\n}\r\nfunction testFunc6()\r\n{\r\nvar _loc1_ = {key1:1,key2:2,key3:3};\r\nfor(var _loc3_ in obj)\r\n{\r\nif(_loc3_ == \"a\")\r\n{\r\ntrace(\"loop1_break\");\r\nbreak;\r\n}\r\ntrace(\"hello\");\r\nfor(var _loc2_ in _loc1_)\r\n{\r\nif(_loc2_ == \"key1\")\r\n{\r\ntrace(\"loop2_break\");\r\nbreak;\r\n}\r\ntrace(\"loop2_inside\");\r\n}\r\ntrace(\"after_loop2\");\r\n}\r\ntrace(\"after_loop1\");\r\n}\r\ntrace(\"forInBreakTest\");\r\nvar obj = {a:5,b:6,c:7};\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame67_switchVariantsTest",
+  "frame": 67,
+  "expected": "function test1()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test2()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test3()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test4()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\ndefault:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test5()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test6()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test7()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ndefault:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test8()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test9()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test10()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place3\");\r\nbreak;\r\ndefault:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test11()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test12()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test13()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ndefault:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test14()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test15()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test16()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test17()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test18()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test19()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test20()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test21()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test22()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test23()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ndefault:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test24()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test25()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test26()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test27()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test28()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ndefault:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test29()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ndefault:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test30()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test31()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test32()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test33()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ndefault:\r\ntrace(\"place1\");\r\ncase 1:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test34()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test35()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place2\");\r\ncase 2:\r\ntrace(\"place3\");\r\nbreak;\r\ndefault:\r\ntrace(\"place1\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test36()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ndefault:\r\ntrace(\"place1\");\r\ncase 1:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test37()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test38()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ndefault:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 1:\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test39()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test40()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test41()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test42()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test43()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test44()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test45()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test46()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ndefault:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test47()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test48()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ndefault:\r\ntrace(\"place2\");\r\ncase 2:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test49()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ndefault:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test50()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test51()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ndefault:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\n}\r\ntrace(\"place3\");\r\ntrace(\"after switch\");\r\n}\r\nfunction test52()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test53()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test54()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place3\");\r\nbreak;\r\ndefault:\r\ntrace(\"place1\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test55()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test56()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place3\");\r\nbreak;\r\ndefault:\r\ntrace(\"place1\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test57()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test58()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ntrace(\"place1\");\r\nbreak;\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test59()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ntrace(\"place2\");\r\nbreak;\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\nfunction test60()\r\n{\r\nvar _loc1_ = random(100);\r\nswitch(_loc1_)\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ntrace(\"place3\");\r\n}\r\ntrace(\"after switch\");\r\n}\r\ntrace(\"switchVariantsTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame68_tryTypeTest",
+  "frame": 68,
+  "expected": "trace(\"tryTypeTest\");\r\nvar a = 5;\r\ntry\r\n{\r\na /= 0;\r\n}\r\ncatch(e)\r\n{\r\ntrace(\"err:\" + e);\r\n}\r\ntry\r\n{\r\na /= 0;\r\n}\r\ncatch(e)\r\n{\r\nif(a == 0)\r\n{\r\nthrow e;\r\n}\r\ntrace(\"err:\" + e);\r\n}\r\ntry\r\n{\r\na /= 0;\r\n}\r\ncatch(e:MyError)\r\n{\r\ntrace(\"err:\" + e);\r\n}\r\ntry\r\n{\r\na /= 0;\r\n}\r\ncatch(e1:MyError)\r\n{\r\ntrace(\"err:\" + e1);\r\n}\r\ncatch(e2)\r\n{\r\ntrace(\"err:\" + e2);\r\n}\r\ntry\r\n{\r\na /= 0;\r\n}\r\ncatch(e:MyError)\r\n{\r\ntrace(\"err:\" + e);\r\n}\r\ncatch(e2:Error)\r\n{\r\ntrace(\"err:\" + e2);\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame69_forInBreakTest",
+  "frame": 69,
+  "expected": "trace(\"forInBreakTest\");\r\nvar obj = {a:5,b:6,c:7};\r\nfor(var k in obj)\r\n{\r\ntrace(k);\r\nbreak;\r\n}\r\ntrace(\"after\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame70_forWithContinue2Test",
+  "frame": 70,
+  "expected": "trace(\"forWithContinue2Test\");\r\nvar s = \"A\";\r\nvar i = 0;\r\nfor(; i < 10; i++)\r\n{\r\nif(s == \"B\")\r\n{\r\nif(s == \"C\")\r\n{\r\ncontinue;\r\n}\r\n}\r\ntrace(\"D\");\r\nvar j = 0;\r\nwhile(j < 29)\r\n{\r\ntrace(\"E\");\r\nj++;\r\n}\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame71_chainedAfterForInTest",
+  "frame": 71,
+  "expected": "function f()\r\n{\r\nvar _loc4_ = 5;\r\nvar _loc3_ = {};\r\nvar _loc2_ = \"bagr\";\r\nfor(var _loc1_ in _locy_)\r\n{\r\ntrace(_loc1_);\r\n}\r\n_loc3_.r1 = _loc2_ + 1 + \". \" + (!_loc4_ ? (_loc3_.r2 = v1[_loc2_][0]) : \"unk\");\r\n}\r\ntrace(\"chainedAfterForInTest\");\r\nvar v1 = {};\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame72_forInSwitchTest",
+  "frame": 72,
+  "expected": "function f()\r\n{\r\nvar _loc3_ = {};\r\nvar _loc2_ = {};\r\nvar _loc1_;\r\nfor(var _loc4_ in _loc3_)\r\n{\r\n_loc1_ = _loc2_[_loc4_];\r\nswitch(_loc1_)\r\n{\r\ncase \"A\":\r\ncase \"B\":\r\ncase \"C\":\r\ntrace(\"Ret 5\");\r\nreturn 5;\r\n}\r\n}\r\ntrace(\"Final\");\r\nreturn 10;\r\n}\r\ntrace(\"forInSwitchTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame73_deleteTest",
+  "frame": 73,
+  "expected": "trace(\"deleteTest\");\r\nvar obj = {a:1,b:2};\r\nobj[\"salam likum\"] = 58;\r\ndelete obj.a;\r\ndelete obj[\"salam likum\"];\r\ndelete \"bagr aa\";\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame74_setPropertyTest",
+  "frame": 74,
+  "expected": "trace(\"setPropertyTest\");\r\nsetProperty(\"_root\", _rotation, 45);\r\n_root._rotation = 60;\r\ntrace(getProperty(\"_root\", _rotation));\r\nset(\"_root._rotation\",60);\r\ntrace(undefined);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame75_castOpTest",
+  "frame": 75,
+  "expected": "trace(\"castOpTest\");\r\nvar a = 5;\r\nvar b = null;\r\nb = flash.display.BitmapData(a);\r\nb = flash.external.ExternalInterface(a);\r\nb = flash.filters.BevelFilter(a);\r\nb = flash.filters.BitmapFilter(a);\r\nb = flash.filters.BlurFilter(a);\r\nb = flash.filters.ColorMatrixFilter(a);\r\nb = flash.filters.ConvolutionFilter(a);\r\nb = flash.filters.DisplacementMapFilter(a);\r\nb = flash.filters.DropShadowFilter(a);\r\nb = flash.filters.GlowFilter(a);\r\nb = flash.filters.GradientBevelFilter(a);\r\nb = flash.filters.GradientGlowFilter(a);\r\nb = flash.geom.ColorTransform(a);\r\nb = flash.geom.Matrix(a);\r\nb = flash.geom.Point(a);\r\nb = flash.geom.Rectangle(a);\r\nb = flash.geom.Transform(a);\r\nb = flash.net.FileReference(a);\r\nb = flash.net.FileReferenceList(a);\r\nb = flash.text.TextRenderer(a);\r\nb = Accordion(a);\r\nb = Alert(a);\r\nb = Array(a);\r\nb = BevelFilter(a);\r\nb = Binding(a);\r\nb = BitmapData(a);\r\nb = BitmapFilter(a);\r\nb = BlurFilter(a);\r\nb = Boolean(a);\r\nb = Button(a);\r\nb = Camera(a);\r\nb = Color(a);\r\nb = ColorMatrixFilter(a);\r\nb = ColorTransform(a);\r\nb = ComboBox(a);\r\nb = ComponentMixins(a);\r\nb = ContextMenu(a);\r\nb = ContextMenuItem(a);\r\nb = ConvolutionFilter(a);\r\nb = CustomActions(a);\r\nb = CheckBox(a);\r\nb = DataGrid(a);\r\nb = DataHolder(a);\r\nb = DataSet(a);\r\nb = DataType(a);\r\nb = Date(a);\r\nb = DateChooser(a);\r\nb = DateField(a);\r\nb = Delta(a);\r\nb = DeltaItem(a);\r\nb = DeltaPacket(a);\r\nb = DisplacementMapFilter(a);\r\nb = DropShadowFilter(a);\r\nb = EndPoint(a);\r\nb = Error(a);\r\nb = ExternalInterface(a);\r\nb = FileReference(a);\r\nb = FileReferenceList(a);\r\nb = FLVPlayback(a);\r\nb = Form(a);\r\nb = Function(a);\r\nb = GlowFilter(a);\r\nb = GradientBevelFilter(a);\r\nb = GradientGlowFilter(a);\r\nb = System.IME(a);\r\nb = Label(a);\r\nb = List(a);\r\nb = Loader(a);\r\nb = LoadVars(a);\r\nb = LocalConnection(a);\r\nb = Log(a);\r\nb = Matrix(a);\r\nb = MediaController(a);\r\nb = MediaDisplay(a);\r\nb = MediaPlayback(a);\r\nb = Menu(a);\r\nb = MenuBar(a);\r\nb = Microphone(a);\r\nb = MovieClip(a);\r\nb = MovieClipLoader(a);\r\nb = NetConnection(a);\r\nb = NetStream(a);\r\nb = Number(a);\r\nb = NumericStepper(a);\r\nb = Object(a);\r\nb = PendingCall(a);\r\nb = Point(a);\r\nb = PopUpManager(a);\r\nb = PrintJob(a);\r\nb = ProgressBar(a);\r\nb = RadioButton(a);\r\nb = RadioButtonGroup(a);\r\nb = RDBMSResolver(a);\r\nb = Rectangle(a);\r\nb = ScrollPane(a);\r\nb = System.security(a);\r\nb = SharedObject(a);\r\nb = Slide(a);\r\nb = SOAPCall(a);\r\nb = Sound(a);\r\nb = String(a);\r\nb = TextArea(a);\r\nb = TextField(a);\r\nb = TextFormat(a);\r\nb = TextInput(a);\r\nb = TextRenderer(a);\r\nb = TextSnapshot(a);\r\nb = Transform(a);\r\nb = Tree(a);\r\nb = TypedValue(a);\r\nb = UIScrollBar(a);\r\nb = Void(a);\r\nb = WebService(a);\r\nb = WebServiceConnector(a);\r\nb = Window(a);\r\nb = XML(a);\r\nb = XMLConnector(a);\r\nb = XMLNode(a);\r\nb = XMLSocket(a);\r\nb = XMLUI(a);\r\nb = XUpdateResolver(a);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame76_compoundAssignmentsTest",
+  "frame": 76,
+  "expected": "function f()\r\n{\r\ntrace(arguments[0]);\r\nvar _loc2_ = 0;\r\n_loc2_ += 20;\r\nvar _loc3_ = _loc2_ += 20;\r\n}\r\ntrace(\"compoundAssignmentsTest\");\r\nvar a = 0;\r\na += 5;\r\nvar x = a += 5;\r\na.b.c += 10;\r\nx = a.b.c += 10;\r\nf(5);\r\ntrace(a.b.c += 30);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame77_Test",
+  "frame": 77,
+  "expected": "var as = 5;\r\nvar abstract = 6;\r\nvar Boolean = 7;\r\nvar bytes = 8;\r\nvar char = 9;\r\nvar const = 10;\r\nvar debugger = 11;\r\nvar double = 12;\r\nvar enum = 13;\r\nvar export = 14;\r\nvar final = 15;\r\nvar float = 16;\r\nvar goto = 17;\r\nvar is = 18;\r\nvar long = 19;\r\nvar namespace = 20;\r\nvar native = 21;\r\nvar package = 22;\r\nvar protected = 23;\r\nvar short = 24;\r\nvar synchronized = 25;\r\nvar throws = 26;\r\nvar transient = 27;\r\nvar use = 28;\r\nvar volatile = 29;\r\nvar false = 43;\r\nvar get = 48;\r\nvar null = 62;\r\nvar set = 69;\r\nvar undefined = 76;\r\nvar true = 81;\r\nvar false = 82;\r\nvar NaN = 83;\r\nvar newline = 84;\r\nvar Infinity = 85;\r\nvar each = 86;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame78_tellTargetTest",
+  "frame": 78,
+  "expected": "trace(\"tellTargetTest\");\r\ntellTarget(root.something)\r\n{\r\ntrace(\"A\");\r\nvar event1 = function()\r\n{\r\ntrace(\"B\");\r\ntellTarget(root.bagr)\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n};\r\n}\r\ntrace(\"E\");\r\ntellTarget(root.somethingA)\r\n{\r\ntrace(\"F\");\r\ntellTarget(root.somethingB)\r\n{\r\ntrace(\"G\");\r\n}\r\ntrace(\"H\");\r\n}\r\ntrace(\"I\");\r\ntellTarget(root.somethingC)\r\n{\r\ntrace(\"J\");\r\n}\r\ntrace(\"K\");\r\ntellTarget(root.somethingD)\r\n{\r\ntrace(\"L\");\r\ntellTarget(root.somethingE)\r\n{\r\ntrace(\"M\");\r\ntellTarget(root.somethingF)\r\n{\r\ntrace(\"N\");\r\n}\r\ntrace(\"O\");\r\n}\r\ntrace(\"P\");\r\n}\r\ntrace(\"Q\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame79_registersVsDefineLocalTest",
+  "frame": 79,
+  "expected": "function x1(c)\r\n{\r\nvar _loc2_ = 1;\r\nvar _loc1_ = 2;\r\nreturn _loc2_ + _loc1_ * c;\r\n}\r\nfunction x2(c)\r\n{\r\nvar a0 = 1;\r\nvar a1 = 2;\r\nvar r = Math.floor(Math.random() * 2);\r\nreturn eval(\"a\" + r) + b * c;\r\n}\r\nfunction x3(c)\r\n{\r\nvar _loc2_ = 1;\r\nvar _loc3_ = 2;\r\nvar _loc1_ = Math.floor(Math.random() * 2);\r\nset(\"a\" + _loc1_,12);\r\nreturn _loc2_ + b * c;\r\n}\r\ntrace(\"registersVsDefineLocalTest\");\r\ntrace(x1(2) + x2(3) + x3(4));\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame80_deleteEvalTest",
+  "frame": 80,
+  "expected": "trace(\"deleteEvalTest\");\r\nvar k0 = 1;\r\nvar k1 = 2;\r\nvar r = Math.floor(Math.random() * 2);\r\ntrace(eval(\"k\" + r));\r\ndelete (\"k\" + r);\r\ntrace(eval(\"k\" + r));\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame81_globalFuncAsVarTest",
+  "frame": 81,
+  "expected": "function t(x)\r\n{\r\ntrace(x);\r\n}\r\ntrace(\"globalFuncAsVarTest\");\r\nvar trace = 5;\r\ntrace = t;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame82_switchAndTest",
+  "frame": 82,
+  "expected": "trace(\"switchAndTest\");\r\nvar a = 5;\r\nvar b = 3;\r\nswitch(true)\r\n{\r\ncase a >= 0 && a <= 3:\r\ntrace(\"a 0-3\");\r\nbreak;\r\ncase a >= 4 && a <= 6:\r\ntrace(\"a 4-6\");\r\ncase a >= 7 && a <= 10:\r\ntrace(\"a 7-10\");\r\nbreak;\r\ncase a >= 11 && a <= 20:\r\ntrace(\"a 11-20\");\r\nbreak;\r\ncase a != 0 ? b < 5 : b > 5:\r\ntrace(\"a 0, b xx\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame83_ifframeLoaded2Test",
+  "frame": 83,
+  "expected": "trace(\"ifframeLoaded2Test\");\r\ntrace(\"A\");\r\nifFrameLoaded(9)\r\n{\r\nvar d = 5;\r\nif(d == 4)\r\n{\r\ntrace(\"B\");\r\n}\r\nelse\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\ntrace(\"E\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame84_withTest",
+  "frame": 84,
+  "expected": "trace(\"withTest\");\r\ntrace(\"before\");\r\nwith(_root.something)\r\n{\r\nsomesub = 5;\r\nwith(subvar)\r\n{\r\nsomesub2 = 4;\r\n}\r\ntrace(\"after1\");\r\n}\r\ntrace(\"after\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame85_numbersCallTest",
+  "frame": 85,
+  "expected": "trace(\"numbersCallTest\");\r\nvar a = (5).toString();\r\nvar b = 5.2.toString();\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame86_tryInsideForInTest",
+  "frame": 86,
+  "expected": "trace(\"tryInsideForInTest\");\r\nvar obj = {};\r\nfor(var thing in obj)\r\n{\r\ntry\r\n{\r\ntrace(\"a\");\r\n}\r\ncatch(error:Object)\r\n{\r\n}\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame87_callRegisterTest",
+  "frame": 87,
+  "expected": "function tst(o)\r\n{\r\nvar _loc1_ = \"a\";\r\no[_loc1_]();\r\n}\r\ntrace(\"callRegisterTest\");\r\nvar f = function()\r\n{\r\ntrace(\"A\");\r\n};\r\nvar g = function()\r\n{\r\ntrace(\"B\");\r\n};\r\nvar obj = {a:f,b:g};\r\ntst(obj);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame88_switchForInTest",
+  "frame": 88,
+  "expected": "trace(\"switchForInTest\");\r\nvar t = 5;\r\nvar a = [\"x\",\"y\",\"z\"];\r\nswitch(t)\r\n{\r\ncase 0:\r\ntrace(\"A\");\r\nbreak;\r\ncase 1:\r\ntrace(\"B\");\r\nbreak;\r\ncase 2:\r\nfor(var k in a)\r\n{\r\ntrace(k);\r\n}\r\n}\r\ntrace(\"finish\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame89_functionPostIncrementTest",
+  "frame": 89,
+  "expected": "function myFunc()\r\n{\r\nvar _loc2_ = 0;\r\nvar _loc1_ = {};\r\nvar _loc4_ = _loc1_[_loc2_++];\r\nvar _loc3_ = _loc1_[_loc2_--];\r\n}\r\ntrace(\"functionPostIncrementTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame90_bitwiseOperandsTest",
+  "frame": 90,
+  "expected": "trace(\"bitwiseOperandsTest\");\r\nvar a = 100;\r\nvar b = a & 0x08FF;\r\nvar c = 0x08FF & a;\r\nvar d = a | 0x0480;\r\nvar e = 0x0480 | a;\r\nvar f = a ^ 0x0641;\r\nvar g = 0x0641 ^ a;\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame91_dynamicGetUrlTest",
+  "frame": 91,
+  "expected": "trace(\"dynamicGetUrlTest\");\r\nvar n = 5;\r\nunloadMovieNum(n);\r\nprintNum(n,\"bmax\");\r\nprintAsBitmapNum(n,\"bmax\");\r\nloadMovieNum(\"something.swf\",n,\"POST\");\r\nvar v = _root.something;\r\nprint(v,\"bmax\");\r\nprintAsBitmap(v,\"bmax\");\r\nvar r = 5;\r\ngetURL(\"file\" + r + \".swf\",\"_blank\",\"POST\");\r\nfscommand(\"test\" + r,\"xx\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame92_Test",
+  "frame": 92,
+  "expected": "function f(tst)\r\n{\r\nvar _loc1_;\r\nif(tst)\r\n{\r\n_loc1_ = 1;\r\n}\r\nelse\r\n{\r\n_loc1_ = 2;\r\n}\r\n}\r\ntrace(\"testVarDefineInFunc\");\r\nf(tst);\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame93_Test",
+  "frame": 93,
+  "expected": "trace(\"testInnerSwitchNoLabel\");\r\nvar a;\r\nvar b;\r\nswitch(a)\r\n{\r\ncase 4:\r\ntrace(\"4\");\r\nbreak;\r\ncase 7:\r\ntrace(\"7\");\r\nbreak;\r\ndefault:\r\nswitch(b)\r\n{\r\ncase 1:\r\ntrace(\"1\");\r\nbreak;\r\ncase 2:\r\ntrace(\"2\");\r\n}\r\n}\r\ntrace(\"end\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame94_functionSwitchTest",
+  "frame": 94,
+  "expected": "function reset()\r\n{\r\n}\r\ntrace(\"functionSwitchTest\");\r\nstop();\r\nswitch(test)\r\n{\r\ncase 1:\r\ntrace(\"A\");\r\nbreak;\r\ncase 2:\r\ncase 3:\r\ntrace(\"B\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame95_breakDetectionTest",
+  "frame": 95,
+  "expected": "function myFunction(item)\r\n{\r\nvar _loc2_;\r\nvar _loc4_;\r\nif(!isNaN(item))\r\n{\r\n_loc2_ = [1,2,3];\r\nfor(var _loc3_ in _loc2_)\r\n{\r\nswitch(_loc3_)\r\n{\r\ncase \"A\":\r\nif(item == \"a\")\r\n{\r\nreturn true;\r\n}\r\ncase \"B\":\r\nif(item == \"b\")\r\n{\r\nreturn true;\r\n}\r\ncase \"C\":\r\nif(item == \"c\")\r\n{\r\nreturn true;\r\n}\r\ncase \"D\":\r\nif(item == \"d\")\r\n{\r\nreturn true;\r\n}\r\n}\r\n}\r\n}\r\nelse\r\n{\r\ntrace(\"item is nan\");\r\n}\r\nreturn false;\r\n}\r\ntrace(\"breakDetectionTest\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame96_doWhileTwiceTest",
+  "frame": 96,
+  "expected": "trace(\"doWhileTwiceTest\");\r\nvar a = 1;\r\nvar b = 2;\r\nwhile(true)\r\n{\r\nwhile(true)\r\n{\r\nif(a)\r\n{\r\ntrace(\"x\");\r\nif(b)\r\n{\r\nbreak;\r\n}\r\ntrace(\"y\");\r\n}\r\ntrace(\"z\");\r\nif(false)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"g\");\r\nif(b)\r\n{\r\nbreak;\r\n}\r\ntrace(\"h\");\r\nif(false)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"finish\");\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame97_twoInTest",
+  "frame": 97,
+  "expected": "trace(\"twoInTest\");\r\nvar o = {a:{}};\r\nfor(var n in o)\r\n{\r\nvar c = 5;\r\nfor(var i in o.a)\r\n{\r\nif(i == c)\r\n{\r\nif(i == 0)\r\n{\r\ntrace(\"xx\");\r\nbreak;\r\n}\r\n}\r\n}\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2Test",
+  "name": "frame98_andIntTest",
+  "frame": 98,
+  "expected": "trace(\"andIntTest\");\r\nvar a = 1;\r\nvar b = 5;\r\nif(0 && (1 || a < b))\r\n{\r\ntrace(\"okay\");\r\n}\r\n"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testVarsMethods",
+  "class": "com.jpexs.flash.test.testcases.TestVarsMethods",
+  "expected": "class com.jpexs.flash.test.testcases.TestVarsMethods\r\n{\r\nvar instVar = 1;\r\nstatic var statVar = 2;\r\nfunction TestVarsMethods()\r\n{\r\ntrace(\"constructor\");\r\n}\r\nfunction instMethod()\r\n{\r\ntrace(\"instance method\");\r\n}\r\nstatic function statMethod()\r\n{\r\ntrace(\"static method\");\r\n}\r\n\r\n}"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testMaintainOrder",
+  "class": "com.jpexs.flash.test.testcases.TestMaintainOrder",
+  "expected": "class com.jpexs.flash.test.testcases.TestMaintainOrder\r\n{\r\nvar a = 1;\r\nstatic var b = 2;\r\nvar c = 3;\r\nstatic var d = 4;\r\nstatic var e = 5;\r\nvar f = 6;\r\nvar g = 7;\r\nvar _x1 = \"after method m\";\r\nfunction TestMaintainOrder()\r\n{\r\n}\r\nfunction h()\r\n{\r\ntrace(\"8\");\r\n}\r\nfunction i()\r\n{\r\ntrace(\"9\");\r\n}\r\nstatic function j()\r\n{\r\ntrace(\"10\");\r\n}\r\nstatic function k()\r\n{\r\ntrace(\"11\");\r\n}\r\nfunction l()\r\n{\r\ntrace(\"12\");\r\n}\r\nstatic function m()\r\n{\r\ntrace(\"13\");\r\n}\r\nfunction _x2()\r\n{\r\ntrace(\"after _x1\");\r\n}\r\n\r\n}"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testSetterGetter",
+  "class": "com.jpexs.flash.test.testcases.TestSetterGetter",
+  "expected": "class com.jpexs.flash.test.testcases.TestSetterGetter\r\n{\r\nvar _myvar = 1;\r\nstatic var _mystvar = 2;\r\nvar _myvarsetonly = 3;\r\nvar _myvargetonly = 4;\r\nfunction TestSetterGetter()\r\n{\r\n}\r\nstatic function get mystvar()\r\n{\r\nreturn _mystvar;\r\n}\r\nstatic function set mystvar(val)\r\n{\r\n_mystvar = val;\r\n}\r\nfunction get myvar()\r\n{\r\nreturn this._myvar;\r\n}\r\nfunction set myvar(val)\r\n{\r\nthis._myvar = val;\r\n}\r\nfunction get myvargetonly()\r\n{\r\nreturn this._myvargetonly;\r\n}\r\nfunction set myvarsetonly(val)\r\n{\r\nthis._myvarsetonly = val;\r\n}\r\nfunction classic()\r\n{\r\ntrace(\"okay\");\r\n}\r\n\r\n}"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testCallSetterGetter",
+  "class": "com.jpexs.flash.test.testcases.TestCallSetterGetter",
+  "expected": "class com.jpexs.flash.test.testcases.TestCallSetterGetter\r\n{\r\n   var myobj;\n   function TestCallSetterGetter()\n   {\n   }\n   function testSetterCall()\n   {\n      this.myobj.myvar = 5;\n   }\n   function testGetterCall()\n   {\n      return this.myobj.myvar;\n   }\n   function testStatGetterCall()\n   {\n      return com.jpexs.flash.test.testcases.TestSetterGetter.mystvar;\n   }\n   function testStatSetterCall(val)\n   {\n      com.jpexs.flash.test.testcases.TestSetterGetter.mystvar = 6;\n   }\r\n}"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testReturnInConstructor",
+  "class": "com.jpexs.flash.test.testcases.TestReturnInConstructor",
+  "expected": "class com.jpexs.flash.test.testcases.TestReturnInConstructor\r\n{\r\n   function TestReturnInConstructor()\n   {\n      var _loc1_ = 3;\n      if(_loc1_ == 3)\n      {\n         trace(\"A\");\n         return;\n      }\n      trace(\"B\");\n   }\n   function func()\n   {\n      var _loc1_ = 3;\n      if(_loc1_ == 3)\n      {\n         trace(\"A\");\n         return undefined;\n      }\n      trace(\"B\");\n      return 5;\n   }\r\n}"
+ },
+ {
+  "suite": "ActionScript2ClassesTest",
+  "name": "testUnpopped",
+  "class": "com.jpexs.flash.test.testcases.TestUnpopped",
+  "expected": "class com.jpexs.flash.test.testcases.TestUnpopped\r\n{\r\nvar a;\n   var c = true;\n   function TestUnpopped()\n   {\n      \n   }\n   function run()\n   {\n      this.a; //unpopped\n      trace(\"b\");\n      if(this.c)\n      {\n         trace(\"c\");\n      }\n   }\r\n}"
+ }
+]
