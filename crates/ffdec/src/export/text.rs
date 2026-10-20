@@ -115,6 +115,10 @@ pub fn edit_text(tag: &Tag) -> Result<String> {
     Ok(if f2 & 0x02 != 0 { strip_html(&text) } else { text })
 }
 
+pub fn html_to_plain(s: &str) -> String {
+    strip_html(s)
+}
+
 fn strip_html(s: &str) -> String {
     let mut out = String::new();
     let mut tag = String::new();
