@@ -152,6 +152,18 @@ pub fn actions_to_tree(list: &ActionList, inside_do_init: bool, path: &str, unin
     r
 }
 
+/// `Helper.appendTimeoutCommentAs2`.
+fn timeout_comment(w: &mut Writer, actions: usize) {
+    w.append_no_hilight("/*").new_line();
+    w.append_no_hilight(" * Decompilation error").new_line();
+    w.append_no_hilight(" * Timeout (1 minute) was reached").new_line();
+    if actions > 0 {
+        w.append_no_hilight(&format!(" * Action count: {actions}")).new_line();
+    }
+    w.append_no_hilight(" */").new_line();
+    w.append_no_hilight("throw new Error(\"Not decompiled due to timeout\");").new_line();
+}
+
 fn error_comment(w: &mut Writer, kind: &str) {
     w.append_no_hilight("/*").new_line();
     w.append_no_hilight(" * Decompilation error").new_line();
@@ -166,7 +178,20 @@ fn error_comment(w: &mut Writer, kind: &str) {
 pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option<&str>, path: &str, uninit: &uninit::Uninitialized) -> String {
     crate::abc::decomp::with_big_stack(|| {
         let uninit = Rc::new(uninit.clone());
-        let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| actions_to_tree(list, inside_do_init, path, &uninit)));
+        let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::abc::decomp::method::with_deadline(|| actions_to_tree(list, inside_do_init, path, &uninit))));
+        let tree = match tree {
+            Ok(Some(t)) => Ok(t),
+            Ok(None) => {
+                SP.with(|c| *c.borrow_mut() = None);
+                let mut w = Writer::new();
+                timeout_comment(&mut w, list.actions.len());
+                return w.finish();
+            }
+            Err(e) => {
+                SP.with(|c| *c.borrow_mut() = None);
+                Err(e)
+            }
+        };
         let abc = Abc::empty();
         let ctx = Ctx::new(&abc, Config::default());
         let mut ld = LocalData::new(&ctx);
@@ -233,4 +258,12 @@ pub fn swf_uninitialized(swf: &crate::Swf) -> uninit::Uninitialized {
         }
         uninit::detect(&classes, &others)
     })
+}
+
+/// Decompiled source of one script, with the class fields `uninit` found for the SWF.
+pub fn source_text(swf: &crate::Swf, s: &super::scripts::Source, uninit: &uninit::Uninitialized) -> String {
+    let names = crate::names::Names::new(swf);
+    let empty = uninit::Uninitialized::default();
+    let u = if is_class_source(swf, &names, s) { uninit } else { &empty };
+    actions_to_source(&s.actions(swf), s.kind == super::scripts::Kind::DoInitAction, s.header.as_deref(), "", u)
 }

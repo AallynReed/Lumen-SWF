@@ -68,6 +68,21 @@ pub fn check_deadline() {
     }
 }
 
+/// Runs `f` under FFDec's per-script time limit; `None` when it ran out.
+pub fn with_deadline<T>(f: impl FnOnce() -> T) -> Option<T> {
+    let outer = DEADLINE.get();
+    if outer.is_none() {
+        DEADLINE.set(Some(std::time::Instant::now() + std::time::Duration::from_secs(TIMEOUT_SECS)));
+    }
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    DEADLINE.set(outer);
+    match r {
+        Ok(v) => Some(v),
+        Err(e) if e.is::<Timeout>() && outer.is_none() => None,
+        Err(e) => std::panic::resume_unwind(e),
+    }
+}
+
 /// What to decompile and in which context.
 #[derive(Clone)]
 pub struct MethodReq<'x> {
