@@ -267,3 +267,24 @@ pub fn source_text(swf: &crate::Swf, s: &super::scripts::Source, uninit: &uninit
     let u = if is_class_source(swf, &names, s) { uninit } else { &empty };
     actions_to_source(&s.actions(swf), s.kind == super::scripts::Kind::DoInitAction, s.header.as_deref(), "", u)
 }
+
+fn dotted(it: &It) -> Option<String> {
+    match &it.borrow().k {
+        K::AGetMember { obj, member, .. } => Some(format!("{}.{}", dotted(obj)?, items::direct_string(member)?)),
+        K::AGetVar { name, .. } => items::direct_string(name),
+        _ => None,
+    }
+}
+
+/// Classes of a decompiled `__Packages` script as (full name, trait keys, superclass).
+pub fn class_traits(tree: &List) -> Vec<(String, Vec<String>, Option<String>)> {
+    let mut out = Vec::new();
+    for it in tree.borrow().iter() {
+        if let K::AClass(c) = &it.borrow().k {
+            let Some(name) = dotted(&c.name) else { continue };
+            let keys = c.traits.iter().filter_map(|(k, _)| items::direct_string(k)).collect();
+            out.push((name, keys, c.extends.as_ref().and_then(dotted)));
+        }
+    }
+    out
+}
