@@ -53,6 +53,9 @@ enum Cmd {
         /// Raster scale for PNG output
         #[arg(long, default_value_t = 1.0)]
         zoom: f32,
+        /// AS3 scripts as p-code instead of decompiled ActionScript
+        #[arg(long)]
+        pcode: bool,
     },
     /// Render a character (by id) or a root frame (frame:N, 1-based) to .svg or .png
     Render {
@@ -68,6 +71,8 @@ enum Cmd {
     Scripts { file: PathBuf },
     /// Print the p-code of an AS3 script by full name, e.g. com.example.Main
     Pcode { file: PathBuf, name: String },
+    /// Print the decompiled ActionScript of an AS3 script by full name
+    As3 { file: PathBuf, name: String },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -145,14 +150,14 @@ fn main() -> Result<()> {
             let swf = open(&file)?;
             std::fs::write(&out, &tag_at(&swf, &path)?.body)?;
         }
-        Cmd::Export { file, outdir, kinds, png, wav, shapes_png, frames_svg, texts_svg, zoom } => {
+        Cmd::Export { file, outdir, kinds, png, wav, shapes_png, frames_svg, texts_svg, zoom, pcode } => {
             let swf = open(&file)?;
             let kinds = if kinds.is_empty() {
                 Kind::ALL.to_vec()
             } else {
                 kinds.iter().map(|k| Kind::parse(k).ok_or_else(|| anyhow!("unknown kind '{k}'"))).collect::<Result<_>>()?
             };
-            let opts = Options { png_only: png, wav_only: wav, shapes_png, frames_svg, texts_svg, zoom };
+            let opts = Options { png_only: png, wav_only: wav, shapes_png, frames_svg, texts_svg, zoom, scripts_pcode: pcode };
             let (written, errors) = Exporter::new(&swf).write_all(&outdir, &kinds, opts);
             println!("{} files written to {}", written.len(), outdir.display());
             for e in &errors {
@@ -205,6 +210,24 @@ fn main() -> Result<()> {
                 for e in ffdec::abc::scripts::entries(&abc) {
                     if e.full_name() == name {
                         print!("{}", ffdec::abc::scripts::entry_pcode(&abc, &e));
+                        found = true;
+                    }
+                }
+            }
+            if !found {
+                return Err(anyhow!("no script named '{name}'"));
+            }
+        }
+        Cmd::As3 { file, name } => {
+            let swf = open(&file)?;
+            let all = abcs(&swf);
+            let refs: Vec<&ffdec::abc::Abc> = all.iter().map(|(_, a)| a).collect();
+            let index = ffdec::abc::decomp::index_for(&refs);
+            let mut found = false;
+            for (_, abc) in &all {
+                for e in ffdec::abc::scripts::entries(abc) {
+                    if e.full_name() == name {
+                        print!("{}", ffdec::abc::decomp::entry_source(&index, abc, &e, swf.header.version));
                         found = true;
                     }
                 }
