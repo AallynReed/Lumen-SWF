@@ -196,13 +196,10 @@ function updateButtons() {
     $('empty').hidden = has;
     $('content').hidden = !has || !state.selected;
     $('btn-save').disabled = !has;
-    $('btn-save-inplace').disabled = !has;
     $('btn-close').disabled = !state.selected;
     const tagSelected = !!(state.selected && (state.selected.node.kind === 'tag' || state.selected.node.kind === 'script'));
-    const isTagOnly = !!(state.selected && state.selected.node.kind === 'tag');
     $('btn-export').disabled = !tagSelected;
-    $('btn-replace').disabled = !isTagOnly;
-    $('btn-raw').disabled = !isTagOnly;
+    $('btn-raw').disabled = !tagSelected;
     $('btn-export-all').disabled = !has;
 }
 
@@ -395,60 +392,15 @@ function renderPreview(info, data) {
 }
 
 // Decompiled ActionScript, with a switch to p-code when the preview carries both.
-function renderCode(el, info, editing = false) {
+function renderCode(el, info) {
     const pcode = state.codeView === 'pcode' && info.alt_text != null;
-    const canEdit = pcode || (info.alt_text == null && state.codeView === 'pcode');
     const seg = info.alt_text == null ? '' : `<div class="seg code-switch" role="tablist" aria-label="Code view">`
         + `<button class="seg-btn${pcode ? '' : ' active'}" data-view="as" role="tab">ActionScript</button>`
         + `<button class="seg-btn${pcode ? ' active' : ''}" data-view="pcode" role="tab">P-code</button></div>`;
-
-    const editBtn = (canEdit && !editing) ? `<button class="btn btn-edit-code" id="btn-edit-pcode">Edit P-code</button>` : '';
-    const header = `<div class="code-header">${seg}${editBtn}</div>`;
-
-    if (editing) {
-        const textVal = (pcode ? info.alt_text : info.text) || '';
-        el.innerHTML = header
-            + `<textarea class="code-edit" spellcheck="false" id="txt-code-edit">${esc(textVal)}</textarea>`
-            + `<div class="code-actions">`
-            + `<button id="btn-save-code" class="btn primary">Apply</button>`
-            + `<button id="btn-cancel-code" class="btn">Cancel</button>`
-            + `</div>`;
-
-        el.querySelector('#btn-save-code')?.addEventListener('click', async () => {
-            const doc = selectedDoc();
-            if (!doc || !state.selected) return;
-            const target = previewTarget(state.selected.node);
-            const text = el.querySelector('#txt-code-edit').value;
-            status('Applying script changes…');
-            try {
-                const out = await call('apply_script_edit', {
-                    id: doc.id,
-                    path: target.path,
-                    script: target.script || null,
-                    text: text,
-                });
-                status(out);
-                await loadTree(doc);
-                render();
-                showSelection();
-            } catch (e) {
-                status(String(e), true);
-            }
-        });
-
-        el.querySelector('#btn-cancel-code')?.addEventListener('click', () => {
-            renderCode(el, info, false);
-        });
-    } else {
-        el.innerHTML = header + `<pre class="code-view">${esc((pcode ? info.alt_text : info.text) || '')}</pre>`;
-        el.querySelector('#btn-edit-pcode')?.addEventListener('click', () => {
-            renderCode(el, info, true);
-        });
-    }
-
+    el.innerHTML = seg + `<pre class="code-view">${esc((pcode ? info.alt_text : info.text) || '')}</pre>`;
     el.querySelectorAll('.code-switch .seg-btn').forEach((b) => b.addEventListener('click', () => {
         state.codeView = b.dataset.view;
-        renderCode(el, info, false);
+        renderCode(el, info);
     }));
 }
 
@@ -602,36 +554,6 @@ $('btn-close').addEventListener('click', closeSelected);
 $('view-res').addEventListener('click', () => setView(false));
 $('view-tags').addEventListener('click', () => setView(true));
 
-$('btn-save-inplace').addEventListener('click', async () => {
-    const doc = selectedDoc() || state.docs[0];
-    if (!doc) return;
-    try {
-        const out = await call('save_inplace', { id: doc.id });
-        if (out) status(out);
-    } catch (e) {
-        status(String(e), true);
-    }
-});
-
-$('btn-replace').addEventListener('click', async () => {
-    const sel = state.selected;
-    if (!sel || !sel.node.path) return;
-    try {
-        const out = await call('replace_asset', { id: sel.docId, path: sel.node.path });
-        if (out) {
-            status(out);
-            const doc = selectedDoc();
-            if (doc) {
-                await loadTree(doc);
-                render();
-                showSelection();
-            }
-        }
-    } catch (e) {
-        status(String(e), true);
-    }
-});
-
 $('btn-save').addEventListener('click', (e) => {
     e.stopPropagation();
     $('export-menu').hidden = true;
@@ -702,13 +624,7 @@ $('btn-export-go').addEventListener('click', async () => {
 document.addEventListener('keydown', (e) => {
     if (!e.ctrlKey) return;
     if (e.key === 'o') openDialog();
-    else if (e.key === 's' && state.docs.length) {
-        if (e.shiftKey) {
-            $('btn-save').click();
-        } else {
-            $('btn-save-inplace').click();
-        }
-    }
+    else if (e.key === 's' && state.docs.length) $('btn-save').click();
     else if (e.key === 'f') $('filter').focus();
     else return;
     e.preventDefault();

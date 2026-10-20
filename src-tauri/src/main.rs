@@ -10,55 +10,65 @@ use ffdec::tree::{self, Node};
 use ffdec::{Compression, SaveOptions, Swf};
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::State;
-use tauri_plugin_dialog::DialogExt;
+use tauri::{Manager, State};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 /// An open file and its exporter, whose render caches survive between calls.
 struct Doc {
     id: u32,
     path: PathBuf,
-    swf: *mut Swf,
+    modified: bool,
+    swf_ptr: &'static Swf,
     exporter: ManuallyDrop<Exporter<'static>>,
 }
 
 impl Doc {
     fn new(id: u32, path: PathBuf, swf: Swf) -> Doc {
-        let swf = Box::into_raw(Box::new(swf));
-        let swf_ref: &'static Swf = unsafe { &*swf };
-        Doc { id, path, swf, exporter: ManuallyDrop::new(Exporter::new(swf_ref)) }
+        let swf_ptr: &'static Swf = Box::leak(Box::new(swf));
+        Doc { id, path, modified: false, swf_ptr, exporter: ManuallyDrop::new(Exporter::new(swf_ptr)) }
+    }
+
+    /// Applies `f` to a copy of the file, which replaces it only when `f` succeeds.
+    fn edit(&mut self, f: impl FnOnce(&mut Swf) -> Res<()>) -> Res<()> {
+        let mut swf = self.swf().clone();
+        f(&mut swf)?;
+        let mut doc = Doc::new(self.id, self.path.clone(), swf);
+        doc.modified = true;
+        *self = doc;
+        Ok(())
+    }
+
+    fn name(&self) -> String {
+        self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+
+    fn save_to(&mut self, path: PathBuf, opts: &SaveOptions) -> Res<()> {
+        let bytes = self.swf().save(opts).map_err(|e| e.to_string())?;
+        std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        self.path = path;
+        self.modified = false;
+        Ok(())
     }
 
     fn swf(&self) -> &Swf {
-        unsafe { &*self.swf }
+        self.swf_ptr
     }
 
     fn exporter(&self) -> &Exporter<'_> {
         &self.exporter
     }
-
-    fn mutate(&mut self, f: impl FnOnce(&mut Swf) -> Res<()>) -> Res<()> {
-        unsafe {
-            ManuallyDrop::drop(&mut self.exporter);
-            let swf_mut = &mut *self.swf;
-            f(swf_mut)?;
-            let swf_ref: &'static Swf = &*self.swf;
-            self.exporter = ManuallyDrop::new(Exporter::new(swf_ref));
-        }
-        Ok(())
-    }
 }
 
 impl Drop for Doc {
     fn drop(&mut self) {
+        // SAFETY: the exporter is the only holder of `swf_ptr` beyond `self`, and neither is
+        // handed out past a `&self` borrow, so freeing the exporter first leaves no users.
         unsafe {
             ManuallyDrop::drop(&mut self.exporter);
-            drop(Box::from_raw(self.swf));
+            drop(Box::from_raw(self.swf_ptr as *const Swf as *mut Swf));
         }
     }
 }
-
-unsafe impl Send for Doc {}
-unsafe impl Sync for Doc {}
 
 #[derive(Default)]
 struct Docs {
@@ -82,6 +92,7 @@ struct Opened {
 struct TagInfo {
     fields: Vec<Field>,
     size: usize,
+    importable: bool,
 }
 
 #[derive(Serialize)]
@@ -101,6 +112,14 @@ fn with_doc_mut<T>(docs: &Docs, id: u32, f: impl FnOnce(&mut Doc) -> Res<T>) -> 
     let mut open = docs.open.lock();
     let doc = open.iter_mut().find(|d| d.id == id).ok_or("document is not open")?;
     f(doc)
+}
+
+fn tag_path(path: &str) -> Res<Vec<usize>> {
+    if path.is_empty() {
+        Ok(Vec::new())
+    } else {
+        tree::parse_path(path).ok_or_else(|| "bad tag path".to_string())
+    }
 }
 
 fn find_tag<'a>(swf: &'a Swf, path: &str) -> Res<&'a ffdec::Tag> {
@@ -185,7 +204,7 @@ fn header_info(docs: State<'_, Docs>, id: u32) -> Res<Vec<Field>> {
 fn tag_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<TagInfo> {
     with_doc(&docs, id, |d| {
         let t = find_tag(d.swf(), &path)?;
-        Ok(TagInfo { fields: describe(t), size: t.body.len() })
+        Ok(TagInfo { fields: describe(t), size: t.body.len(), importable: ffdec::importers::Asset::of(t.code).is_some() })
     })
 }
 
@@ -216,15 +235,89 @@ async fn export_tag(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path:
 }
 
 #[tauri::command]
-async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compression: String, encrypt: bool) -> Res<Option<String>> {
+fn save(docs: State<'_, Docs>, id: u32) -> Res<String> {
+    with_doc_mut(&docs, id, |d| {
+        let opts = SaveOptions { compression: d.swf().header.compression, encrypt: d.swf().header.encrypted };
+        d.save_to(d.path.clone(), &opts)?;
+        Ok(d.path.display().to_string())
+    })
+}
+
+/// Saves under a new name, which the document then takes.
+#[tauri::command]
+async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compression: String, encrypt: bool) -> Res<Option<Opened>> {
     let compression = Compression::parse(&compression).ok_or("unknown compression")?;
-    let (bytes, name) = with_doc(&docs, id, |d| {
-        let bytes = d.swf().save(&SaveOptions { compression, encrypt }).map_err(|e| e.to_string())?;
-        Ok((bytes, d.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()))
-    })?;
+    let name = with_doc(&docs, id, |d| Ok(d.name()))?;
     let Some(out) = save_dialog(&app, &name, ("SWF", &["swf"])) else { return Ok(None) };
-    std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
-    Ok(Some(out.display().to_string()))
+    with_doc_mut(&docs, id, |d| {
+        d.save_to(out, &SaveOptions { compression, encrypt })?;
+        Ok(Some(Opened { id, name: d.name(), path: d.path.display().to_string(), warnings: Vec::new() }))
+    })
+}
+
+/// Replaces an image, sound, binary data or edit text with a file the user picks.
+#[tauri::command]
+async fn replace_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<String>> {
+    let p = tag_path(&path)?;
+    let asset = with_doc(&docs, id, |d| {
+        let t = d.swf().tag(&p).ok_or("no such tag")?;
+        ffdec::importers::Asset::of(t.code).ok_or_else(|| format!("{} tags cannot be replaced yet", t.name()))
+    })?;
+    let mut dialog = app.dialog().file();
+    if !asset.extensions().is_empty() {
+        dialog = dialog.add_filter(format!("{asset:?} files"), asset.extensions());
+    }
+    let Some(file) = dialog.add_filter("All files", &["*"]).blocking_pick_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let data = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::importers::import(swf, &p, &data).map_err(|e| e.to_string())))?;
+    Ok(Some(file.display().to_string()))
+}
+
+#[derive(Serialize)]
+struct EditError {
+    line: usize,
+    message: String,
+}
+
+impl From<ffdec::action::asm::ParseError> for EditError {
+    fn from(e: ffdec::action::asm::ParseError) -> Self {
+        EditError { line: e.line, message: e.message }
+    }
+}
+
+impl From<String> for EditError {
+    fn from(message: String) -> Self {
+        EditError { line: 0, message }
+    }
+}
+
+#[tauri::command]
+fn script_methods(docs: State<'_, Docs>, id: u32, path: String, script: String) -> Res<Vec<String>> {
+    let p = tag_path(&path)?;
+    with_doc(&docs, id, |d| ffdec::edit::script_methods(d.swf(), &p, &script).map_err(|e| e.message))
+}
+
+#[tauri::command]
+fn script_pcode(docs: State<'_, Docs>, id: u32, path: String, script: String, method: Option<String>) -> Res<String> {
+    let p = tag_path(&path)?;
+    with_doc(&docs, id, |d| ffdec::edit::script_pcode(d.swf(), &p, &script, method.as_deref()).map_err(|e| e.message))
+}
+
+/// Assembles edited p-code into the script; errors carry the line they are on.
+#[tauri::command]
+async fn apply_pcode(docs: State<'_, Docs>, id: u32, path: String, script: String, method: Option<String>, text: String) -> Result<(), EditError> {
+    let p = tag_path(&path)?;
+    let mut failure = None;
+    let r = with_doc_mut(&docs, id, |d| {
+        d.edit(|swf| {
+            ffdec::edit::set_script_pcode(swf, &p, &script, method.as_deref(), &text).map_err(|e| {
+                let m = e.message.clone();
+                failure = Some(e);
+                m
+            })
+        })
+    });
+    r.map_err(|m| failure.map_or_else(|| EditError::from(m), EditError::from))
 }
 
 #[derive(Serialize)]
@@ -244,7 +337,7 @@ struct PreviewInfo {
 /// A preview of a tag, or of the root timeline when `path` is empty.
 #[tauri::command]
 async fn preview_info(docs: State<'_, Docs>, id: u32, path: String, frame: usize, script: Option<String>) -> Res<Option<PreviewInfo>> {
-    let p = if path.is_empty() { Vec::new() } else { tree::parse_path(&path).ok_or("bad tag path")? };
+    let p = tag_path(&path)?;
     let (info, data) = with_doc(&docs, id, |d| {
         let exportable = d.swf().tag(&p).is_some_and(|t| Kind::of(t.code).is_some());
         let preview = match &script {
@@ -358,148 +451,43 @@ fn startup_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect()
 }
 
-#[tauri::command]
-async fn replace_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<String>> {
-    let p = tree::parse_path(&path).ok_or("bad tag path")?;
-    let (code, tag_name) = with_doc(&docs, id, |d| {
-        let t = d.swf().tag(&p).ok_or("tag not found")?;
-        Ok((t.code, t.name()))
-    })?;
-
-    let filter: (&str, &[&str]) = match code {
-        ffdec::tags::code::DEFINE_BITS
-        | ffdec::tags::code::DEFINE_BITS_JPEG2
-        | ffdec::tags::code::DEFINE_BITS_JPEG3
-        | ffdec::tags::code::DEFINE_BITS_JPEG4
-        | ffdec::tags::code::DEFINE_BITS_LOSSLESS
-        | ffdec::tags::code::DEFINE_BITS_LOSSLESS2 => ("Image files", &["png", "jpg", "jpeg", "gif", "bmp"]),
-        ffdec::tags::code::DEFINE_SOUND => ("Audio files", &["mp3", "wav", "bin"]),
-        ffdec::tags::code::DEFINE_BINARY_DATA => ("Binary files", &["bin", "swf", "*"]),
-        _ => ("All files", &["*"]),
-    };
-
-    let picked = app.dialog().file().add_filter(filter.0, filter.1).blocking_pick_file();
-    let Some(file_path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
-    let data = std::fs::read(&file_path).map_err(|e| e.to_string())?;
-
-    with_doc_mut(&docs, id, |d| {
-        d.mutate(|swf| {
-            match code {
-                ffdec::tags::code::DEFINE_BITS
-                | ffdec::tags::code::DEFINE_BITS_JPEG2
-                | ffdec::tags::code::DEFINE_BITS_JPEG3
-                | ffdec::tags::code::DEFINE_BITS_JPEG4
-                | ffdec::tags::code::DEFINE_BITS_LOSSLESS
-                | ffdec::tags::code::DEFINE_BITS_LOSSLESS2 => {
-                    ffdec::replace::replace_image(swf, &p, &data).map_err(|e| e.to_string())?;
-                }
-                ffdec::tags::code::DEFINE_SOUND => {
-                    ffdec::replace::replace_sound(swf, &p, &data).map_err(|e| e.to_string())?;
-                }
-                ffdec::tags::code::DEFINE_BINARY_DATA => {
-                    ffdec::replace::replace_binary(swf, &p, &data).map_err(|e| e.to_string())?;
-                }
-                _ => {
-                    swf.replace_tag_body(&p, &data).map_err(|e| e.to_string())?;
-                }
-            }
-            Ok(())
-        })
-    })?;
-
-    Ok(Some(format!("Replaced {tag_name} with {}", file_path.file_name().unwrap_or_default().to_string_lossy())))
+fn discard_dialog(app: &tauri::AppHandle, names: &str) -> tauri_plugin_dialog::MessageDialogBuilder<tauri::Wry> {
+    app.dialog()
+        .message(format!("Discard unsaved changes to {names}?"))
+        .title("Rust-FFDec")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Discard".into(), "Cancel".into()))
 }
 
-#[tauri::command]
-async fn save_inplace(docs: State<'_, Docs>, id: u32) -> Res<String> {
-    with_doc(&docs, id, |d| {
-        let opts = SaveOptions {
-            compression: d.swf().header.compression,
-            encrypt: d.swf().header.encrypted,
-        };
-        let bytes = d.swf().save(&opts).map_err(|e| e.to_string())?;
-        std::fs::write(&d.path, bytes).map_err(|e| e.to_string())?;
-        Ok(format!("Saved to {}", d.path.display()))
-    })
+/// Asks before closing the window while a file has unsaved changes.
+fn guard_close(window: &tauri::Window, event: &tauri::WindowEvent) {
+    let tauri::WindowEvent::CloseRequested { api, .. } = event else { return };
+    let app = window.app_handle();
+    let unsaved: Vec<String> = app.state::<Docs>().open.lock().iter().filter(|d| d.modified).map(Doc::name).collect();
+    if unsaved.is_empty() {
+        return;
+    }
+    api.prevent_close();
+    let window = window.clone();
+    discard_dialog(app, &unsaved.join(", ")).show(move |discard| {
+        if discard {
+            window.app_handle().state::<Docs>().open.lock().clear();
+            let _ = window.destroy();
+        }
+    });
 }
 
+/// Asks before discarding a file's unsaved changes.
 #[tauri::command]
-async fn apply_script_edit(docs: State<'_, Docs>, id: u32, path: String, script: Option<String>, text: String) -> Res<String> {
-    let p = if path.is_empty() { Vec::new() } else { tree::parse_path(&path).ok_or("bad tag path")? };
-    with_doc_mut(&docs, id, |d| {
-        d.mutate(|swf| {
-            if let Some(name) = &script {
-                // If it's an AS1/2 script
-                let as2_list = ffdec::action::scripts::export_paths(&ffdec::action::scripts::tree(swf));
-                for (n, src) in as2_list {
-                    if n == *name || n.trim_start_matches("scripts/") == name.trim_start_matches("scripts/") {
-                        let list = ffdec::action::asm::parse_pcode(&text, swf.header.version).map_err(|e| e.to_string())?;
-                        swf.replace_as2_script(&src.tag, &list).map_err(|e| e.to_string())?;
-                        return Ok(());
-                    }
-                }
-                // If it's an AS3 entry
-                let mut abcs = Vec::new();
-                swf.walk(|path, t| {
-                    if let Some((data, _)) = ffdec::abc::tag_abc(t) {
-                        if let Ok(abc) = ffdec::abc::Abc::parse(data) {
-                            abcs.push((path.to_vec(), abc));
-                        }
-                    }
-                });
-                for (abc_path, abc) in abcs {
-                    for e in ffdec::abc::scripts::entries(&abc) {
-                        if e.full_name() == *name {
-                            let code = ffdec::abc::asm::assemble_instructions(&text, &abc).map_err(|e| e.to_string())?;
-                            let mut new_abc = abc.clone();
-                            if let Some(trait_idx) = e.trait_index {
-                                let tr = &new_abc.scripts[e.script].traits[trait_idx];
-                                let method_opt = match &tr.data {
-                                    ffdec::abc::TraitData::Function { method, .. }
-                                    | ffdec::abc::TraitData::Method { method, .. }
-                                    | ffdec::abc::TraitData::Getter { method, .. }
-                                    | ffdec::abc::TraitData::Setter { method, .. } => Some(*method),
-                                    ffdec::abc::TraitData::Class { class, .. } => Some(new_abc.instances[*class].iinit),
-                                    _ => None,
-                                };
-                                if let Some(m) = method_opt {
-                                    if let Some(b_idx) = new_abc.body_of.get(m).copied().flatten() {
-                                        new_abc.bodies[b_idx].code = code;
-                                        swf.replace_as3_script(&abc_path, &new_abc.to_bytes()).map_err(|e| e.to_string())?;
-                                        return Ok(());
-                                    }
-                                }
-                            } else {
-                                let init = new_abc.scripts[e.script].init;
-                                if let Some(b_idx) = new_abc.body_of.get(init).copied().flatten() {
-                                    new_abc.bodies[b_idx].code = code;
-                                    swf.replace_as3_script(&abc_path, &new_abc.to_bytes()).map_err(|e| e.to_string())?;
-                                    return Ok(());
-                                }
-                            }
-                        }
-                    }
-                }
-                return Err(format!("could not find script '{name}'"));
-            } else {
-                let tag = swf.tag(&p).ok_or("tag not found")?;
-                if tag.code == ffdec::tags::code::DO_ACTION || tag.code == ffdec::tags::code::DO_INIT_ACTION {
-                    let list = ffdec::action::asm::parse_pcode(&text, swf.header.version).map_err(|e| e.to_string())?;
-                    swf.replace_as2_script(&p, &list).map_err(|e| e.to_string())?;
-                } else {
-                    return Err("editing this tag type is not supported directly".into());
-                }
-            }
-            Ok(())
-        })
-    })?;
-    Ok("Applied script update".into())
+async fn confirm_discard(app: tauri::AppHandle, name: String) -> bool {
+    discard_dialog(&app, &name).blocking_show()
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Docs::default())
+        .on_window_event(guard_close)
         .invoke_handler(tauri::generate_handler![
             open_dialog,
             open_path,
@@ -509,15 +497,18 @@ fn main() {
             tag_info,
             tag_bytes,
             export_tag,
+            save,
             save_as,
+            replace_asset,
+            script_methods,
+            script_pcode,
+            apply_pcode,
+            confirm_discard,
             preview_info,
             preview_data,
             export_asset,
             export_all,
-            startup_files,
-            replace_asset,
-            save_inplace,
-            apply_script_edit
+            startup_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running Rust-FFDec");
