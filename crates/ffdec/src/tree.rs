@@ -17,12 +17,15 @@ pub struct Node {
     pub category: &'static str,
     /// Tag path such as `"12/3"`; set for tag nodes.
     pub path: Option<String>,
+    /// AS3 script entry (`script:trait`) inside the DoABC tag at `path`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script: Option<String>,
     pub children: Vec<Node>,
 }
 
 impl Node {
     fn folder(label: &str, category: &'static str, children: Vec<Node>) -> Node {
-        Node { label: label.into(), kind: "folder", category, path: None, children }
+        Node { label: label.into(), kind: "folder", category, path: None, script: None, children }
     }
 }
 
@@ -98,7 +101,7 @@ pub fn tag_label(tag: &Tag, names: &HashMap<u16, String>) -> String {
 }
 
 fn tag_node(tag: &Tag, path: &[usize], names: &HashMap<u16, String>) -> Node {
-    Node { label: tag_label(tag, names), kind: "tag", category: category(tag.code), path: Some(path_str(path)), children: vec![] }
+    Node { label: tag_label(tag, names), kind: "tag", category: category(tag.code), path: Some(path_str(path)), script: None, children: vec![] }
 }
 
 fn frames(tl: &Timeline, base: &[usize], names: &HashMap<u16, String>, only_frame_tags: bool) -> Vec<Node> {
@@ -112,14 +115,14 @@ fn frames(tl: &Timeline, base: &[usize], names: &HashMap<u16, String>, only_fram
         let mut p = base.to_vec();
         p.push(i);
         if t.code == SHOW_FRAME {
-            out.push(Node { label: format!("frame {n}"), kind: "frame", category: "frames", path: Some(path_str(&p)), children: std::mem::take(&mut current) });
+            out.push(Node { label: format!("frame {n}"), kind: "frame", category: "frames", path: Some(path_str(&p)), script: None, children: std::mem::take(&mut current) });
             n += 1;
         } else if !only_frame_tags || is_frame_tag(t.code) || matches!(t.code, DO_ACTION) {
             current.push(tag_node(t, &p, names));
         }
     }
     if !current.is_empty() {
-        out.push(Node { label: format!("frame {n}"), kind: "frame", category: "frames", path: None, children: current });
+        out.push(Node { label: format!("frame {n}"), kind: "frame", category: "frames", path: None, script: None, children: current });
     }
     out
 }
@@ -130,6 +133,7 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
     let mut folders: HashMap<&str, Vec<Node>> = HashMap::new();
     let mut others = Vec::new();
     let mut scripts = Vec::new();
+    let mut as3: Vec<([usize; 1], &Tag)> = Vec::new();
     let mut by_char: HashMap<u16, (&str, usize)> = HashMap::new();
     let mut attached: Vec<(u16, Node)> = Vec::new();
 
@@ -144,6 +148,7 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
         }
         match cat {
             "frames" => {}
+            "scripts" if t.code == DO_ABC || t.code == DO_ABC2 => as3.push((path, t)),
             "scripts" => scripts.push(script_node(t, &path, &names, swf)),
             "others" => others.push(tag_node(t, &path, &names)),
             _ => {
@@ -168,7 +173,7 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
         }
     }
 
-    let mut root = vec![Node { label: "header".into(), kind: "header", category: "header", path: None, children: vec![] }];
+    let mut root = vec![Node { label: "header".into(), kind: "header", category: "header", path: None, script: None, children: vec![] }];
     for cat in order {
         if let Some(list) = folders.remove(cat) {
             root.push(Node::folder(cat, cat, list));
@@ -179,6 +184,22 @@ pub fn resource_tree(swf: &Swf) -> Vec<Node> {
         root.push(Node::folder("frames", "frames", root_frames));
     }
     root.push(Node::folder("others", "others", others));
+    let mut packages = PackageTree::default();
+    for (path, t) in as3 {
+        let Some((data, _)) = crate::abc::tag_abc(t) else { continue };
+        match crate::abc::Abc::parse(data) {
+            Ok(abc) => {
+                for e in crate::abc::scripts::entries(&abc) {
+                    let node = Node { label: e.name.clone(), kind: "script", category: e.kind, path: Some(path_str(&path)), script: Some(e.id()), children: vec![] };
+                    packages.insert(&e.package, node);
+                }
+            }
+            Err(_) => scripts.push(tag_node(t, &path, &names)),
+        }
+    }
+    let mut as3_nodes = packages.into_nodes();
+    as3_nodes.extend(scripts);
+    let scripts = as3_nodes;
     if !scripts.is_empty() {
         root.push(Node::folder("scripts", "scripts", scripts));
     }
@@ -232,11 +253,38 @@ pub fn tag_list(swf: &Swf) -> Vec<Node> {
             })
             .collect()
     }
-    let mut root = vec![Node { label: "header".into(), kind: "header", category: "header", path: None, children: vec![] }];
+    let mut root = vec![Node { label: "header".into(), kind: "header", category: "header", path: None, script: None, children: vec![] }];
     root.extend(go(&swf.timeline, &mut Vec::new(), &names));
     root
 }
 
 pub fn parse_path(s: &str) -> Option<Vec<usize>> {
     s.split('/').map(|p| p.parse().ok()).collect()
+}
+
+/// Packages as nested folders (sorted), with their scripts after the sub-packages.
+#[derive(Default)]
+struct PackageTree {
+    packages: std::collections::BTreeMap<String, PackageTree>,
+    items: Vec<Node>,
+}
+
+impl PackageTree {
+    fn insert(&mut self, package: &str, node: Node) {
+        let mut cur = self;
+        if !package.is_empty() {
+            for part in package.split('.') {
+                cur = cur.packages.entry(part.to_string()).or_default();
+            }
+        }
+        cur.items.push(node);
+    }
+
+    fn into_nodes(self) -> Vec<Node> {
+        let mut out: Vec<Node> = self.packages.into_iter().map(|(name, sub)| Node::folder(&name, "package", sub.into_nodes())).collect();
+        let mut items = self.items;
+        items.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+        out.extend(items);
+        out
+    }
 }
