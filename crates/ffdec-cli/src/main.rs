@@ -53,7 +53,7 @@ enum Cmd {
         /// Raster scale for PNG output
         #[arg(long, default_value_t = 1.0)]
         zoom: f32,
-        /// Scripts as p-code instead of decompiled ActionScript (AS1/2 is always p-code for now)
+        /// Scripts as p-code instead of decompiled ActionScript
         #[arg(long)]
         pcode: bool,
     },
@@ -74,6 +74,8 @@ enum Cmd {
     Pcode { file: PathBuf, name: String },
     /// Print the decompiled ActionScript of an AS3 script by full name
     As3 { file: PathBuf, name: String },
+    /// Print the decompiled ActionScript of an AS1/2 script by export path, e.g. frame_1/DoAction
+    As2 { file: PathBuf, name: String },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -250,6 +252,11 @@ fn main() -> Result<()> {
             if !found {
                 return Err(anyhow!("no script named '{name}'"));
             }
+        }
+        Cmd::As2 { file, name } => {
+            let swf = open(&file)?;
+            let src = as2_scripts(&swf).into_iter().find(|(n, _)| *n == name).map(|(_, s)| s).ok_or_else(|| anyhow!("no script named '{name}'"))?;
+            print!("{}", Exporter::new(&swf).as2_source(&src));
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;
