@@ -3,6 +3,7 @@
 pub mod abc;
 pub mod action;
 pub mod container;
+pub mod edit;
 pub mod error;
 pub mod export;
 pub mod filters;

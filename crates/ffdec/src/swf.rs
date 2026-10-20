@@ -4,6 +4,7 @@ use crate::io::{Reader, Writer};
 use crate::tags::{code, Tag, Timeline};
 use crate::types::Rect;
 
+#[derive(Clone)]
 pub struct Swf {
     pub header: Header,
     pub frame_rect: Rect,
