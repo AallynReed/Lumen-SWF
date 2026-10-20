@@ -4,7 +4,7 @@ use crate::io::Writer;
 
 use super::{utf8_bytes, Action, ActionList, Charset, Op, Value, CP1252_HIGH};
 
-fn encode(cs: Charset, s: &str) -> Vec<u8> {
+pub fn encode(cs: Charset, s: &str) -> Vec<u8> {
     match cs {
         Charset::Utf8 => utf8_bytes(s),
         Charset::Windows1252 => s
