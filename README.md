@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 4 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, and shows ActionScript 3 bytecode as p-code. The AS3 decompiler is next; see [Roadmap](#roadmap).
+> **Status: phase 4 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, and decompiles ActionScript 3. AS3 deobfuscation is next; see [Roadmap](#roadmap).
 
 ## What works
 
@@ -23,7 +23,8 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
   - static text from embedded fonts, and dynamic text with system fonts;
   - sprites, buttons (all four states) and root frames, with nested sprite timing, clip masks, colour transforms, blend modes and the common filters (blur, drop shadow, glow, colour matrix, convolution).
 - Previews of every shape, sprite, button and text, with a frame player for sprites, buttons and the root timeline.
-- ActionScript 3: ABC bytecode parsed and listed by package and class, with FFDec-format p-code (FFDec's path-following disassembler, so obfuscated method bodies survive). The p-code matches FFDec's on 99.97% of the corpus's 10,580 method bodies. Scripts export as `.pcode` files.
+- ActionScript 3: ABC bytecode parsed and listed by package and class, with FFDec-format p-code (FFDec's path-following disassembler, so obfuscated method bodies survive). The p-code matches FFDec's on 99.97% of the corpus's 10,580 method bodies.
+- ActionScript 3 decompiler, a port of FFDec's: whole classes with imports, metadata, slot initializers and inner functions, typed with the player's own library. It reproduces 366 of JPEXS's 369 method expectations and all 21 class expectations. The preview switches between ActionScript and p-code; scripts export as `.as` (or `.pcode` with `--pcode`).
 - Drag and drop, and the installer adds an "Open with" entry for `.swf`.
 
 ## Download
@@ -39,12 +40,13 @@ ffdec-cli info movie.swf
 ffdec-cli tags movie.swf [--raw]
 ffdec-cli tag movie.swf 12/3
 ffdec-cli extract-tag movie.swf 12 body.bin
-ffdec-cli export movie.swf outdir [--kinds shapes,sprites] [--png] [--wav] [--shapes-png] [--frames-svg] [--texts-svg] [--zoom 2]
+ffdec-cli export movie.swf outdir [--kinds shapes,sprites] [--png] [--wav] [--shapes-png] [--frames-svg] [--texts-svg] [--pcode] [--zoom 2]
 ffdec-cli render movie.swf 12 shape.svg
 ffdec-cli render movie.swf frame:5 frame.png --zoom 2
 ffdec-cli frame movie.swf 5
 ffdec-cli scripts movie.swf
 ffdec-cli pcode movie.swf com.example.Main
+ffdec-cli as3 movie.swf com.example.Main
 ffdec-cli decompress in.swf out.swf
 ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
 ```
@@ -83,7 +85,7 @@ cargo test -p ffdec --release
 1. **Container and tags.** Done.
 2. **Asset export:** images, sounds, binary data, fonts, texts, video. Done.
 3. **Rendering:** shapes, morph shapes, sprites and frames to SVG/PNG, with previews. Done; bevel and gradient filters still to come.
-4. **ActionScript 3:** ABC bytecode and p-code done; decompiler and deobfuscation next.
+4. **ActionScript 3:** ABC bytecode, p-code and decompiler done; deobfuscation next.
 5. **ActionScript 1/2:** actions, p-code, decompiler.
 6. **Editing:** replacing assets, editing tags, recompiling scripts.
 7. **Extras:** SWC/ZIP bundles, search, XFL/FLA export, Iggy, AMF.
