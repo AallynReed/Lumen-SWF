@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "ffdec-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3003,7 +3003,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rust-ffdec"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "ffdec",
  "parking_lot",
