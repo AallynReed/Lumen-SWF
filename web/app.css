@@ -250,6 +250,7 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     background: var(--surface);
     color: var(--text);
 }
+.font-add { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
 .glyphs { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 4px; }
 .glyphs span {
     display: grid;

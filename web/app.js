@@ -392,6 +392,7 @@ function renderPreview(info, data) {
             const sample = chars.filter((c) => c.trim()).slice(0, 60).join('') || 'The quick brown fox';
             el.innerHTML = `<input class="font-sample" spellcheck="false" style="font-family:'${family}'" value="${esc(sample)}" aria-label="Sample text">`
                 + `<div class="glyphs" style="font-family:'${family}'">${chars.map((c) => `<span title="U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}">${esc(c)}</span>`).join('')}</div>`;
+            fontAddBar(el);
         }).catch(() => {
             el.innerHTML = '<p class="preview-empty">This font could not be loaded for preview.</p>';
         });
@@ -401,6 +402,33 @@ function renderPreview(info, data) {
     } else if (info.kind === 'code') {
         renderCode(el, info);
     }
+}
+
+// DefineFont2/3 take new glyphs from a font file: the characters typed here, and new shapes
+// for those they have.
+function fontAddBar(el) {
+    const sel = state.selected;
+    const n = sel && sel.node;
+    if (!n || n.kind !== 'tag' || !/^DefineFont[23] /.test(n.label)) return;
+    el.insertAdjacentHTML('afterbegin', '<div class="code-bar"><input class="font-add" spellcheck="false" placeholder="Characters to add" aria-label="Characters to add">'
+        + '<button class="btn" data-act="font-add" title="Pick a TrueType or OpenType font to redraw these glyphs and add the characters typed">From font file…</button></div>');
+    el.querySelector('[data-act="font-add"]').addEventListener('click', async () => {
+        const chars = el.querySelector('.font-add').value;
+        let count;
+        try {
+            count = await invoke('add_font_chars', { id: sel.docId, path: n.path, chars });
+        } catch (e) {
+            status(String(e), true);
+            return;
+        }
+        if (count == null) return;
+        const doc = state.docs.find((d) => d.id === sel.docId);
+        doc.modified = true;
+        await loadTree(doc);
+        render();
+        status(`Set ${count} glyph${count === 1 ? '' : 's'}`);
+        showSelection();
+    });
 }
 
 function textEditButton(el) {

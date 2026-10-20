@@ -273,6 +273,20 @@ async fn replace_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, pa
     Ok(Some(file.display().to_string()))
 }
 
+/// Adds characters to a DefineFont2/3 from a font file the user picks, also redrawing the
+/// characters it has; returns how many glyphs were set.
+#[tauri::command]
+async fn add_font_chars(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, chars: String) -> Res<Option<usize>> {
+    let p = tag_path(&path)?;
+    let dialog = app.dialog().file().add_filter("Fonts", &["ttf", "otf"]).add_filter("All files", &["*"]);
+    let Some(file) = dialog.blocking_pick_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let data = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let chars: Vec<char> = chars.chars().filter(|c| !c.is_control()).collect();
+    let mut n = 0;
+    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::importers::font(swf, &p, &data, &chars).map(|c| n = c).map_err(|e| e.to_string())))?;
+    Ok(Some(n))
+}
+
 #[derive(Serialize)]
 struct EditError {
     line: usize,
@@ -544,6 +558,7 @@ fn main() {
             script_pcode,
             apply_pcode,
             text_source,
+            add_font_chars,
             apply_text,
             apply_source,
             confirm_discard,
