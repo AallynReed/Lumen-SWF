@@ -96,3 +96,61 @@ fn pcode_assembles_to_itself() {
     report("pcode_asm", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
 }
+
+/// Assembling every method's printed p-code, with its trait where it has one, must leave
+/// the ABC byte for byte as it was.
+#[test]
+fn as3_pcode_assembles_to_itself() {
+    use ffdec::abc::asm::{assemble_method, TraitLoc};
+    use ffdec::abc::pcode::{method_pcode, trait_pcode};
+    let (mut total, mut bad) = (0, Vec::new());
+    for (f, swf) in swfs() {
+        swf.walk(|path, t| {
+            let Some((data, _)) = ffdec::abc::tag_abc(t) else { return };
+            let Ok(orig) = ffdec::abc::Abc::parse(data) else { return };
+            let mut owned: Vec<(usize, Option<TraitLoc>)> = Vec::new();
+            let mut add = |traits: &[ffdec::abc::Trait], loc: &dyn Fn(usize) -> TraitLoc| {
+                for (i, tr) in traits.iter().enumerate() {
+                    if let Some(m) = tr.method() {
+                        owned.push((m, Some(loc(i))));
+                    }
+                }
+            };
+            for (s, sc) in orig.scripts.iter().enumerate() {
+                add(&sc.traits, &|i| TraitLoc::Script(s, i));
+            }
+            for (c, ii) in orig.instances.iter().enumerate() {
+                add(&ii.traits, &|i| TraitLoc::Instance(c, i));
+            }
+            for (c, cl) in orig.classes.iter().enumerate() {
+                add(&cl.traits, &|i| TraitLoc::Class(c, i));
+            }
+            let traited: std::collections::HashSet<usize> = owned.iter().map(|(m, _)| *m).collect();
+            owned.extend((0..orig.methods.len()).filter(|m| !traited.contains(m)).map(|m| (m, None)));
+            for (m, loc) in owned {
+                total += 1;
+                let text = match loc {
+                    Some(l) => trait_pcode(&orig, orig.trait_at(l).unwrap()),
+                    None => method_pcode(&orig, m),
+                };
+                let mut abc = orig.clone();
+                match assemble_method(&mut abc, m, loc, &text) {
+                    Err(e) => bad.push(format!("{} {path:?} method {m}: {e}: {}", f.display(), text.lines().nth(e.line - 1).unwrap_or("").trim())),
+                    // Dead bytes the disassembler skips cannot survive; the text must then.
+                    Ok(()) if abc.to_bytes() != data => {
+                        let again = match loc {
+                            Some(l) => trait_pcode(&abc, abc.trait_at(l).unwrap()),
+                            None => method_pcode(&abc, m),
+                        };
+                        if again != text {
+                            bad.push(format!("{} {path:?} method {m}: differs", f.display()));
+                        }
+                    }
+                    Ok(()) => {}
+                }
+            }
+        });
+    }
+    report("as3_asm", total, &bad);
+    assert!(bad.is_empty(), "{} methods differ", bad.len());
+}

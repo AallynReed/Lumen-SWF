@@ -1,8 +1,7 @@
 //! AVM2 ABC bytecode serialization.
 
 use crate::io::Writer;
-use super::opcodes::{Instruction, Operand};
-use super::{mn_kind, ns_kind, trait_attr, Abc, MethodBody, Multiname, Trait, TraitData};
+use super::{mn_kind, ns_kind, trait_attr, Abc, Multiname, Trait, TraitData};
 
 pub fn write_u30(w: &mut Writer, v: usize) {
     write_u32v(w, (v & 0x3fff_ffff) as u32);
@@ -86,76 +85,6 @@ fn write_traits(w: &mut Writer, traits: &[Trait]) {
                 write_u30(w, m);
             }
         }
-    }
-}
-
-impl Instruction {
-    pub fn encode(&self, w: &mut Writer) {
-        w.u8(self.code);
-        for (i, kind) in self.kinds.iter().enumerate() {
-            let v = self.operands.get(i).copied().unwrap_or(0);
-            match kind {
-                Operand::ArgCount
-                | Operand::ClassIndex
-                | Operand::ExceptionIndex
-                | Operand::IntIndex
-                | Operand::UintIndex
-                | Operand::DoubleIndex
-                | Operand::FloatIndex
-                | Operand::Float4Index
-                | Operand::DecimalIndex
-                | Operand::StringIndex
-                | Operand::NamespaceIndex
-                | Operand::MultinameIndex
-                | Operand::MethodIndex
-                | Operand::ScopeIndex
-                | Operand::SlotIndex
-                | Operand::LocalRegIndex
-                | Operand::RegisterIndex
-                | Operand::Linenum
-                | Operand::OptU30 | Operand::DispatchId => {
-                    write_u30(w, v as usize);
-                }
-                Operand::Offset | Operand::CaseBaseoffset => {
-                    let off = v as i32;
-                    w.u8((off & 0xff) as u8);
-                    w.u8(((off >> 8) & 0xff) as u8);
-                    w.u8(((off >> 16) & 0xff) as u8);
-                }
-                Operand::OptS8 | Operand::DebugType => {
-                    w.u8(v as u8);
-                }
-                Operand::OptS16 => {
-                    w.i16(v as i16);
-                }
-                Operand::OptCaseOffsets => {
-                    // remaining operands are case offsets
-                    let remaining = &self.operands[i..];
-                    let count = remaining.len().saturating_sub(1);
-                    write_u30(w, count);
-                    for &off_val in remaining {
-                        let off = off_val as i32;
-                        w.u8((off & 0xff) as u8);
-                        w.u8(((off >> 8) & 0xff) as u8);
-                        w.u8(((off >> 16) & 0xff) as u8);
-                    }
-                    break;
-                }
-                Operand::NumberContext => {
-                    w.u8(v as u8);
-                }
-            }
-        }
-    }
-}
-
-impl MethodBody {
-    pub fn write_code(instructions: &[Instruction]) -> Vec<u8> {
-        let mut w = Writer::new();
-        for ins in instructions {
-            ins.encode(&mut w);
-        }
-        w.data
     }
 }
 
