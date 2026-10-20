@@ -159,6 +159,7 @@ pub struct Exporter<'a> {
     jpeg_tables: Option<&'a [u8]>,
     renderer: Renderer<'a>,
     as3: OnceLock<As3>,
+    as2_fields: OnceLock<crate::action::decomp::uninit::Uninitialized>,
 }
 
 /// The SWF's parsed ABCs with their type index, built on first use.
@@ -173,7 +174,7 @@ const BUTTON_FRAMES: [(u8, &str); 4] = [(BUTTON_UP, "1_up"), (BUTTON_OVER, "2_ov
 impl<'a> Exporter<'a> {
     pub fn new(swf: &'a Swf) -> Exporter<'a> {
         let jpeg_tables = swf.timeline.tags.iter().find(|t| t.code == JPEG_TABLES).map(|t| &t.body[..]);
-        Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf), as3: OnceLock::new() }
+        Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf), as3: OnceLock::new(), as2_fields: OnceLock::new() }
     }
 
     fn as3(&self) -> &As3 {
@@ -442,9 +443,8 @@ impl<'a> Exporter<'a> {
         if let Some(index) = script.strip_prefix("as2:") {
             let index = index.parse().map_err(|_| Error::Other("bad script id".into()))?;
             let s = crate::action::scripts::find(self.swf, path, index).ok_or_else(|| Error::Other("script not found".into()))?;
-            let text = crate::action::pcode::to_pcode(&s.actions(self.swf));
-            let _ = pcode;
-            return Ok(File { name: make_file_name(&format!("{}.pcode", s.export_name)), mime: "text/plain", data: text.into_bytes() });
+            let (ext, text) = if pcode { ("pcode", crate::action::pcode::to_pcode(&s.actions(self.swf))) } else { ("as", self.as2_source(&s)) };
+            return Ok(File { name: make_file_name(&format!("{}.{ext}", s.export_name)), mime: "text/plain", data: text.into_bytes() });
         }
         let pv = self.script_preview(path, script)?;
         let name = pv.note.as_deref().and_then(|n| n.split(' ').nth(1)).unwrap_or("script").rsplit('.').next().unwrap_or("script").to_string();
@@ -463,7 +463,7 @@ impl<'a> Exporter<'a> {
                 kind: "code",
                 mime: "text/plain",
                 data: Vec::new(),
-                text: Some(pcode.clone()),
+                text: Some(self.as2_source(&s)),
                 alt_text: Some(pcode),
                 note: Some(format!("ActionScript 1/2 {}", s.export_name)),
                 frames: 1,
@@ -508,21 +508,27 @@ impl<'a> Exporter<'a> {
             out.extend(self.export_frames(opts).into_iter().map(|r| (Kind::Frames, Vec::new(), r)));
         }
         if kinds.contains(&Kind::Scripts) {
-            out.extend(self.export_as2_scripts().into_iter().map(|(p, f)| (Kind::Scripts, p, Ok(f))));
+            out.extend(self.export_as2_scripts(opts.scripts_pcode).into_iter().map(|(p, f)| (Kind::Scripts, p, Ok(f))));
         }
         out
     }
 
-    /// AS1/2 scripts as `.pcode` files laid out like FFDec's script export.
-    pub fn export_as2_scripts(&self) -> Vec<(Vec<usize>, File)> {
+    /// AS1/2 scripts as `.as` (or `.pcode`) files laid out like FFDec's script export.
+    pub fn export_as2_scripts(&self, pcode: bool) -> Vec<(Vec<usize>, File)> {
         let tree = crate::action::scripts::tree(self.swf);
         crate::action::scripts::export_paths(&tree)
             .into_iter()
             .map(|(name, s)| {
-                let text = crate::action::pcode::to_pcode(&s.actions(self.swf));
-                (s.tag.clone(), File { name: format!("{name}.pcode"), mime: "text/plain", data: text.into_bytes() })
+                let (ext, text) = if pcode { ("pcode", crate::action::pcode::to_pcode(&s.actions(self.swf))) } else { ("as", self.as2_source(&s)) };
+                (s.tag.clone(), File { name: format!("{name}.{ext}"), mime: "text/plain", data: text.into_bytes() })
             })
             .collect()
+    }
+
+    /// Decompiled ActionScript of one AS1/2 script.
+    pub fn as2_source(&self, s: &crate::action::scripts::Source) -> String {
+        let fields = self.as2_fields.get_or_init(|| crate::action::decomp::swf_uninitialized(self.swf));
+        crate::action::decomp::source_text(self.swf, s, fields)
     }
 
     /// Writes `export_all` into `dir/<kind>/…`. Returns written paths and per-asset errors.
