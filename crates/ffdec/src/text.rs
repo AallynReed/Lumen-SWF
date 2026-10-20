@@ -800,11 +800,11 @@ pub fn set_formatted(swf: &Swf, t: &mut StaticText, formatted: &str, texts: Opti
                     };
                     adv += letter_spacing;
                     if let Some(s) = simple.get(&c) {
-                        adv += s - letter_spacing;
+                        adv += s;
                     }
                     let key: String = std::iter::once(c).chain(next).collect();
                     if let Some(s) = pairs.get(&key) {
-                        adv += s - letter_spacing;
+                        adv += s;
                     }
                     rec.glyphs.push((g, adv));
                 }

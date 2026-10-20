@@ -2,8 +2,10 @@ use std::path::{Path, PathBuf};
 
 use ffdec::text::{formatted, set_formatted, StaticText};
 
-/// Compares formatted text and its re-import with JPEXS 26.4, read from `FFDEC_TEXT_REF` (the
-/// TextDump driver's output: one folder per SWF with swf.txt, id.txt and id.bin).
+/// Compares formatted text with JPEXS 26.4's, read from `FFDEC_TEXT_REF` (the TextDump
+/// driver's output: one folder per SWF with swf.txt and id.txt), and checks that importing it
+/// back keeps every record. JPEXS's own re-import (id.bin) loses spacing that is relative to
+/// letter spacing, so bodies are only compared where no letter spacing is involved.
 #[test]
 fn texts_match_jpexs() {
     let Ok(dir) = std::env::var("FFDEC_TEXT_REF") else { return };
@@ -31,9 +33,10 @@ fn texts_match_jpexs() {
                 bad.push(format!("{label}: text differs at {at}: got {:?} want {:?}", got.chars().skip(at.saturating_sub(20)).take(60).collect::<String>(), expected.chars().skip(at.saturating_sub(20)).take(60).collect::<String>()));
                 continue;
             }
-            let Ok(bin) = std::fs::read(p.with_extension("bin")) else { continue };
+            let original = t.clone();
             match set_formatted(&swf, &mut t, &expected, None) {
-                Ok(()) if t.write() != bin => bad.push(format!("{label}: body differs")),
+                Ok(()) if t != original => bad.push(format!("{label}: records change")),
+                Ok(()) if !expected.contains("letterspacing") && std::fs::read(p.with_extension("bin")).is_ok_and(|b| b != t.write()) => bad.push(format!("{label}: body differs from JPEXS")),
                 Ok(()) => {}
                 Err(e) => bad.push(format!("{label}: {e}")),
             }
@@ -80,4 +83,16 @@ fn formatted_errors_name_their_line() {
     assert!(e.to_string().contains("line 5") && e.to_string().contains("no character"), "{e}");
     let e = ffdec::text::import(&mut swf, &path, "[\nxmin 0\ncolor red\n]").unwrap_err();
     assert_eq!(e.line, 3);
+}
+
+#[test]
+fn spacing_survives_a_round_trip() {
+    let Some(swf) = template() else { return };
+    let tag = swf.tag(&swf.find_character(7).unwrap()).unwrap();
+    let mut t = StaticText::read(tag).unwrap();
+    let original = t.clone();
+    let text = formatted(&swf, &t, false);
+    assert!(text.contains("letterspacing 159") && text.contains("spacingpair \"k\" \"e\" 1"));
+    set_formatted(&swf, &mut t, &text, None).unwrap();
+    assert_eq!(t, original);
 }
