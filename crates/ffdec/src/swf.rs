@@ -123,6 +123,51 @@ impl Swf {
         Some(tag)
     }
 
+    pub fn tag_mut(&mut self, path: &[usize]) -> Option<&mut Tag> {
+        self.timeline.tag_mut(path)
+    }
+
+    pub fn replace_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
+        self.timeline.replace_tag(path, tag)
+    }
+
+    pub fn remove_tag(&mut self, path: &[usize]) -> Result<Tag> {
+        self.timeline.remove_tag(path)
+    }
+
+    pub fn insert_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
+        self.timeline.insert_tag(path, tag)
+    }
+
+    pub fn replace_tag_body(&mut self, path: &[usize], new_body: &[u8]) -> Result<()> {
+        let tag = self.tag_mut(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
+        tag.body = new_body.to_vec();
+        if tag.code == code::DEFINE_SPRITE {
+            let mut sr = Reader::new(&tag.body);
+            if sr.skip(4).is_ok() {
+                tag.sprite = Some(Timeline::parse(&mut sr, tag.offset + tag.header_len() + 4, 1));
+            }
+        }
+        if path.len() > 1 {
+            self.timeline.sync_sprites();
+        }
+        Ok(())
+    }
+
+    pub fn sync_sprites(&mut self) {
+        self.timeline.sync_sprites();
+    }
+
+    pub fn find_character(&self, id: u16) -> Option<Vec<usize>> {
+        let mut found = None;
+        self.walk(|path, tag| {
+            if found.is_none() && crate::tags::defines_character(tag.code) && tag.character_id() == Some(id) {
+                found = Some(path.to_vec());
+            }
+        });
+        found
+    }
+
     pub fn walk<'a>(&'a self, mut f: impl FnMut(&[usize], &'a Tag)) {
         fn go<'a>(tl: &'a Timeline, path: &mut Vec<usize>, f: &mut dyn FnMut(&[usize], &'a Tag)) {
             for (i, t) in tl.tags.iter().enumerate() {

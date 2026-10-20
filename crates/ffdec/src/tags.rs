@@ -296,6 +296,32 @@ impl Tag {
         }
     }
 
+    pub fn set_character_id(&mut self, id: u16) -> bool {
+        if (defines_character(self.code) || references_character(self.code)) && self.body.len() >= 2 {
+            self.body[0..2].copy_from_slice(&id.to_le_bytes());
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn sync_sprite(&mut self) {
+        if self.code == code::DEFINE_SPRITE {
+            if let Some(s) = &self.sprite {
+                let mut w = Writer::new();
+                if self.body.len() >= 4 {
+                    w.bytes(&self.body[..2]);
+                    w.u16(s.frame_count() as u16);
+                } else {
+                    w.u16(0);
+                    w.u16(s.frame_count() as u16);
+                }
+                s.write(&mut w);
+                self.body = w.data;
+            }
+        }
+    }
+
     pub fn header_len(&self) -> usize {
         if self.needs_long() { 6 } else { 2 }
     }
@@ -385,6 +411,73 @@ impl Timeline {
             .take_while(|t| t.code != code::SHOW_FRAME)
             .any(|t| t.code != code::END);
         shows + tail as usize
+    }
+
+    pub fn tag_mut(&mut self, path: &[usize]) -> Option<&mut Tag> {
+        let (first, rest) = path.split_first()?;
+        let tag = self.tags.get_mut(*first)?;
+        if rest.is_empty() {
+            Some(tag)
+        } else {
+            tag.sprite.as_mut()?.tag_mut(rest)
+        }
+    }
+
+    pub fn replace_tag(&mut self, path: &[usize], new_tag: Tag) -> Result<()> {
+        let (first, rest) = path.split_first().ok_or_else(|| crate::error::Error::Other("empty path".into()))?;
+        if rest.is_empty() {
+            if *first >= self.tags.len() {
+                return Err(crate::error::Error::Other(format!("tag index out of bounds: {first}")));
+            }
+            self.tags[*first] = new_tag;
+            Ok(())
+        } else {
+            let parent = self.tags.get_mut(*first).ok_or_else(|| crate::error::Error::Other("parent tag not found".into()))?;
+            let sprite = parent.sprite.as_mut().ok_or_else(|| crate::error::Error::Other("parent is not a sprite".into()))?;
+            sprite.replace_tag(rest, new_tag)?;
+            parent.sync_sprite();
+            Ok(())
+        }
+    }
+
+    pub fn remove_tag(&mut self, path: &[usize]) -> Result<Tag> {
+        let (first, rest) = path.split_first().ok_or_else(|| crate::error::Error::Other("empty path".into()))?;
+        if rest.is_empty() {
+            if *first >= self.tags.len() {
+                return Err(crate::error::Error::Other(format!("tag index out of bounds: {first}")));
+            }
+            Ok(self.tags.remove(*first))
+        } else {
+            let parent = self.tags.get_mut(*first).ok_or_else(|| crate::error::Error::Other("parent tag not found".into()))?;
+            let sprite = parent.sprite.as_mut().ok_or_else(|| crate::error::Error::Other("parent is not a sprite".into()))?;
+            let removed = sprite.remove_tag(rest)?;
+            parent.sync_sprite();
+            Ok(removed)
+        }
+    }
+
+    pub fn insert_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
+        let (first, rest) = path.split_first().ok_or_else(|| crate::error::Error::Other("empty path".into()))?;
+        if rest.is_empty() {
+            let idx = (*first).min(self.tags.len());
+            self.tags.insert(idx, tag);
+            Ok(())
+        } else {
+            let parent = self.tags.get_mut(*first).ok_or_else(|| crate::error::Error::Other("parent tag not found".into()))?;
+            let sprite = parent.sprite.as_mut().ok_or_else(|| crate::error::Error::Other("parent is not a sprite".into()))?;
+            sprite.insert_tag(rest, tag)?;
+            parent.sync_sprite();
+            Ok(())
+        }
+    }
+
+    pub fn sync_sprites(&mut self) {
+        for t in &mut self.tags {
+            if let Some(s) = &mut t.sprite {
+                s.sync_sprites();
+                t.sync_sprite();
+            }
+        }
     }
 }
 
