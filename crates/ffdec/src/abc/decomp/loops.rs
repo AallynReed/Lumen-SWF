@@ -384,6 +384,7 @@ fn successors_get<'m>(parts: &[Part], m: &'m [(P, Vec<P>)], k: P) -> Option<&'m 
 }
 
 fn leads_only_to_abrupt(parts: &[Part], start: P, boundary: &[P], abrupt: &[P], back_edges: &[Edge], pnw: &Walker, ignored: &[Edge]) -> bool {
+    super::method::check_deadline();
     let mut succ: Vec<(P, Vec<P>)> = Vec::new();
     let mut q: VecDeque<P> = VecDeque::from([start]);
     let mut found = false;
@@ -444,6 +445,7 @@ fn leads_only_to_abrupt(parts: &[Part], start: P, boundary: &[P], abrupt: &[P], 
 
 #[allow(clippy::too_many_arguments)]
 fn nearest_common_post_dominator(parts: &[Part], starts: &[P], back_edges: &[Edge], stops: &[P], pnw: &Walker, ignored: &[Edge], excluded: &[P], direct_out: &[P]) -> Option<P> {
+    super::method::check_deadline();
     if starts.is_empty() {
         return None;
     }
@@ -578,6 +580,7 @@ fn nearest_common_post_dominator(parts: &[Part], starts: &[P], back_edges: &[Edg
 }
 
 fn build_natural_loop(parts: &[Part], tail: P, header: P, pnw: &Walker) -> PartList {
+    super::method::check_deadline();
     let mut lp = PartList::default();
     if tail == header {
         lp.0.push(header);
@@ -597,6 +600,7 @@ fn build_natural_loop(parts: &[Part], tail: P, header: P, pnw: &Walker) -> PartL
 }
 
 fn get_reachable(parts: &[Part], start: P, back_edges: &[Edge], ignored_parts: &[P], pnw: &Walker, ignored_edges: &[Edge]) -> Vec<P> {
+    super::method::check_deadline();
     let mut visited: Vec<P> = Vec::new();
     let mut q: VecDeque<P> = VecDeque::from([start]);
     while let Some(part) = q.pop_front() {
@@ -620,6 +624,7 @@ fn get_reachable(parts: &[Part], start: P, back_edges: &[Edge], ignored_parts: &
 }
 
 fn part_leads_to_get_prev(parts: &[Part], p1: P, p2: P, back_edges: &[Edge], pnw: &Walker) -> Option<P> {
+    super::method::check_deadline();
     if p1 == p2 {
         return None;
     }

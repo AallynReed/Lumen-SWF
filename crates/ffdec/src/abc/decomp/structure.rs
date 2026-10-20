@@ -87,6 +87,7 @@ fn loop_commands(it: &It) -> List {
 impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn print_graph(&mut self, pc: &mut Pc, visited: &mut Vec<P>, ld: &mut Ld, stack: &St, parent: Option<P>, part: Option<P>, stop: Option<Stops>, ret: Option<List>, recursion: usize) -> List {
+        super::method::check_deadline();
         let ret = ret.unwrap_or_else(empty_list);
         let original_ret = ret.clone();
         let mut ret = ret;

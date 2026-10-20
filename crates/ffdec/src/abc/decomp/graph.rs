@@ -116,6 +116,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let mut visited: Vec<P> = Vec::new();
         let mut first = first_can_be_continue;
         'todo: while let Some(this) = todo.pop() {
+            super::method::check_deadline();
             let Some(tpart) = self.check_part(None, ld, None, this) else { continue };
             if tpart != this {
                 todo.push(tpart);

@@ -47,6 +47,27 @@ impl ConvertData {
     }
 }
 
+/// FFDec's `decompilationTimeoutSingleMethod`, in seconds.
+pub const TIMEOUT_SECS: u64 = 60;
+
+thread_local! {
+    static DEADLINE: Cell<Option<std::time::Instant>> = const { Cell::new(None) };
+}
+
+/// Panic payload for a method that ran past its time limit.
+struct Timeout;
+
+const TIMEOUT_ERROR: &str = "\u{0}timeout";
+
+/// Aborts the current conversion once its time limit has passed.
+pub fn check_deadline() {
+    if let Some(d) = DEADLINE.get() {
+        if std::time::Instant::now() > d {
+            std::panic::resume_unwind(Box::new(Timeout));
+        }
+    }
+}
+
 /// What to decompile and in which context.
 #[derive(Clone)]
 pub struct MethodReq<'x> {
@@ -120,9 +141,21 @@ pub fn convert(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<
 
 /// `convert` printing into a given null writer, so callers can tell whether anything was printed.
 pub fn convert_into(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>, w: &mut Writer) -> Result<Converted, String> {
+    let outer = DEADLINE.get();
+    if outer.is_none() {
+        DEADLINE.set(Some(std::time::Instant::now() + std::time::Duration::from_secs(TIMEOUT_SECS)));
+    }
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| convert_inner(ctx, req, cd, seen, w)));
+    DEADLINE.set(outer);
     match r {
         Ok(v) => v,
+        Err(e) if e.is::<Timeout>() => {
+            if outer.is_some() {
+                std::panic::resume_unwind(e);
+            }
+            let n = ctx.abc.body(req.method).map_or(0, |b| prepare_code(ctx, b).len());
+            Err(format!("{TIMEOUT_ERROR}{n}"))
+        }
         Err(e) => Err(e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_else(|| "decompilation failed".into())),
     }
 }
@@ -185,6 +218,17 @@ pub fn decompile_to_writer(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, see
 }
 
 pub fn error_comment(w: &mut Writer, msg: &str) {
+    if let Some(n) = msg.strip_prefix(TIMEOUT_ERROR) {
+        w.append_no_hilight("/*").new_line();
+        w.append_no_hilight(" * Decompilation error").new_line();
+        w.append_no_hilight(" * Timeout (1 minute) was reached").new_line();
+        if n != "0" {
+            w.append_no_hilight(&format!(" * Instruction count: {n}")).new_line();
+        }
+        w.append_no_hilight(" */").new_line();
+        w.append_no_hilight("throw new flash.errors.IllegalOperationError(\"Not decompiled due to timeout\");").new_line();
+        return;
+    }
     w.append("/*").new_line();
     w.append(" * Decompilation error").new_line();
     w.append(" * Code may be obfuscated").new_line();
