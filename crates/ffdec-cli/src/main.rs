@@ -27,11 +27,12 @@ enum Cmd {
     Tag { file: PathBuf, path: String },
     /// Write the raw body of one tag to a file
     ExtractTag { file: PathBuf, path: String, out: PathBuf },
-    /// Export assets into <outdir>/images, sounds, binaryData, fonts, texts, movies
+    /// Export assets into <outdir>/<kind> folders, laid out like FFDec
     Export {
         file: PathBuf,
         outdir: PathBuf,
-        /// Comma-separated kinds (images,sounds,binaryData,fonts,texts,movies); default all
+        /// Comma-separated kinds: images, sounds, binaryData, fonts, texts, movies, shapes,
+        /// morphshapes, frames, sprites, buttons (default all)
         #[arg(long, value_delimiter = ',')]
         kinds: Vec<String>,
         /// Write every image as PNG
@@ -40,7 +41,29 @@ enum Cmd {
         /// Decode every sound to WAV
         #[arg(long)]
         wav: bool,
+        /// Shapes and morph shapes as PNG instead of SVG
+        #[arg(long)]
+        shapes_png: bool,
+        /// Frames, sprites and buttons as SVG instead of PNG
+        #[arg(long)]
+        frames_svg: bool,
+        /// Texts as SVG instead of plain text
+        #[arg(long)]
+        texts_svg: bool,
+        /// Raster scale for PNG output
+        #[arg(long, default_value_t = 1.0)]
+        zoom: f32,
     },
+    /// Render a character (by id) or a root frame (frame:N, 1-based) to .svg or .png
+    Render {
+        file: PathBuf,
+        what: String,
+        out: PathBuf,
+        #[arg(long, default_value_t = 1.0)]
+        zoom: f32,
+    },
+    /// Print the display list of a root frame (1-based)
+    Frame { file: PathBuf, frame: usize },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -105,17 +128,49 @@ fn main() -> Result<()> {
             let swf = open(&file)?;
             std::fs::write(&out, &tag_at(&swf, &path)?.body)?;
         }
-        Cmd::Export { file, outdir, kinds, png, wav } => {
+        Cmd::Export { file, outdir, kinds, png, wav, shapes_png, frames_svg, texts_svg, zoom } => {
             let swf = open(&file)?;
             let kinds = if kinds.is_empty() {
                 Kind::ALL.to_vec()
             } else {
                 kinds.iter().map(|k| Kind::parse(k).ok_or_else(|| anyhow!("unknown kind '{k}'"))).collect::<Result<_>>()?
             };
-            let (written, errors) = Exporter::new(&swf).write_all(&outdir, &kinds, Options { png_only: png, wav_only: wav });
+            let opts = Options { png_only: png, wav_only: wav, shapes_png, frames_svg, texts_svg, zoom };
+            let (written, errors) = Exporter::new(&swf).write_all(&outdir, &kinds, opts);
             println!("{} files written to {}", written.len(), outdir.display());
             for e in &errors {
                 eprintln!("error: {e}");
+            }
+        }
+        Cmd::Render { file, what, out, zoom } => {
+            let swf = open(&file)?;
+            let r = ffdec::render::Renderer::new(&swf);
+            let svg = match what.strip_prefix("frame:") {
+                Some(n) => r.frame_svg(n.parse::<usize>()?.saturating_sub(1)),
+                None => {
+                    let id: u16 = what.parse()?;
+                    match r.character(id) {
+                        Some(t) if ffdec::morph::is_morph(t.code) && out.extension().is_some_and(|e| e == "svg") => r.morph_svg(id)?,
+                        _ => r.character_svg(id, 0, ffdec::render::display::BUTTON_UP)?,
+                    }
+                }
+            };
+            if out.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+                std::fs::write(&out, ffdec::render::raster::png(&svg, zoom)?)?;
+            } else {
+                std::fs::write(&out, svg)?;
+            }
+        }
+        Cmd::Frame { file, frame } => {
+            let swf = open(&file)?;
+            let list = ffdec::render::display::display_list(&swf.timeline.tags, frame.saturating_sub(1));
+            for p in list.values() {
+                let m = &p.matrix;
+                println!(
+                    "depth {:>4}  char {:>5}  since {:>3}  ratio {:>5}  clip {:>4}  matrix [{:.3} {:.3} {:.3} {:.3} {} {}]{}",
+                    p.depth, p.id, p.since + 1, p.ratio, p.clip_depth, m.a, m.b, m.c, m.d, m.tx, m.ty,
+                    p.name.as_deref().map(|n| format!("  name {n}")).unwrap_or_default()
+                );
             }
         }
         Cmd::Decompress { input, output } => {
