@@ -1,11 +1,79 @@
-//! Serialization of ActionScript 1/2 actions to SWF byte streams.
+//! Action serialization, as FFDec's `Action.getBytes`.
 
 use crate::io::Writer;
 
-use super::{Action, ActionList, Charset, Op, Value};
+use super::{utf8_bytes, Action, ActionList, Charset, Op, Value, CP1252_HIGH};
+
+fn encode(cs: Charset, s: &str) -> Vec<u8> {
+    match cs {
+        Charset::Utf8 => utf8_bytes(s),
+        Charset::Windows1252 => s
+            .chars()
+            .map(|c| match c as u32 {
+                v if v < 0x80 || (0xa0..0x100).contains(&v) => v as u8,
+                v => CP1252_HIGH.iter().position(|&h| h as u32 == v).map_or(b'?', |i| 0x80 + i as u8),
+            })
+            .collect(),
+    }
+}
+
+fn string(w: &mut Writer, cs: Charset, s: &str) {
+    w.bytes(&encode(cs, s));
+    w.u8(0);
+}
+
+/// SWF DOUBLE: the high 32-bit word first.
+fn double(w: &mut Writer, d: f64) {
+    let b = d.to_le_bytes();
+    w.bytes(&b[4..]);
+    w.bytes(&b[..4]);
+}
+
+fn value(w: &mut Writer, cs: Charset, v: &Value) {
+    match v {
+        Value::Str(s) => {
+            w.u8(0);
+            string(w, cs, s);
+        }
+        Value::Float(f) => {
+            w.u8(1);
+            w.bytes(&f.to_le_bytes());
+        }
+        Value::Null => w.u8(2),
+        Value::Undefined => w.u8(3),
+        Value::Register(r) => {
+            w.u8(4);
+            w.u8(*r);
+        }
+        Value::Bool(b) => {
+            w.u8(5);
+            w.u8(*b as u8);
+        }
+        Value::Double(d) => {
+            w.u8(6);
+            double(w, *d);
+        }
+        Value::Int(i) if i32::try_from(*i).is_err() => {
+            w.u8(6);
+            double(w, *i as f64);
+        }
+        Value::Int(i) => {
+            w.u8(7);
+            w.bytes(&(*i as i32).to_le_bytes());
+        }
+        Value::Constant(c) if *c < 256 => {
+            w.u8(8);
+            w.u8(*c as u8);
+        }
+        Value::Constant(c) => {
+            w.u8(9);
+            w.u16(*c);
+        }
+    }
+}
 
 impl Action {
-    pub fn write(&self, w: &mut Writer, _cs: Charset) {
+    pub fn write(&self, w: &mut Writer, cs: Charset) {
         if matches!(self.op, Op::End) {
             w.u8(0);
             return;
@@ -14,142 +82,80 @@ impl Action {
         if self.code < 0x80 {
             return;
         }
-
-        let mut cw = Writer::new();
+        let mut c = Writer::new();
+        let u8s = Charset::Utf8;
         match &self.op {
             Op::Simple | Op::End => {}
-            Op::GotoFrame(f) => cw.u16(*f),
+            Op::GotoFrame(f) => c.u16(*f),
             Op::GetUrl { url, target } => {
-                cw.string(url);
-                cw.string(target);
+                string(&mut c, cs, url);
+                string(&mut c, cs, target);
             }
             Op::WaitForFrame { frame, skip } => {
-                cw.u16(*frame);
-                cw.u8(*skip as u8);
+                c.u16(*frame);
+                c.u8(*skip as u8);
             }
-            Op::SetTarget(s) | Op::GoToLabel(s) => cw.string(s),
-            Op::Push { values, .. } => {
-                for v in values {
-                    match v {
-                        Value::Str(s) => {
-                            cw.u8(0);
-                            cw.string(s);
-                        }
-                        Value::Float(f) => {
-                            cw.u8(1);
-                            cw.bytes(&f.to_le_bytes());
-                        }
-                        Value::Null => cw.u8(2),
-                        Value::Undefined => cw.u8(3),
-                        Value::Register(r) => {
-                            cw.u8(4);
-                            cw.u8(*r);
-                        }
-                        Value::Bool(b) => {
-                            cw.u8(5);
-                            cw.u8(if *b { 1 } else { 0 });
-                        }
-                        Value::Double(d) => {
-                            cw.u8(6);
-                            cw.bytes(&d.to_le_bytes());
-                        }
-                        Value::Int(i) => {
-                            cw.u8(7);
-                            cw.bytes(&(*i as i32).to_le_bytes());
-                        }
-                        Value::Constant(c) => {
-                            if *c < 256 {
-                                cw.u8(8);
-                                cw.u8(*c as u8);
-                            } else {
-                                cw.u8(9);
-                                cw.u16(*c);
-                            }
-                        }
-                    }
-                }
-            }
-            Op::Jump { offset, .. } | Op::If { offset } => cw.i16(*offset as i16),
-            Op::GetUrl2 { load_variables, load_target, method } => {
-                let b = (*method << 6) | ((*load_target as u8) << 1) | (*load_variables as u8);
-                cw.u8(b);
-            }
+            Op::SetTarget(s) | Op::GoToLabel(s) => string(&mut c, cs, s),
+            Op::Push { values, .. } => values.iter().for_each(|v| value(&mut c, cs, v)),
+            Op::Jump { offset, .. } | Op::If { offset } => c.i16(*offset as i16),
+            Op::GetUrl2 { load_variables, load_target, method } => c.u8((*load_variables as u8) << 7 | (*load_target as u8) << 6 | method & 3),
             Op::GotoFrame2 { scene_bias_flag, play, scene_bias } => {
-                let b = ((*scene_bias_flag as u8) << 1) | (*play as u8);
-                cw.u8(b);
+                c.u8((*scene_bias_flag as u8) << 1 | *play as u8);
                 if *scene_bias_flag {
-                    cw.u16(*scene_bias);
+                    c.u16(*scene_bias);
                 }
             }
-            Op::WaitForFrame2 { skip } => cw.u8(*skip as u8),
+            Op::WaitForFrame2 { skip } => c.u8(*skip as u8),
             Op::ConstantPool(pool) => {
-                cw.u16(pool.len() as u16);
-                for s in pool {
-                    cw.string(s);
-                }
+                c.u16(pool.len() as u16);
+                pool.iter().for_each(|s| string(&mut c, cs, s));
             }
             Op::DefineFunction { name, params, code_size } => {
-                cw.string(name);
-                cw.u16(params.len() as u16);
-                for p in params {
-                    cw.string(p);
-                }
-                cw.u16(*code_size as u16);
+                string(&mut c, u8s, name);
+                c.u16(params.len() as u16);
+                params.iter().for_each(|p| string(&mut c, u8s, p));
+                c.u16(*code_size as u16);
             }
-            Op::With { code_size } => cw.u16(*code_size as u16),
-            Op::StoreRegister(r) => cw.u8(*r),
+            Op::With { code_size } => c.u16(*code_size as u16),
+            Op::StoreRegister(r) => c.u8(*r),
             Op::DefineFunction2(f) => {
-                cw.string(&f.name);
-                cw.u16(f.params.len() as u16);
-                cw.u8(f.register_count);
-                let flags: u16 = (f.preload_parent as u16) << 7
-                    | (f.preload_root as u16) << 6
-                    | (f.suppress_super as u16) << 5
-                    | (f.preload_super as u16) << 4
-                    | (f.suppress_arguments as u16) << 3
-                    | (f.preload_arguments as u16) << 2
-                    | (f.suppress_this as u16) << 1
-                    | (f.preload_this as u16)
-                    | ((f.preload_global as u16) << 10);
-                cw.u16(flags);
+                string(&mut c, u8s, &f.name);
+                c.u16(f.params.len() as u16);
+                c.u8(f.register_count);
+                let bits = [f.preload_parent, f.preload_root, f.suppress_super, f.preload_super, f.suppress_arguments, f.preload_arguments, f.suppress_this, f.preload_this];
+                c.u8(bits.iter().fold(0, |acc, &b| acc << 1 | b as u8));
+                c.u8(f.preload_global as u8);
                 for (reg, name) in &f.params {
-                    cw.u8(*reg);
-                    cw.string(name);
+                    c.u8(*reg);
+                    string(&mut c, u8s, name);
                 }
-                cw.u16(f.code_size as u16);
+                c.u16(f.code_size as u16);
             }
             Op::Try(t) => {
-                let flags = (t.catch_in_register as u8) << 2
-                    | (t.finally_flag as u8) << 1
-                    | (t.catch_flag as u8);
-                cw.u8(flags);
-                cw.u16(t.try_size as u16);
-                cw.u16(t.catch_size as u16);
-                cw.u16(t.finally_size as u16);
+                c.u8((t.catch_in_register as u8) << 2 | (t.finally_flag as u8) << 1 | t.catch_flag as u8);
+                c.u16(t.try_size as u16);
+                c.u16(t.catch_size as u16);
+                c.u16(t.finally_size as u16);
                 if t.catch_in_register {
-                    cw.u8(t.catch_register);
+                    c.u8(t.catch_register);
                 } else {
-                    cw.string(t.catch_name.as_deref().unwrap_or(""));
+                    string(&mut c, u8s, t.catch_name.as_deref().unwrap_or(""));
                 }
             }
-            Op::StrictMode(m) => cw.u8(*m),
-            Op::Unknown(d) => cw.bytes(d),
+            Op::StrictMode(m) => c.u8(*m),
+            Op::Unknown(d) => c.bytes(d),
         }
-        w.u16(cw.data.len() as u16);
-        w.bytes(&cw.data);
+        w.u16(c.data.len() as u16);
+        w.bytes(&c.data);
     }
 }
 
 impl ActionList {
-    pub fn write(&self, w: &mut Writer) {
-        for a in &self.actions {
-            a.write(w, self.charset);
-        }
-    }
-
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut w = Writer::new();
-        self.write(&mut w);
+        for a in &self.actions {
+            a.write(&mut w, self.charset);
+        }
         w.data
     }
 }
