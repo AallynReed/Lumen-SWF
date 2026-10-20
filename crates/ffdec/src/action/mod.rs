@@ -1,5 +1,5 @@
 //! ActionScript 1/2 bytecode (SWF actions), read like FFDec's `ActionListReader`.
-
+pub mod pcode;
 
 
 
