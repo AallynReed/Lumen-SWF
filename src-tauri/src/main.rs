@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use ffdec::export::{Exporter, Kind, Options};
 use ffdec::info::{describe, Field};
 use ffdec::tree::{self, Node};
 use ffdec::{Compression, SaveOptions, Swf};
@@ -21,6 +22,8 @@ struct Doc {
 struct Docs {
     open: Mutex<Vec<Doc>>,
     next_id: AtomicU32,
+    /// Bytes of the last preview, fetched separately as a raw IPC response.
+    preview: Mutex<Option<(u32, String, Vec<u8>)>>,
 }
 
 type Res<T> = Result<T, String>;
@@ -176,6 +179,73 @@ async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compress
     Ok(Some(out.display().to_string()))
 }
 
+#[derive(Serialize)]
+struct PreviewInfo {
+    kind: &'static str,
+    mime: &'static str,
+    text: Option<String>,
+    note: Option<String>,
+    size: usize,
+    exportable: bool,
+}
+
+#[tauri::command]
+async fn preview_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<PreviewInfo>> {
+    let p = tree::parse_path(&path).ok_or("bad tag path")?;
+    let (info, data) = with_doc(&docs, id, |d| {
+        let exportable = d.swf.tag(&p).is_some_and(|t| Kind::of(t.code).is_some());
+        match Exporter::new(&d.swf).preview(&p).map_err(|e| e.to_string())? {
+            Some(pv) => Ok((Some(PreviewInfo { kind: pv.kind, mime: pv.mime, text: pv.text, note: pv.note, size: pv.data.len(), exportable }), pv.data)),
+            None => Ok((None, Vec::new())),
+        }
+    })?;
+    *docs.preview.lock() = Some((id, path, data));
+    Ok(info)
+}
+
+#[tauri::command]
+fn preview_data(docs: State<'_, Docs>, id: u32, path: String) -> tauri::ipc::Response {
+    let cached = docs.preview.lock();
+    let data = match &*cached {
+        Some((i, p, d)) if *i == id && *p == path => d.clone(),
+        _ => Vec::new(),
+    };
+    tauri::ipc::Response::new(data)
+}
+
+#[tauri::command]
+async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, png: bool, wav: bool) -> Res<Option<String>> {
+    let p = tree::parse_path(&path).ok_or("bad tag path")?;
+    let file = with_doc(&docs, id, |d| {
+        Exporter::new(&d.swf).export(&p, Options { png_only: png, wav_only: wav }).map_err(|e| e.to_string())
+    })?
+    .ok_or("this tag is not an exportable asset")?;
+    let ext = file.name.rsplit('.').next().unwrap_or("bin").to_string();
+    let Some(out) = save_dialog(&app, &file.name, (&ext.to_uppercase(), &[&ext])) else { return Ok(None) };
+    std::fs::write(&out, &file.data).map_err(|e| e.to_string())?;
+    Ok(Some(out.display().to_string()))
+}
+
+#[derive(Serialize)]
+struct ExportReport {
+    dir: String,
+    written: usize,
+    errors: Vec<String>,
+}
+
+#[tauri::command]
+async fn export_all(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, kinds: Vec<String>, png: bool, wav: bool) -> Res<Option<ExportReport>> {
+    let kinds: Vec<Kind> = kinds.iter().filter_map(|k| Kind::parse(k)).collect();
+    if kinds.is_empty() {
+        return Err("choose at least one asset type".into());
+    }
+    let Some(dir) = app.dialog().file().blocking_pick_folder().and_then(|d| d.into_path().ok()) else { return Ok(None) };
+    with_doc(&docs, id, |d| {
+        let (written, errors) = Exporter::new(&d.swf).write_all(&dir, &kinds, Options { png_only: png, wav_only: wav });
+        Ok(Some(ExportReport { dir: dir.display().to_string(), written: written.len(), errors }))
+    })
+}
+
 #[tauri::command]
 fn startup_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect()
@@ -195,6 +265,10 @@ fn main() {
             tag_bytes,
             export_tag,
             save_as,
+            preview_info,
+            preview_data,
+            export_asset,
+            export_all,
             startup_files
         ])
         .run(tauri::generate_context!())
