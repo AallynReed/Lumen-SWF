@@ -1343,8 +1343,7 @@ impl<'x> X<'x> {
 
     /// `ActionSetMember.handleSetMember`.
     fn handle_set_member(&mut self, setter: bool, value: It, member: It, obj: It) {
-        self.handle_set_member_inner(setter, value, member, obj);
-        if setter {
+        if self.handle_set_member_inner(setter, value, member, obj) && setter {
             self.finish();
             let last = self.out.borrow_mut().pop();
             if let Some(l) = last {
@@ -1354,7 +1353,8 @@ impl<'x> X<'x> {
         }
     }
 
-    fn handle_set_member_inner(&mut self, setter: bool, value: It, member: It, obj: It) {
+    /// False for the post-increment shortcut, which skips Java's `finally`.
+    fn handle_set_member_inner(&mut self, setter: bool, value: It, member: It, obj: It) -> bool {
         let vk = value.borrow().k.clone();
         if let K::AInc { obj: o } | K::ADec { obj: o } = &vk {
             if self.peek().is_some_and(|p| crate::abc::decomp::eq::eq(&p, o)) {
@@ -1364,7 +1364,7 @@ impl<'x> X<'x> {
                 if setter {
                     self.push(bare(K::Any, prec::PRIMARY));
                 }
-                return;
+                return false;
             }
         }
         if let K::AInc { obj: o } | K::ADec { obj: o } = &vk {
@@ -1390,7 +1390,7 @@ impl<'x> X<'x> {
                     };
                     let item = if setter { self.mk(k, prec::UNARY, Some(target)) } else { self.mk(k, prec::POSTFIX, None) };
                     self.add_out(item);
-                    return;
+                    return true;
                 }
             }
         }
@@ -1421,9 +1421,10 @@ impl<'x> X<'x> {
         let obj2 = set_mem.clone();
         let target = set_type_object(&obj2);
         if self.define_store(&value, &set_mem, |v| matches!(v.borrow().k, K::AGetMember { .. }) && crate::abc::decomp::eq::eq(v, &target)).is_some() {
-            return;
+            return true;
         }
         self.add_out(set_mem);
+        true
     }
 
     fn cleanup_temp(&mut self, d1: &It, d2: &It) {
