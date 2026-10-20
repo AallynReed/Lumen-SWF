@@ -288,7 +288,9 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     font: inherit;
 }
 
-.code-switch { width: max-content; margin-bottom: 8px; }
+.code-switch { width: max-content; }
+.code-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.btn-edit-code { font-size: 11px; padding: 2px 8px; }
 .code-view {
     margin: 0;
     padding: 10px 12px;
@@ -300,3 +302,19 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     border-radius: 6px;
     tab-size: 3;
 }
+.code-edit {
+    width: 100%;
+    min-height: 480px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: 12px/1.5 var(--mono);
+    white-space: pre;
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    resize: vertical;
+    tab-size: 3;
+}
+.code-actions { display: flex; gap: 8px; margin-top: 8px; }
