@@ -39,11 +39,19 @@ pub struct Ctx<'a> {
     pub display_ns: HashSet<usize>,
     pub cfg: Config,
     pub swf_version: u8,
+    pub index: Option<std::sync::Arc<super::index::AbcIndex>>,
 }
 
 impl<'a> Ctx<'a> {
     pub fn new(abc: &'a Abc, cfg: Config) -> Ctx<'a> {
-        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: HashSet::new(), cfg, swf_version: 10 }
+        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: HashSet::new(), cfg, swf_version: 10, index: None }
+    }
+
+    /// Attaches type information about the ABC's classes and the player library.
+    pub fn with_index(mut self, index: std::sync::Arc<super::index::AbcIndex>) -> Self {
+        self.custom_ns = index.custom_namespaces(self.abc);
+        self.index = Some(index);
+        self
     }
 
     pub fn names(&self) -> Names<'_> {
