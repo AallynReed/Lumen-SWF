@@ -21,8 +21,8 @@ fn corpus() -> Vec<PathBuf> {
     out
 }
 
-fn swfs() -> Vec<(PathBuf, ffdec::Swf)> {
-    corpus().into_iter().filter_map(|f| ffdec::Swf::parse(&std::fs::read(&f).ok()?).ok().map(|s| (f, s))).collect()
+fn swfs() -> impl Iterator<Item = (PathBuf, ffdec::Swf)> {
+    corpus().into_iter().filter_map(|f| ffdec::Swf::parse(&std::fs::read(&f).ok()?).ok().map(|s| (f, s)))
 }
 
 fn report(name: &str, total: usize, bad: &[String]) {
