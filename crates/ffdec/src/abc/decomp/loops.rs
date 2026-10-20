@@ -1,6 +1,6 @@
 //! FFDec's `LoopDetector` and `GraphPrecontinueDetector`.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::item::PartId as P;
 use super::parts::*;
@@ -649,27 +649,63 @@ fn part_leads_to_get_prev(parts: &[Part], p1: P, p2: P, back_edges: &[Edge], pnw
 }
 
 fn get_back_edges(parts: &[Part], first: P, throw_states: &[ThrowState]) -> Vec<Edge> {
-    let mut stack: Vec<(Edge, std::rc::Rc<Vec<P>>)> = vec![(Edge { from: None, to: first }, std::rc::Rc::new(Vec::new()))];
-    let mut visited: Vec<P> = Vec::new();
-    let mut back: Vec<Edge> = Vec::new();
-    while let Some((edge, path)) = stack.pop() {
-        if pcontains(parts, &path, edge.to) {
-            edges_insert(parts, &mut back, edge);
+    // A back edge is one whose target is on the DFS-tree path to its source; checked afterwards
+    // with entry/exit times instead of copying the path for every part.
+    let mut canon: HashMap<(i32, i32), P> = HashMap::new();
+    let mut key = |p: P| *canon.entry((parts[p].start, parts[p].end)).or_insert(p);
+    let mut stack: Vec<Edge> = vec![Edge { from: None, to: first }];
+    let mut visited: HashSet<P> = HashSet::new();
+    let mut children: HashMap<P, Vec<P>> = HashMap::new();
+    let mut candidates: Vec<(Edge, P, P)> = Vec::new();
+    let mut root = None;
+    while let Some(edge) = stack.pop() {
+        let to = key(edge.to);
+        if let Some(f) = edge.from {
+            candidates.push((edge, key(f), to));
         }
         let part = edge.to;
-        if set_contains(parts, &visited, part) {
+        if !visited.insert(to) {
             continue;
         }
-        visited.push(part);
-        let mut sub = (*path).clone();
-        sub.push(part);
-        let sub = std::rc::Rc::new(sub);
+        match edge.from {
+            Some(f) => children.entry(key(f)).or_default().push(to),
+            None => root = Some(to),
+        }
         for &n in &parts[part].next {
-            stack.push((Edge { from: Some(part), to: n }, sub.clone()));
+            stack.push(Edge { from: Some(part), to: n });
         }
         for ts in throw_states {
             if ts.throwing.contains(parts, part) {
-                stack.push((Edge { from: Some(part), to: ts.target.expect("target") }, sub.clone()));
+                stack.push(Edge { from: Some(part), to: ts.target.expect("target") });
+            }
+        }
+    }
+    let mut tin: HashMap<P, (usize, usize)> = HashMap::new();
+    let mut time = 0;
+    if let Some(r) = root {
+        let mut dfs: Vec<(P, usize)> = vec![(r, 0)];
+        tin.insert(r, (time, usize::MAX));
+        while let Some(top) = dfs.last_mut() {
+            let n = top.0;
+            let kids = children.get(&n).map_or(&[][..], |v| &v[..]);
+            if top.1 < kids.len() {
+                let c = kids[top.1];
+                top.1 += 1;
+                time += 1;
+                tin.insert(c, (time, usize::MAX));
+                dfs.push((c, 0));
+            } else {
+                time += 1;
+                tin.get_mut(&n).unwrap().1 = time;
+                dfs.pop();
+            }
+        }
+    }
+    let mut back: Vec<Edge> = Vec::new();
+    for (edge, from, to) in candidates {
+        if let (Some(a), Some(b)) = (tin.get(&to), tin.get(&from)) {
+            if a.0 <= b.0 && b.1 <= a.1 {
+                edges_insert(parts, &mut back, edge);
             }
         }
     }

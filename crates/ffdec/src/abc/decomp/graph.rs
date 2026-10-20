@@ -81,6 +81,11 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         peq(&self.parts, a, b)
     }
 
+    /// What `GraphPart.equals` compares.
+    pub fn part_key(&self, p: P) -> (i32, i32) {
+        (self.parts[p].start, self.parts[p].end)
+    }
+
     pub fn pcontains(&self, list: &[P], p: P) -> bool {
         pcontains(&self.parts, list, p)
     }
@@ -127,7 +132,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     /// `GraphPart.hasPathTo`; with `collect`, gathers every reachable part instead.
     fn has_path_to(&self, ld: &Ld, from: P, target: Option<P>, loops: &[usize], throws: &[ThrowState], first_can_be_continue: bool, mut collect: Option<&mut Vec<P>>) -> bool {
         let mut todo: Vec<P> = vec![from];
-        let mut visited: Vec<P> = Vec::new();
+        let mut visited: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
+        let mut collected: std::collections::HashSet<P> = std::collections::HashSet::new();
         let mut first = first_can_be_continue;
         'todo: while let Some(this) = todo.pop() {
             super::method::check_deadline();
@@ -143,14 +149,13 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 }
             }
             first = false;
-            if pcontains(&self.parts, &visited, this) {
+            if !visited.insert(self.part_key(this)) {
                 continue;
             }
-            visited.push(this);
             for &p in &self.parts[this].next {
                 match collect.as_deref_mut() {
                     Some(c) => {
-                        if !c.contains(&p) {
+                        if collected.insert(p) {
                             c.push(p);
                         }
                     }
@@ -160,7 +165,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                         }
                     }
                 }
-                if pcontains(&self.parts, &visited, p) {
+                if visited.contains(&self.part_key(p)) {
                     continue;
                 }
                 todo.push(p);
@@ -170,7 +175,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     let p = ts.target.expect("throw target");
                     match collect.as_deref_mut() {
                         Some(c) => {
-                            if !c.contains(&p) {
+                            if collected.insert(p) {
                                 c.push(p);
                             }
                         }
@@ -180,7 +185,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                             }
                         }
                     }
-                    if pcontains(&self.parts, &visited, p) {
+                    if visited.contains(&self.part_key(p)) {
                         continue;
                     }
                     todo.push(p);
@@ -442,6 +447,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let refs = code.graph_refs(alternate);
         let mut visited = vec![false; n as usize];
         let mut all: Vec<P> = Vec::new();
+        let mut owner: Vec<P> = vec![P::MAX; n as usize + 1];
         struct W {
             parent: Option<P>,
             path: GraphPath,
@@ -459,7 +465,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         'q: while let Some(w) = q.pop_front() {
             let (parent, path, start, mut last) = (w.parent, w.path, w.start, w.last);
             let mut ip = start;
-            if let Some(ex) = self.search_part(ip, &all) {
+            if let Some(ex) = find_owner(&owner, ip) {
                 if let Some(par) = parent {
                     self.parts[ex].refs.push(par);
                     self.parts[par].next.push(ex);
@@ -481,8 +487,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 }
                 if visited[ip as usize] || (ip != start && refs[ip as usize].len() > 1) {
                     self.parts[part].end = last;
-                    let found = self.search_part(aip, &all);
-                    all.push(part);
+                    let found = find_owner(&owner, aip);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                     match found {
                         Some(f) => {
                             self.parts[part].next.push(f);
@@ -511,7 +517,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     ip = self.tr.code.adr2pos(cend).map_or(n, |x| x as i32);
                     if define {
                         self.parts[part].end = last;
-                        all.push(part);
+                        push_part(&mut all, &mut owner, &self.parts, part);
                         let np = self.new_part(ip, -1);
                         self.parts[np].path = path.clone();
                         self.parts[part].next.push(np);
@@ -522,17 +528,17 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 }
                 if ins.is_exit() {
                     self.parts[part].end = ip;
-                    all.push(part);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                     break;
                 } else if ins.is_jump() {
                     self.parts[part].end = ip;
-                    all.push(part);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                     let target = self.check_ip(self.tr.code.branches(ip as usize)[0]);
                     q.push_back(W { parent: Some(part), path: path.clone(), start: target, last });
                     break;
                 } else if ins.is_branch() {
                     self.parts[part].end = ip;
-                    all.push(part);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                     let branches = self.tr.code.branches(ip as usize);
                     for (i, &b) in branches.iter().enumerate() {
                         q.push_back(W { parent: Some(part), path: path.sub(i as i32, ip), start: self.check_ip(b), last: ip });
@@ -544,20 +550,20 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             if self.parts[part].end == -1 && ip >= n {
                 if self.parts[part].start == n {
                     self.parts[part].end = n;
-                    all.push(part);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                 } else {
                     self.parts[part].end = ip - 1;
                     if let Some(&p) = all.iter().find(|&&p| self.parts[p].start == ip) {
                         self.parts[p].refs.push(part);
                         self.parts[part].next.push(p);
-                        all.push(part);
+                        push_part(&mut all, &mut owner, &self.parts, part);
                         continue 'q;
                     }
                     let gp = self.new_part(ip, ip);
-                    all.push(gp);
+                    push_part(&mut all, &mut owner, &self.parts, gp);
                     self.parts[gp].refs.push(part);
                     self.parts[part].next.push(gp);
-                    all.push(part);
+                    push_part(&mut all, &mut owner, &self.parts, part);
                 }
             }
         }
@@ -682,4 +688,22 @@ pub fn last_of(l: &List) -> Option<It> {
 
 pub fn pop_last(l: &List) -> Option<It> {
     l.borrow_mut().pop()
+}
+
+/// Records which part first covers each ip, so `searchPart` during graph building is a lookup.
+fn push_part(all: &mut Vec<P>, owner: &mut [P], parts: &[Part], p: P) {
+    all.push(p);
+    let (s, e) = (parts[p].start.max(0), parts[p].end.min(owner.len() as i32 - 1));
+    for ip in s..=e {
+        if owner[ip as usize] == P::MAX {
+            owner[ip as usize] = p;
+        }
+    }
+}
+
+fn find_owner(owner: &[P], ip: i32) -> Option<P> {
+    if ip < 0 {
+        return None;
+    }
+    owner.get(ip as usize).copied().filter(|&p| p != P::MAX)
 }

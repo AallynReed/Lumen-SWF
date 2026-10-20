@@ -5,11 +5,32 @@
 
 use super::item::PartId as P;
 
+/// One branch taken: (ip, index), linked to the branches before it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Branch {
+    pub ip: i32,
+    pub index: i32,
+    pub prev: Option<std::rc::Rc<Branch>>,
+}
+
+impl Drop for Branch {
+    fn drop(&mut self) {
+        let mut prev = self.prev.take();
+        while let Some(rc) = prev {
+            match std::rc::Rc::try_unwrap(rc) {
+                Ok(mut b) => prev = b.prev.take(),
+                Err(_) => break,
+            }
+        }
+    }
+}
+
+/// `GraphPath`, as a shared list so `sub` does not copy the whole history.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GraphPath {
     pub root: String,
-    pub ips: Vec<i32>,
-    pub indices: Vec<i32>,
+    pub last: Option<std::rc::Rc<Branch>>,
+    pub len: usize,
 }
 
 impl GraphPath {
@@ -18,10 +39,7 @@ impl GraphPath {
     }
 
     pub fn sub(&self, index: i32, ip: i32) -> GraphPath {
-        let mut p = self.clone();
-        p.ips.push(ip);
-        p.indices.push(index);
-        p
+        GraphPath { root: self.root.clone(), last: Some(std::rc::Rc::new(Branch { ip, index, prev: self.last.clone() })), len: self.len + 1 }
     }
 }
 
