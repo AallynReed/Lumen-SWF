@@ -337,6 +337,29 @@ async fn apply_pcode(docs: State<'_, Docs>, id: u32, path: String, script: Strin
     r.map_err(|m| failure.map_or_else(|| EditError::from(m), EditError::from))
 }
 
+#[tauri::command]
+fn text_source(docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<String>> {
+    let p = tag_path(&path)?;
+    with_doc(&docs, id, |d| ffdec::edit::text_source(d.swf(), &p).map_err(|e| e.message))
+}
+
+/// Stores an edited text; errors carry the line they are on.
+#[tauri::command]
+async fn apply_text(docs: State<'_, Docs>, id: u32, path: String, text: String) -> Result<(), EditError> {
+    let p = tag_path(&path)?;
+    let mut failure = None;
+    let r = with_doc_mut(&docs, id, |d| {
+        d.edit(|swf| {
+            ffdec::edit::set_text_source(swf, &p, &text).map_err(|e| {
+                let m = e.message.clone();
+                failure = Some(e);
+                m
+            })
+        })
+    });
+    r.map_err(|m| failure.map_or_else(|| EditError::from(m), EditError::from))
+}
+
 #[derive(Serialize)]
 struct PreviewInfo {
     kind: &'static str,
@@ -520,6 +543,8 @@ fn main() {
             script_methods,
             script_pcode,
             apply_pcode,
+            text_source,
+            apply_text,
             apply_source,
             confirm_discard,
             preview_info,

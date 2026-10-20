@@ -1,5 +1,5 @@
 //! Script editing by tree id: `as2:<index>` for AS1/2 sources, `<script>:<trait>` for AS3
-//! entries, whose methods are edited one at a time.
+//! entries, whose methods are edited one at a time. Texts are edited by tag path.
 
 use crate::abc::scripts::{entries, methods, parse_id, MethodRef};
 use crate::abc::Abc;
@@ -70,4 +70,29 @@ pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str
     };
     let c = compile(text, swf.header.version, target, &swf_classes(swf), Some(swf)).map_err(|e| ParseError { line: e.line, message: e.message })?;
     src.set_compiled(swf, &c).map_err(|e| fail(e.to_string()))
+}
+
+/// The editable text of a text tag: FFDec's formatted text for DefineText/2, the initial text
+/// (HTML when the field is HTML) for DefineEditText. None for other tags.
+pub fn text_source(swf: &Swf, path: &[usize]) -> Result<Option<String>, ParseError> {
+    use crate::tags::code::*;
+    let tag = swf.tag(path).ok_or_else(|| fail("tag not found"))?;
+    match tag.code {
+        DEFINE_TEXT | DEFINE_TEXT2 => {
+            let t = crate::text::StaticText::read(tag).map_err(|e| fail(e.to_string()))?;
+            Ok(Some(crate::text::formatted(swf, &t, false)))
+        }
+        DEFINE_EDIT_TEXT => Ok(Some(crate::export::text::edit_text_raw(tag).map_err(|e| fail(e.to_string()))?.0)),
+        _ => Ok(None),
+    }
+}
+
+/// Stores edited text in place of what `text_source` returned.
+pub fn set_text_source(swf: &mut Swf, path: &[usize], text: &str) -> Result<(), ParseError> {
+    use crate::tags::code::*;
+    match swf.tag(path).map(|t| t.code) {
+        Some(DEFINE_TEXT | DEFINE_TEXT2) => crate::text::import(swf, path, text),
+        Some(DEFINE_EDIT_TEXT) => crate::importers::edit_text(swf, path, text).map_err(|e| fail(e.to_string())),
+        _ => Err(fail("not a text tag")),
+    }
 }

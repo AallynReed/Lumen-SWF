@@ -377,6 +377,7 @@ function renderPreview(info, data) {
         if (info.kind === 'vector' && info.text) {
             el.insertAdjacentHTML('beforeend', `<pre class="text-preview">${esc(info.text)}</pre>`);
         }
+        textEditButton(el);
     } else if (info.kind === 'audio') {
         previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
         el.innerHTML = `<audio controls preload="metadata" src="${previewUrl}"></audio>`;
@@ -396,9 +397,17 @@ function renderPreview(info, data) {
         });
     } else if (info.kind === 'text') {
         el.innerHTML = info.text ? `<pre class="text-preview">${esc(info.text)}</pre>` : '<p class="preview-empty">No text.</p>';
+        textEditButton(el);
     } else if (info.kind === 'code') {
         renderCode(el, info);
     }
+}
+
+function textEditButton(el) {
+    const n = state.selected && state.selected.node;
+    if (!n || n.kind !== 'tag' || n.category !== 'texts') return;
+    el.insertAdjacentHTML('afterbegin', '<div class="code-bar"><button class="btn" data-act="edit-text" title="Edit this text">Edit</button></div>');
+    el.querySelector('[data-act="edit-text"]').addEventListener('click', () => openTextEditor(el));
 }
 
 // Decompiled ActionScript, with a switch to p-code, which can be edited: AS1/2 scripts whole,
@@ -436,24 +445,60 @@ async function renderCode(el, info) {
 
 function openEditor(el, info, text, pcode) {
     const sel = state.selected;
+    const n = sel.node;
+    editInPlace(el, {
+        title: !pcode ? 'Editing ActionScript' : state.method ? `Editing ${state.method}` : 'Editing p-code',
+        label: pcode ? 'P-code' : 'ActionScript',
+        verb: pcode ? 'Assemble' : 'Compile',
+        text,
+        store: (value) => pcode
+            ? invoke('apply_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method, text: value })
+            : invoke('apply_source', { id: sel.docId, path: n.path, script: n.script, text: value }),
+        stored: pcode && state.method ? `Updated ${state.method}` : 'Updated the script',
+        back: () => renderCode(el, info),
+    });
+}
+
+async function openTextEditor(el) {
+    const sel = state.selected;
+    const n = sel.node;
+    let text;
+    try {
+        text = await invoke('text_source', { id: sel.docId, path: n.path });
+    } catch (e) {
+        status(String(e), true);
+        return;
+    }
+    if (state.selected !== sel || text == null) return;
+    editInPlace(el, {
+        title: 'Editing text',
+        label: 'Text',
+        verb: 'Check',
+        text,
+        store: (value) => invoke('apply_text', { id: sel.docId, path: n.path, text: value }),
+        stored: 'Updated the text',
+        back: () => showSelection(),
+    });
+}
+
+// A text area over the preview whose Apply stores the text, showing errors by line.
+function editInPlace(el, { title, label, verb, text, store, stored, back }) {
+    const sel = state.selected;
     state.editor = { original: text };
-    const what = !pcode ? 'Editing ActionScript' : state.method ? `Editing ${state.method}` : 'Editing p-code';
-    el.innerHTML = `<div class="code-bar"><span class="code-title">${esc(what)}</span>`
-        + `<button class="btn primary" data-act="apply" title="${pcode ? 'Assemble' : 'Compile'} and store (Ctrl+Enter)">Apply</button>`
+    el.innerHTML = `<div class="code-bar"><span class="code-title">${esc(title)}</span>`
+        + `<button class="btn primary" data-act="apply" title="${verb} and store (Ctrl+Enter)">Apply</button>`
         + '<button class="btn" data-act="cancel" title="Discard these edits (Esc)">Cancel</button></div>'
         + '<p class="code-error" hidden></p>'
-        + `<textarea class="code-edit" spellcheck="false" wrap="off" aria-label="${pcode ? 'P-code' : 'ActionScript'}">${esc(text)}</textarea>`;
+        + `<textarea class="code-edit" spellcheck="false" wrap="off" aria-label="${label}">${esc(text)}</textarea>`;
     const area = el.querySelector('textarea');
     area.focus();
     const cancel = () => {
         state.editor = null;
-        renderCode(el, info);
+        back();
     };
     const apply = async () => {
-        const n = sel.node;
         try {
-            if (pcode) await invoke('apply_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method, text: area.value });
-            else await invoke('apply_source', { id: sel.docId, path: n.path, script: n.script, text: area.value });
+            await store(area.value);
         } catch (e) {
             showEditError(el, area, e);
             return;
@@ -463,7 +508,7 @@ function openEditor(el, info, text, pcode) {
         doc.modified = true;
         await loadTree(doc);
         render();
-        status(pcode && state.method ? `Updated ${state.method}` : 'Updated the script');
+        status(stored);
         showSelection();
     };
     el.querySelector('[data-act="apply"]').addEventListener('click', apply);

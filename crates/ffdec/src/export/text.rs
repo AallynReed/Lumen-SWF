@@ -84,6 +84,12 @@ fn skip_matrix(r: &mut Reader) -> Result<()> {
 
 /// The initial text of a DefineEditText, with HTML markup reduced to plain text.
 pub fn edit_text(tag: &Tag) -> Result<String> {
+    let (text, html) = edit_text_raw(tag)?;
+    Ok(if html { strip_html(&text) } else { text })
+}
+
+/// The initial text of a DefineEditText as stored, and whether it is HTML.
+pub fn edit_text_raw(tag: &Tag) -> Result<(String, bool)> {
     let mut r = Reader::new(&tag.body);
     r.u16()?;
     Rect::read(&mut r)?;
@@ -109,10 +115,9 @@ pub fn edit_text(tag: &Tag) -> Result<String> {
     }
     r.string()?;
     if f1 & 0x80 == 0 {
-        return Ok(String::new());
+        return Ok((String::new(), f2 & 0x02 != 0));
     }
-    let text = r.string()?;
-    Ok(if f2 & 0x02 != 0 { strip_html(&text) } else { text })
+    Ok((r.string()?, f2 & 0x02 != 0))
 }
 
 pub fn html_to_plain(s: &str) -> String {
