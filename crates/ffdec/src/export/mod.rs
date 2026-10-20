@@ -1,4 +1,5 @@
-//! Asset export: images, sounds, binary data, fonts, texts and video streams.
+//! Asset export: images, sounds, binary data, fonts, texts, video streams, and rendered
+//! shapes, morph shapes, frames, sprites and buttons.
 
 pub mod flv;
 pub mod font;
@@ -9,13 +10,14 @@ pub mod text;
 pub mod ttf;
 pub mod video;
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::names::{make_file_name, Names};
+use crate::render::display::{BUTTON_DOWN, BUTTON_HIT, BUTTON_OVER, BUTTON_UP};
+use crate::render::{raster, Renderer};
 use crate::tags::{code::*, Tag, Timeline};
 use crate::Swf;
 
@@ -28,10 +30,27 @@ pub enum Kind {
     Fonts,
     Texts,
     Movies,
+    Shapes,
+    MorphShapes,
+    Frames,
+    Sprites,
+    Buttons,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 6] = [Kind::Images, Kind::Sounds, Kind::BinaryData, Kind::Fonts, Kind::Texts, Kind::Movies];
+    pub const ALL: [Kind; 11] = [
+        Kind::Images,
+        Kind::Sounds,
+        Kind::BinaryData,
+        Kind::Fonts,
+        Kind::Texts,
+        Kind::Movies,
+        Kind::Shapes,
+        Kind::MorphShapes,
+        Kind::Frames,
+        Kind::Sprites,
+        Kind::Buttons,
+    ];
 
     /// Folder name, matching FFDec's export layout.
     pub fn dir(self) -> &'static str {
@@ -42,20 +61,22 @@ impl Kind {
             Kind::Fonts => "fonts",
             Kind::Texts => "texts",
             Kind::Movies => "movies",
+            Kind::Shapes => "shapes",
+            Kind::MorphShapes => "morphshapes",
+            Kind::Frames => "frames",
+            Kind::Sprites => "sprites",
+            Kind::Buttons => "buttons",
         }
     }
 
     pub fn parse(s: &str) -> Option<Kind> {
-        Kind::ALL.into_iter().find(|k| k.dir().eq_ignore_ascii_case(s) || k.dir().trim_end_matches('s').eq_ignore_ascii_case(s))
-            .or(match s.to_ascii_lowercase().as_str() {
-                "image" => Some(Kind::Images),
-                "sound" => Some(Kind::Sounds),
-                "binary" | "binarydata" => Some(Kind::BinaryData),
-                "font" => Some(Kind::Fonts),
-                "text" => Some(Kind::Texts),
-                "movie" | "video" => Some(Kind::Movies),
-                _ => None,
-            })
+        let s = s.to_ascii_lowercase();
+        Kind::ALL.into_iter().find(|k| k.dir().eq_ignore_ascii_case(&s) || k.dir().trim_end_matches('s').eq_ignore_ascii_case(&s)).or(match s.as_str() {
+            "binary" => Some(Kind::BinaryData),
+            "video" => Some(Kind::Movies),
+            "morph" | "morphshape" => Some(Kind::MorphShapes),
+            _ => None,
+        })
     }
 
     pub fn of(code: u16) -> Option<Kind> {
@@ -66,6 +87,10 @@ impl Kind {
             c if font::is_font(c) => Kind::Fonts,
             c if text::is_text(c) => Kind::Texts,
             DEFINE_VIDEO_STREAM => Kind::Movies,
+            c if crate::shape::is_shape(c) => Kind::Shapes,
+            c if crate::morph::is_morph(c) => Kind::MorphShapes,
+            DEFINE_SPRITE => Kind::Sprites,
+            DEFINE_BUTTON | DEFINE_BUTTON2 => Kind::Buttons,
             _ => return None,
         })
     }
@@ -77,9 +102,24 @@ pub struct Options {
     pub png_only: bool,
     /// Decode every sound to WAV instead of keeping MP3 and wrapping other codecs in FLV.
     pub wav_only: bool,
+    /// Shapes and morph shapes as PNG (default SVG; morph shapes then as start/end images).
+    pub shapes_png: bool,
+    /// Frames, sprites and buttons as SVG (default PNG).
+    pub frames_svg: bool,
+    /// Texts as SVG drawings instead of plain text.
+    pub texts_svg: bool,
+    /// Raster scale; 0 means 1.
+    pub zoom: f32,
+}
+
+impl Options {
+    fn zoom(&self) -> f32 {
+        if self.zoom > 0.0 { self.zoom } else { 1.0 }
+    }
 }
 
 pub struct File {
+    /// File name, possibly under a sub-folder (`DefineSprite_3/1.png`).
     pub name: String,
     pub mime: &'static str,
     pub data: Vec<u8>,
@@ -88,13 +128,17 @@ pub struct File {
 /// A browser-friendly rendition of an asset for the preview pane.
 #[derive(Serialize)]
 pub struct Preview {
-    /// `image`, `audio`, `font` or `text`.
+    /// `image`, `audio`, `font`, `text` or `vector` (SVG).
     pub kind: &'static str,
     pub mime: &'static str,
     #[serde(skip)]
     pub data: Vec<u8>,
     pub text: Option<String>,
     pub note: Option<String>,
+    /// Frames the preview can step through (sprites, buttons, the root timeline).
+    pub frames: usize,
+    pub frame: usize,
+    pub frame_rate: f32,
 }
 
 const NL: &str = if cfg!(windows) { "\r\n" } else { "\n" };
@@ -104,29 +148,45 @@ pub struct Exporter<'a> {
     swf: &'a Swf,
     names: Names,
     jpeg_tables: Option<&'a [u8]>,
-    fonts: HashMap<u16, font::Font>,
+    renderer: Renderer<'a>,
 }
+
+const BUTTON_FRAMES: [(u8, &str); 4] = [(BUTTON_UP, "1_up"), (BUTTON_OVER, "2_over"), (BUTTON_DOWN, "3_down"), (BUTTON_HIT, "4_hittest")];
 
 impl<'a> Exporter<'a> {
     pub fn new(swf: &'a Swf) -> Exporter<'a> {
         let jpeg_tables = swf.timeline.tags.iter().find(|t| t.code == JPEG_TABLES).map(|t| &t.body[..]);
-        let mut fonts = HashMap::new();
-        swf.walk(|_, t| {
-            if matches!(t.code, DEFINE_FONT | DEFINE_FONT2 | DEFINE_FONT3) {
-                if let Ok(f) = font::Font::read(swf, t) {
-                    fonts.insert(f.id, f);
-                }
-            }
-        });
-        Exporter { swf, names: Names::new(swf), jpeg_tables, fonts }
+        Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf) }
+    }
+
+    pub fn renderer(&self) -> &Renderer<'a> {
+        &self.renderer
+    }
+
+    fn stem(&self, tag: &Tag, path: &[usize]) -> String {
+        match tag.character_id() {
+            Some(id) if crate::tags::defines_character(tag.code) => self.names.export_file_name(id),
+            _ => format!("stream_{}", path.iter().map(|i| i.to_string()).collect::<Vec<_>>().join("_")),
+        }
     }
 
     fn file_name(&self, tag: &Tag, path: &[usize], ext: &str) -> String {
-        let stem = match tag.character_id() {
-            Some(id) if crate::tags::defines_character(tag.code) => self.names.export_file_name(id),
-            _ => format!("stream_{}", path.iter().map(|i| i.to_string()).collect::<Vec<_>>().join("_")),
-        };
-        make_file_name(&format!("{stem}.{ext}"))
+        make_file_name(&format!("{}.{ext}", self.stem(tag, path)))
+    }
+
+    /// FFDec's folder name for a timeline character: `DefineSprite_12_ExportName`.
+    fn folder_name(&self, tag: &Tag) -> String {
+        let id = tag.character_id().unwrap_or(0);
+        let mut s = format!("{}_{id}", tag.name());
+        if let Some(e) = self.names.export.get(&id) {
+            s.push('_');
+            s.push_str(e);
+        }
+        if let Some([c]) = self.names.classes.get(&id).map(Vec::as_slice) {
+            s.push('_');
+            s.push_str(c);
+        }
+        make_file_name(&s)
     }
 
     fn timeline_of(&self, path: &[usize]) -> Option<&'a Timeline> {
@@ -147,60 +207,120 @@ impl<'a> Exporter<'a> {
         }
     }
 
-    /// Exports one tag in its FFDec format. `Ok(None)` when the tag is not an asset.
-    pub fn export(&self, path: &[usize], opts: Options) -> Result<Option<File>> {
+    fn vector(&self, svg: String, png: bool, zoom: f32) -> Result<(&'static str, &'static str, Vec<u8>)> {
+        if png {
+            Ok(("png", "image/png", raster::png(&svg, zoom)?))
+        } else {
+            Ok(("svg", "image/svg+xml", svg.into_bytes()))
+        }
+    }
+
+    /// Exports one tag in its FFDec format: usually one file, several for sprites,
+    /// buttons and PNG morph shapes; none when the tag is not an asset.
+    pub fn export(&self, path: &[usize], opts: Options) -> Result<Vec<File>> {
         let tag = self.swf.tag(path).ok_or_else(|| Error::Other("no such tag".into()))?;
-        let Some(kind) = Kind::of(tag.code) else { return Ok(None) };
-        let (ext, mime, data): (&str, &'static str, Vec<u8>) = match kind {
+        let Some(kind) = Kind::of(tag.code) else { return Ok(Vec::new()) };
+        let id = tag.character_id().unwrap_or(0);
+        let r = &self.renderer;
+        let one = |ext: &str, mime: &'static str, data: Vec<u8>| Ok(vec![File { name: self.file_name(tag, path, ext), mime, data }]);
+        match kind {
             Kind::Images => {
                 let bmp = image::Bitmap::read(tag, self.jpeg_tables)?;
                 let (fmt, data) = bmp.encode(opts.png_only)?;
-                (fmt.ext(), fmt.mime(), data)
+                one(fmt.ext(), fmt.mime(), data)
             }
             Kind::Sounds => {
                 let s = self.sound(tag, path)?;
                 let k = if opts.wav_only { sound::Kind::Wav } else { s.native_kind() };
-                (k.ext(), k.mime(), s.export(k)?)
+                one(k.ext(), k.mime(), s.export(k)?)
             }
             Kind::BinaryData => {
                 let data = tag.body.get(6..).unwrap_or(&[]).to_vec();
-                let inner = Swf::parse(&data).is_ok();
-                (if inner { "swf" } else { "bin" }, if inner { "application/x-shockwave-flash" } else { "application/octet-stream" }, data)
-            }
-            Kind::Fonts => {
-                if tag.code == DEFINE_FONT4 {
-                    ("otf", "font/otf", font::font4_data(tag)?.to_vec())
+                if Swf::parse(&data).is_ok() {
+                    one("swf", "application/x-shockwave-flash", data)
                 } else {
-                    let id = tag.character_id().unwrap_or(0);
-                    let f = self.fonts.get(&id).ok_or_else(|| Error::Other("font could not be read".into()))?;
-                    // FFDec writes nothing for fonts without glyphs (device fonts).
-                    if f.glyphs.iter().all(|g| g.shape.is_empty()) {
-                        return Ok(None);
-                    }
-                    ("ttf", "font/ttf", f.to_ttf())
+                    one("bin", "application/octet-stream", data)
                 }
             }
+            Kind::Fonts => {
+                let (ext, mime, data, font_name) = if tag.code == DEFINE_FONT4 {
+                    ("otf", "font/otf", font::font4_data(tag)?.to_vec(), font::font4_name(tag))
+                } else {
+                    let f = r.fonts().get(&id).ok_or_else(|| Error::Other("font could not be read".into()))?;
+                    // FFDec writes nothing for fonts without glyphs (device fonts).
+                    if f.glyphs.iter().all(|g| g.shape.is_empty()) {
+                        return Ok(Vec::new());
+                    }
+                    ("ttf", "font/ttf", f.to_ttf(), f.name.clone())
+                };
+                Ok(vec![File { name: make_file_name(&format!("{}_{font_name}.{ext}", self.stem(tag, path))), mime, data }])
+            }
+            Kind::Texts if opts.texts_svg => one("svg", "image/svg+xml", r.character_svg(id, 0, BUTTON_UP)?.into_bytes()),
             Kind::Texts => {
                 let sep = format!("{NL}--- RECORDSEPARATOR ---{NL}");
-                ("txt", "text/plain", text::records(tag, &self.fonts)?.join(&sep).into_bytes())
+                one("txt", "text/plain", text::records(tag, r.fonts())?.join(&sep).into_bytes())
             }
-            Kind::Movies => ("flv", "video/x-flv", video::export(self.swf, tag)?),
-        };
-        let mut name = self.file_name(tag, path, ext);
-        if kind == Kind::Fonts {
-            let font_name = match tag.code {
-                DEFINE_FONT4 => font::font4_name(tag),
-                _ => self.fonts.get(&tag.character_id().unwrap_or(0)).map(|f| f.name.clone()).unwrap_or_default(),
-            };
-            let stem = name.strip_suffix(&format!(".{ext}")).unwrap_or(&name).to_string();
-            name = make_file_name(&format!("{stem}_{font_name}.{ext}"));
+            Kind::Movies => one("flv", "video/x-flv", video::export(self.swf, tag)?),
+            Kind::Shapes => {
+                let (ext, mime, data) = self.vector(r.character_svg(id, 0, BUTTON_UP)?, opts.shapes_png, opts.zoom())?;
+                one(ext, mime, data)
+            }
+            Kind::MorphShapes if opts.shapes_png => {
+                let stem = self.stem(tag, path);
+                let mut out = Vec::new();
+                for (suffix, ratio) in [("start", 0u16), ("end", 65535)] {
+                    let data = raster::png(&r.morph_svg_at(id, ratio)?, opts.zoom())?;
+                    out.push(File { name: make_file_name(&format!("{stem}.{suffix}.png")), mime: "image/png", data });
+                }
+                Ok(out)
+            }
+            Kind::MorphShapes => one("svg", "image/svg+xml", r.morph_svg(id)?.into_bytes()),
+            Kind::Sprites => {
+                let dir = self.folder_name(tag);
+                let mut out = Vec::new();
+                for f in 0..r.frame_count_of(id) {
+                    let (ext, mime, data) = self.vector(r.character_svg(id, f, BUTTON_UP)?, !opts.frames_svg, opts.zoom())?;
+                    out.push(File { name: format!("{dir}/{}.{ext}", f + 1), mime, data });
+                }
+                Ok(out)
+            }
+            Kind::Buttons => {
+                let dir = self.folder_name(tag);
+                let mut out = Vec::new();
+                for (state, name) in BUTTON_FRAMES {
+                    let (ext, mime, data) = self.vector(r.character_svg(id, 0, state)?, !opts.frames_svg, opts.zoom())?;
+                    out.push(File { name: format!("{dir}/{name}.{ext}"), mime, data });
+                }
+                Ok(out)
+            }
+            Kind::Frames => Ok(Vec::new()),
         }
-        Ok(Some(File { name, mime, data }))
     }
 
-    pub fn preview(&self, path: &[usize]) -> Result<Option<Preview>> {
+    /// Root timeline frames as `frames/<n>.png` (or SVG).
+    pub fn export_frames(&self, opts: Options) -> Vec<Result<File>> {
+        (0..self.renderer.root_frame_count())
+            .map(|f| {
+                let (ext, mime, data) = self.vector(self.renderer.frame_svg(f), !opts.frames_svg, opts.zoom())?;
+                Ok(File { name: format!("{}.{ext}", f + 1), mime, data })
+            })
+            .collect()
+    }
+
+    /// A preview of a tag, or of the root timeline when `path` is empty.
+    pub fn preview(&self, path: &[usize], frame: usize) -> Result<Option<Preview>> {
+        let r = &self.renderer;
+        let p = |kind, mime, data, text: Option<String>| Preview { kind, mime, data, text, note: None, frames: 1, frame: 0, frame_rate: self.swf.frame_rate };
+        if path.is_empty() {
+            let n = r.root_frame_count();
+            let f = frame.min(n - 1);
+            let mut pv = p("vector", "image/svg+xml", r.frame_svg(f).into_bytes(), None);
+            pv.frames = n;
+            pv.frame = f;
+            return Ok(Some(pv));
+        }
         let tag = self.swf.tag(path).ok_or_else(|| Error::Other("no such tag".into()))?;
-        let p = |kind, mime, data, text: Option<String>| Preview { kind, mime, data, text, note: None };
+        let id = tag.character_id().unwrap_or(0);
         Ok(Some(match Kind::of(tag.code) {
             Some(Kind::Images) => {
                 let bmp = image::Bitmap::read(tag, self.jpeg_tables)?;
@@ -220,15 +340,40 @@ impl<'a> Exporter<'a> {
                 pv
             }
             Some(Kind::Fonts) if tag.code != DEFINE_FONT4 => {
-                let id = tag.character_id().unwrap_or(0);
-                let Some(f) = self.fonts.get(&id) else { return Ok(None) };
+                let Some(f) = r.fonts().get(&id) else { return Ok(None) };
                 let chars: String = f.glyphs.iter().filter_map(|g| char::from_u32(g.code as u32)).filter(|c| !c.is_control()).collect();
                 let mut pv = p("font", "font/ttf", f.to_ttf(), Some(chars));
                 pv.note = Some(format!("{} — {} glyphs", if f.name.is_empty() { "unnamed" } else { &f.name }, f.glyphs.len()));
                 pv
             }
             Some(Kind::Fonts) => p("font", "font/otf", font::font4_data(tag)?.to_vec(), None),
-            Some(Kind::Texts) => p("text", "text/plain", Vec::new(), Some(text::records(tag, &self.fonts)?.join("\n"))),
+            Some(Kind::Texts) => {
+                let mut pv = p("vector", "image/svg+xml", r.character_svg(id, 0, BUTTON_UP)?.into_bytes(), None);
+                pv.text = Some(text::records(tag, r.fonts())?.join("\n"));
+                pv
+            }
+            Some(Kind::Shapes) => p("vector", "image/svg+xml", r.character_svg(id, 0, BUTTON_UP)?.into_bytes(), None),
+            Some(Kind::MorphShapes) => {
+                let mut pv = p("vector", "image/svg+xml", r.morph_svg(id)?.into_bytes(), None);
+                pv.note = Some("Morphs from the start to the end shape every 2 seconds".into());
+                pv
+            }
+            Some(Kind::Sprites) => {
+                let n = r.frame_count_of(id);
+                let f = frame.min(n - 1);
+                let mut pv = p("vector", "image/svg+xml", r.character_svg(id, f, BUTTON_UP)?.into_bytes(), None);
+                pv.frames = n;
+                pv.frame = f;
+                pv
+            }
+            Some(Kind::Buttons) => {
+                let f = frame.min(3);
+                let mut pv = p("vector", "image/svg+xml", r.character_svg(id, 0, BUTTON_FRAMES[f].0)?.into_bytes(), None);
+                pv.frames = 4;
+                pv.frame = f;
+                pv.note = Some(["up", "over", "down", "hit test"][f].to_string() + " state");
+                pv
+            }
             _ => return Ok(None),
         }))
     }
@@ -241,13 +386,15 @@ impl<'a> Exporter<'a> {
                 let empty_stream = k == Kind::Sounds && t.code != DEFINE_SOUND && self.sound(t, path).map_or(true, |s| s.chunks.is_empty());
                 if kinds.contains(&k) && !empty_stream {
                     match self.export(path, opts) {
-                        Ok(Some(f)) => out.push((k, path.to_vec(), Ok(f))),
-                        Ok(None) => {}
+                        Ok(files) => out.extend(files.into_iter().map(|f| (k, path.to_vec(), Ok(f)))),
                         Err(e) => out.push((k, path.to_vec(), Err(e))),
                     }
                 }
             }
         });
+        if kinds.contains(&Kind::Frames) {
+            out.extend(self.export_frames(opts).into_iter().map(|r| (Kind::Frames, Vec::new(), r)));
+        }
         out
     }
 
@@ -258,9 +405,9 @@ impl<'a> Exporter<'a> {
             let p = path.iter().map(|i| i.to_string()).collect::<Vec<_>>().join("/");
             match r {
                 Ok(f) => {
-                    let sub = dir.join(kind.dir());
-                    let target = sub.join(&f.name);
-                    match std::fs::create_dir_all(&sub).and_then(|_| std::fs::write(&target, &f.data)) {
+                    let target = dir.join(kind.dir()).join(&f.name);
+                    let res = target.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&target, &f.data));
+                    match res {
                         Ok(()) => written.push(target),
                         Err(e) => errors.push(format!("{}: {e}", target.display())),
                     }

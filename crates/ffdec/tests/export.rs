@@ -34,7 +34,7 @@ fn jpexs_corpus_exports() {
     for f in &files {
         let Ok(swf) = ffdec::Swf::parse(&std::fs::read(f).unwrap()) else { continue };
         let ex = Exporter::new(&swf);
-        for opts in [Options::default(), Options { png_only: true, wav_only: true }] {
+        for opts in [Options::default(), Options { png_only: true, wav_only: true, shapes_png: true, frames_svg: true, texts_svg: true, zoom: 0.25 }] {
             for (kind, path, r) in ex.export_all(&Kind::ALL, opts) {
                 *counts.entry(kind.dir()).or_insert(0) += 1;
                 if let Err(e) = r {
@@ -43,8 +43,9 @@ fn jpexs_corpus_exports() {
             }
         }
         swf.walk(|path, _| {
-            let _ = ex.preview(path);
+            let _ = ex.preview(path, 0);
         });
+        let _ = ex.preview(&[], 0);
     }
     eprintln!("exported: {counts:?}");
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
