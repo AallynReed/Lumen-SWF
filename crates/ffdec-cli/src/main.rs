@@ -82,8 +82,8 @@ enum Cmd {
     As3 { file: PathBuf, name: String },
     /// Print the decompiled ActionScript of an AS1/2 script by export path, e.g. frame_1/DoAction
     As2 { file: PathBuf, name: String },
-    /// Replace a character (by id) with a file, or a script (by name) with p-code, like
-    /// FFDec's -replace
+    /// Replace a character (by id) with a file, or a script (by name) with ActionScript or
+    /// .pcode, like FFDec's -replace
     Replace {
         input: PathBuf,
         output: PathBuf,
@@ -317,11 +317,20 @@ fn main() -> Result<()> {
                 ffdec::abc::asm::assemble_method(&mut abc, m.method, m.owner, &text())?;
                 swf.set_abc(&path, &abc)?;
             } else if let Some((_, src)) = as2_scripts(&swf).into_iter().find(|(n, _)| *n == target) {
-                if data.extension().is_some_and(|e| e.eq_ignore_ascii_case("as")) {
-                    return Err(anyhow!("compiling ActionScript is not supported yet; replace it with p-code"));
+                if data.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcode")) {
+                    let list = ffdec::action::asm::parse_pcode(&text(), swf.header.version)?;
+                    src.set_actions(&mut swf, &list)?;
+                } else {
+                    use ffdec::action::compile::{compile, swf_classes, Target};
+                    use ffdec::action::scripts::Kind;
+                    let target = match src.kind {
+                        Kind::ButtonCond => Target::ButtonCond,
+                        Kind::ClipAction => Target::ClipAction,
+                        _ => Target::Actions,
+                    };
+                    let c = compile(&text(), swf.header.version, target, &swf_classes(&swf), Some(&swf))?;
+                    src.set_compiled(&mut swf, &c)?;
                 }
-                let list = ffdec::action::asm::parse_pcode(&text(), swf.header.version)?;
-                src.set_actions(&mut swf, &list)?;
             } else if abcs(&swf).iter().any(|(_, a)| ffdec::abc::scripts::entries(a).iter().any(|e| e.full_name() == target)) {
                 return Err(anyhow!("an AS3 script is replaced one method at a time; pass --method"));
             } else {
