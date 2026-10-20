@@ -10,6 +10,8 @@ const state = {
     filter: '',
     expanded: new Set(),
     tab: 'details',
+    tabPref: 'preview',
+    exportable: false,
 };
 
 const ICONS = {
@@ -186,7 +188,10 @@ function updateButtons() {
     $('content').hidden = !has || !state.selected;
     $('btn-save').disabled = !has;
     $('btn-close').disabled = !state.selected;
-    $('btn-export').disabled = !(state.selected && state.selected.node.kind === 'tag');
+    const tagSelected = !!(state.selected && state.selected.node.kind === 'tag');
+    $('btn-export').disabled = !tagSelected;
+    $('btn-raw').disabled = !tagSelected;
+    $('btn-export-all').disabled = !has;
 }
 
 function select(sel) {
@@ -258,9 +263,12 @@ async function showSelection() {
     $('sel-title').textContent = n.kind === 'header' ? doc.name : n.label;
     const isTag = !!n.path && n.kind !== 'folder';
     document.querySelector('.tab[data-tab="hex"]').hidden = !isTag;
-    if (!isTag && state.tab === 'hex') setTab('details');
+    clearPreview();
+    state.exportable = false;
+    updateButtons();
 
     let fields;
+    let preview = null;
     if (n.kind === 'header') {
         fields = await call('header_info', { id: doc.id });
     } else if (n.kind === 'folder') {
@@ -268,19 +276,87 @@ async function showSelection() {
     } else if (n.kind === 'frame' && !n.path) {
         fields = [{ name: 'Tags in frame', value: String(n.children.length) }];
     } else {
-        const info = await call('tag_info', { id: doc.id, path: n.path });
+        const [info, pv] = await Promise.all([
+            call('tag_info', { id: doc.id, path: n.path }),
+            n.kind === 'tag' ? call('preview_info', { id: doc.id, path: n.path }).catch(() => null) : null,
+        ]);
         fields = info.fields;
         if (n.kind === 'frame') fields.unshift({ name: 'Tags in frame', value: String(n.children.length) });
         hexState = { docId: doc.id, path: n.path, total: info.size, pages: new Map() };
+        preview = pv;
     }
     if (state.selected !== sel) return;
     $('fields').innerHTML = fieldRows(fields);
     if (isTag) resetHex();
+
+    const hasPreview = !!preview;
+    document.querySelector('.tab[data-tab="preview"]').hidden = !hasPreview;
+    state.exportable = !!(preview && preview.exportable);
+    updateButtons();
+    if (hasPreview) {
+        const data = preview.size ? await invoke('preview_data', { id: doc.id, path: n.path }) : new ArrayBuffer(0);
+        if (state.selected !== sel) return;
+        renderPreview(preview, data);
+    }
+    // Follow the tab the user last picked, falling back when it is not available here.
+    let tab = state.tabPref;
+    if (tab === 'preview' && !hasPreview) tab = 'details';
+    if (tab === 'hex' && !isTag) tab = 'details';
+    setTab(tab, false);
 }
 
-function setTab(tab) {
+let previewUrl = null;
+let previewFont = null;
+
+function clearPreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (previewFont) document.fonts.delete(previewFont);
+    previewUrl = null;
+    previewFont = null;
+    $('preview').innerHTML = '';
+    $('preview-note').textContent = '';
+}
+
+function renderPreview(info, data) {
+    clearPreview();
+    const el = $('preview');
+    $('preview-note').textContent = info.note || '';
+    if (info.kind === 'image') {
+        previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
+        el.innerHTML = `<div class="checker"><img alt="" src="${previewUrl}"></div>`;
+        const img = el.querySelector('img');
+        img.addEventListener('load', () => {
+            // Blow small bitmaps up by a whole factor so pixels stay crisp.
+            const k = Math.max(1, Math.floor(256 / Math.max(img.naturalWidth, img.naturalHeight)));
+            img.style.width = `${img.naturalWidth * k}px`;
+        });
+    } else if (info.kind === 'audio') {
+        previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
+        el.innerHTML = `<audio controls preload="metadata" src="${previewUrl}"></audio>`;
+    } else if (info.kind === 'font') {
+        const family = `ffdec-preview-${Date.now()}`;
+        const face = new FontFace(family, data);
+        previewFont = face;
+        face.load().then((f) => {
+            if (previewFont !== face) return;
+            document.fonts.add(f);
+            const chars = [...(info.text || '')];
+            const sample = chars.filter((c) => c.trim()).slice(0, 60).join('') || 'The quick brown fox';
+            el.innerHTML = `<input class="font-sample" spellcheck="false" style="font-family:'${family}'" value="${esc(sample)}" aria-label="Sample text">`
+                + `<div class="glyphs" style="font-family:'${family}'">${chars.map((c) => `<span title="U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}">${esc(c)}</span>`).join('')}</div>`;
+        }).catch(() => {
+            el.innerHTML = '<p class="preview-empty">This font could not be loaded for preview.</p>';
+        });
+    } else if (info.kind === 'text') {
+        el.innerHTML = info.text ? `<pre class="text-preview">${esc(info.text)}</pre>` : '<p class="preview-empty">No text.</p>';
+    }
+}
+
+function setTab(tab, remember = true) {
+    if (remember) state.tabPref = tab;
     state.tab = tab;
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    $('tab-preview').hidden = tab !== 'preview';
     $('tab-details').hidden = tab !== 'details';
     $('tab-hex').hidden = tab !== 'hex';
     if (tab === 'hex') drawHex();
@@ -362,10 +438,14 @@ $('view-tags').addEventListener('click', () => setView(true));
 
 $('btn-save').addEventListener('click', (e) => {
     e.stopPropagation();
+    $('export-menu').hidden = true;
     $('save-menu').hidden = !$('save-menu').hidden;
 });
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('.menu-wrap')) $('save-menu').hidden = true;
+    if (!e.target.closest('.menu-wrap')) {
+        $('save-menu').hidden = true;
+        $('export-menu').hidden = true;
+    }
 });
 
 $('btn-save-go').addEventListener('click', async () => {
@@ -380,8 +460,35 @@ $('btn-save-go').addEventListener('click', async () => {
 $('btn-export').addEventListener('click', async () => {
     const sel = state.selected;
     if (!sel || !sel.node.path) return;
+    const out = state.exportable
+        ? await call('export_asset', { id: sel.docId, path: sel.node.path, png: $('opt-png').checked, wav: $('opt-wav').checked })
+        : await call('export_tag', { id: sel.docId, path: sel.node.path });
+    if (out) status(`Exported ${out}`);
+});
+
+$('btn-raw').addEventListener('click', async () => {
+    const sel = state.selected;
+    if (!sel || !sel.node.path) return;
     const out = await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
+});
+
+$('btn-export-all').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('save-menu').hidden = true;
+    $('export-menu').hidden = !$('export-menu').hidden;
+});
+
+$('btn-export-go').addEventListener('click', async () => {
+    $('export-menu').hidden = true;
+    const doc = selectedDoc() || state.docs[0];
+    if (!doc) return;
+    const kinds = [...document.querySelectorAll('input[name="kind"]:checked')].map((i) => i.value);
+    status('Exporting…');
+    const r = await call('export_all', { id: doc.id, kinds, png: $('opt-png').checked, wav: $('opt-wav').checked });
+    if (!r) return status('Ready');
+    if (r.errors.length) status(`Exported ${r.written} files to ${r.dir}; ${r.errors.length} failed: ${r.errors[0]}`, true);
+    else status(`Exported ${r.written} files to ${r.dir}`);
 });
 
 document.addEventListener('keydown', (e) => {

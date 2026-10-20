@@ -24,7 +24,25 @@
             <button id="btn-save-go" class="btn primary block">Save…</button>
         </div>
     </div>
-    <button id="btn-export" class="btn" disabled title="Save the selected tag's raw body">Export tag…</button>
+    <button id="btn-export" class="btn" disabled title="Export the selected asset (images, sounds, fonts…), or the raw tag body">Export…</button>
+    <button id="btn-raw" class="btn" disabled title="Save the selected tag's raw body">Raw…</button>
+    <div class="menu-wrap">
+        <button id="btn-export-all" class="btn" disabled title="Export every asset of the chosen types into a folder">Export all…</button>
+        <div id="export-menu" class="menu" hidden>
+            <div class="menu-title">Asset types</div>
+            <label><input type="checkbox" name="kind" value="images" checked> Images</label>
+            <label><input type="checkbox" name="kind" value="sounds" checked> Sounds</label>
+            <label><input type="checkbox" name="kind" value="fonts" checked> Fonts</label>
+            <label><input type="checkbox" name="kind" value="texts" checked> Texts</label>
+            <label><input type="checkbox" name="kind" value="binaryData" checked> Binary data</label>
+            <label><input type="checkbox" name="kind" value="movies" checked> Movies</label>
+            <div class="menu-sep"></div>
+            <div class="menu-title">Formats</div>
+            <label><input type="checkbox" id="opt-png"> Images as PNG only</label>
+            <label><input type="checkbox" id="opt-wav"> Sounds as WAV only</label>
+            <button id="btn-export-go" class="btn primary block">Choose folder…</button>
+        </div>
+    </div>
     <button id="btn-close" class="btn" disabled title="Close the selected file">Close</button>
     <div class="spacer"></div>
     <div class="seg" role="tablist" aria-label="Tree view">
@@ -50,9 +68,14 @@
             <div class="panel-head">
                 <h2 id="sel-title"></h2>
                 <div class="tabs" role="tablist">
+                    <button class="tab" data-tab="preview" role="tab" hidden>Preview</button>
                     <button class="tab active" data-tab="details" role="tab">Details</button>
                     <button class="tab" data-tab="hex" role="tab">Hex</button>
                 </div>
+            </div>
+            <div id="tab-preview" class="tab-body preview-body" hidden>
+                <div id="preview"></div>
+                <p id="preview-note" class="preview-note"></p>
             </div>
             <div id="tab-details" class="tab-body">
                 <table class="fields"><tbody id="fields"></tbody></table>
