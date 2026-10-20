@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 5 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, and decompiles ActionScript 3 and ActionScript 1/2. See [Roadmap](#roadmap).
+> **Status: phase 6 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets, tags and scripts. See [Roadmap](#roadmap).
 
 ## What works
 
