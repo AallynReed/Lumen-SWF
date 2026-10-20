@@ -71,11 +71,31 @@ enum Cmd {
     Scripts { file: PathBuf },
     /// Print the p-code of a script: an AS3 full name such as com.example.Main, or an AS1/2
     /// export path such as frame_1/DoAction
-    Pcode { file: PathBuf, name: String },
+    Pcode {
+        file: PathBuf,
+        name: String,
+        /// One AS3 method, such as "instance initializer", "foo" or "static get bar"
+        #[arg(long)]
+        method: Option<String>,
+    },
     /// Print the decompiled ActionScript of an AS3 script by full name
     As3 { file: PathBuf, name: String },
     /// Print the decompiled ActionScript of an AS1/2 script by export path, e.g. frame_1/DoAction
     As2 { file: PathBuf, name: String },
+    /// Replace a character (by id) with a file, or a script (by name) with p-code, like
+    /// FFDec's -replace
+    Replace {
+        input: PathBuf,
+        output: PathBuf,
+        target: String,
+        data: PathBuf,
+        /// The AS3 method to replace, as named by `pcode --method`
+        #[arg(long)]
+        method: Option<String>,
+        /// Replace the raw body of the tag at path TARGET, such as 12 or 12/3
+        #[arg(long)]
+        raw: bool,
+    },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -123,6 +143,25 @@ fn print_tree(nodes: &[Node], depth: usize) {
 fn tag_at<'a>(swf: &'a Swf, path: &str) -> Result<&'a ffdec::Tag> {
     let p = tree::parse_path(path).ok_or_else(|| anyhow!("bad tag path '{path}'"))?;
     swf.tag(&p).ok_or_else(|| anyhow!("no tag at '{path}'"))
+}
+
+/// The AS3 method of `name` labelled `label`, with the ABC tag that holds it.
+fn as3_method(swf: &Swf, name: &str, label: &str) -> Result<(Vec<usize>, ffdec::abc::Abc, ffdec::abc::scripts::MethodRef)> {
+    use ffdec::abc::scripts::{entries, methods};
+    for (path, abc) in abcs(swf) {
+        let Some(e) = entries(&abc).into_iter().find(|e| e.full_name() == name) else { continue };
+        let all = methods(&abc, &e);
+        return match all.iter().find(|m| m.label == label) {
+            Some(m) => Ok((path, abc.clone(), m.clone())),
+            None => Err(anyhow!("{name} has no method '{label}'; it has: {}", all.iter().map(|m| m.label.as_str()).collect::<Vec<_>>().join(", "))),
+        };
+    }
+    Err(anyhow!("no AS3 script named '{name}'"))
+}
+
+fn save(swf: &Swf, out: &PathBuf) -> Result<()> {
+    let opts = SaveOptions { compression: swf.header.compression, encrypt: swf.header.encrypted };
+    std::fs::write(out, swf.save(&opts)?).with_context(|| format!("writing {}", out.display()))
 }
 
 fn main() -> Result<()> {
@@ -213,7 +252,12 @@ fn main() -> Result<()> {
                 println!("{:<10} {name}", "as2");
             }
         }
-        Cmd::Pcode { file, name } => {
+        Cmd::Pcode { file, name, method: Some(label) } => {
+            let swf = open(&file)?;
+            let (_, abc, m) = as3_method(&swf, &name, &label)?;
+            print!("{}", m.pcode(&abc));
+        }
+        Cmd::Pcode { file, name, method: None } => {
             let swf = open(&file)?;
             let mut found = false;
             for (_, abc) in abcs(&swf) {
@@ -257,6 +301,33 @@ fn main() -> Result<()> {
             let swf = open(&file)?;
             let src = as2_scripts(&swf).into_iter().find(|(n, _)| *n == name).map(|(_, s)| s).ok_or_else(|| anyhow!("no script named '{name}'"))?;
             print!("{}", Exporter::new(&swf).as2_source(&src));
+        }
+        Cmd::Replace { input, output, target, data, method, raw } => {
+            let mut swf = open(&input)?;
+            let bytes = std::fs::read(&data).with_context(|| format!("reading {}", data.display()))?;
+            let text = || String::from_utf8_lossy(&bytes).into_owned();
+            if raw {
+                let p = tree::parse_path(&target).ok_or_else(|| anyhow!("bad tag path '{target}'"))?;
+                swf.set_tag_body(&p, bytes)?;
+            } else if let Ok(id) = target.parse::<u16>() {
+                let p = swf.find_character(id).ok_or_else(|| anyhow!("no character {id}"))?;
+                ffdec::importers::import(&mut swf, &p, &bytes)?;
+            } else if let Some(label) = method {
+                let (path, mut abc, m) = as3_method(&swf, &target, &label)?;
+                ffdec::abc::asm::assemble_method(&mut abc, m.method, m.owner, &text())?;
+                swf.set_abc(&path, &abc)?;
+            } else if let Some((_, src)) = as2_scripts(&swf).into_iter().find(|(n, _)| *n == target) {
+                if data.extension().is_some_and(|e| e.eq_ignore_ascii_case("as")) {
+                    return Err(anyhow!("compiling ActionScript is not supported yet; replace it with p-code"));
+                }
+                let list = ffdec::action::asm::parse_pcode(&text(), swf.header.version)?;
+                src.set_actions(&mut swf, &list)?;
+            } else if abcs(&swf).iter().any(|(_, a)| ffdec::abc::scripts::entries(a).iter().any(|e| e.full_name() == target)) {
+                return Err(anyhow!("an AS3 script is replaced one method at a time; pass --method"));
+            } else {
+                return Err(anyhow!("no character or script '{target}'"));
+            }
+            save(&swf, &output)?;
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;
