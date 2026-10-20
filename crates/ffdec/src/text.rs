@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::action::asm::ParseError;
+use crate::io::JavaRound;
 use crate::error::{Error, Result};
 use crate::export::font::Font;
 use crate::io::{Reader, Writer};
@@ -219,14 +220,14 @@ fn advance(font: &Font, glyph: u32, height: i32, c: char, next: Option<char>) ->
     if has_layout(font) {
         let kern = next.map_or(0, |n| font.kerning.iter().find(|k| k.0 as u32 == c as u32 && k.1 as u32 == n as u32).map_or(0, |k| k.2 as i32));
         let adv = font.glyphs.get(glyph as usize).and_then(|g| g.advance).unwrap_or(0) as f64;
-        return Some((height as f64 * (adv + kern as f64) / (font.divider * 1024.0)).round() as i32);
+        return Some((height as f64 * (adv + kern as f64) / (font.divider * 1024.0)).jround() as i32);
     }
     let size = (height as f64 / 20.0) as i32;
     let (data, index) = system_faces(font)?;
     let face = ttf_parser::Face::parse(&data, index).ok()?;
     let units = face.glyph_index(c).and_then(|g| face.glyph_hor_advance(g)).unwrap_or(0) as f32;
     let px = units * size as f32 / face.units_per_em() as f32;
-    Some((20.0 * px as f64).round() as i32)
+    Some((20.0 * px as f64).jround() as i32)
 }
 
 fn system_faces(font: &Font) -> Option<(Vec<u8>, u32)> {

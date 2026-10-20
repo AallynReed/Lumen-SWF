@@ -221,3 +221,14 @@ impl Writer {
 pub fn bits_s(values: &[i32]) -> u32 {
     values.iter().map(|&v| if v == 0 { 0 } else { 33 - v.unsigned_abs().leading_zeros() }).max().unwrap_or(0)
 }
+
+/// Java's Math.round: halves round up, so -0.5 becomes 0.
+pub trait JavaRound {
+    fn jround(self) -> f64;
+}
+
+impl JavaRound for f64 {
+    fn jround(self) -> f64 {
+        (self + 0.5).floor()
+    }
+}
