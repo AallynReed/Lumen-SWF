@@ -3,6 +3,7 @@
 pub mod container;
 pub mod error;
 pub mod export;
+pub mod filters;
 pub mod harman;
 pub mod info;
 pub mod io;
