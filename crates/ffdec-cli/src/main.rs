@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
+use ffdec::export::{Exporter, Kind, Options};
 use ffdec::tree::{self, Node};
 use ffdec::{Compression, SaveOptions, Swf};
 
@@ -26,6 +27,20 @@ enum Cmd {
     Tag { file: PathBuf, path: String },
     /// Write the raw body of one tag to a file
     ExtractTag { file: PathBuf, path: String, out: PathBuf },
+    /// Export assets into <outdir>/images, sounds, binaryData, fonts, texts, movies
+    Export {
+        file: PathBuf,
+        outdir: PathBuf,
+        /// Comma-separated kinds (images,sounds,binaryData,fonts,texts,movies); default all
+        #[arg(long, value_delimiter = ',')]
+        kinds: Vec<String>,
+        /// Write every image as PNG
+        #[arg(long)]
+        png: bool,
+        /// Decode every sound to WAV
+        #[arg(long)]
+        wav: bool,
+    },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -89,6 +104,19 @@ fn main() -> Result<()> {
         Cmd::ExtractTag { file, path, out } => {
             let swf = open(&file)?;
             std::fs::write(&out, &tag_at(&swf, &path)?.body)?;
+        }
+        Cmd::Export { file, outdir, kinds, png, wav } => {
+            let swf = open(&file)?;
+            let kinds = if kinds.is_empty() {
+                Kind::ALL.to_vec()
+            } else {
+                kinds.iter().map(|k| Kind::parse(k).ok_or_else(|| anyhow!("unknown kind '{k}'"))).collect::<Result<_>>()?
+            };
+            let (written, errors) = Exporter::new(&swf).write_all(&outdir, &kinds, Options { png_only: png, wav_only: wav });
+            println!("{} files written to {}", written.len(), outdir.display());
+            for e in &errors {
+                eprintln!("error: {e}");
+            }
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;
