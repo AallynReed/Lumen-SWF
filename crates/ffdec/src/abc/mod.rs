@@ -1,10 +1,12 @@
 //! ActionScript 3 bytecode (ABC) as found in DoABC/DoABC2 tags, read like FFDec's `ABC`.
 
+pub mod asm;
 pub mod decomp;
 pub mod names;
 pub mod opcodes;
 pub mod pcode;
 pub mod scripts;
+pub mod write;
 
 use crate::error::{Error, Result};
 use crate::io::Reader;

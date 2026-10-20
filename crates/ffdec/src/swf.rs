@@ -158,6 +158,25 @@ impl Swf {
         self.timeline.sync_sprites();
     }
 
+    pub fn replace_as3_script(&mut self, path: &[usize], abc_bytes: &[u8]) -> Result<()> {
+        let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
+        let new_body = match tag.code {
+            code::DO_ABC => abc_bytes.to_vec(),
+            code::DO_ABC2 => {
+                let mut r = Reader::new(&tag.body);
+                let flags = r.u32().unwrap_or(0);
+                let name = r.string().unwrap_or_default();
+                let mut w = Writer::new();
+                w.u32(flags);
+                w.string(&name);
+                w.bytes(abc_bytes);
+                w.data
+            }
+            _ => return Err(crate::error::Error::Other(format!("tag 0x{:x} is not a DoABC tag", tag.code))),
+        };
+        self.replace_tag_body(path, &new_body)
+    }
+
     pub fn replace_as2_script(&mut self, path: &[usize], actions: &crate::action::ActionList) -> Result<()> {
         let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other("tag not found".into()))?;
         let bytes = actions.to_bytes();
