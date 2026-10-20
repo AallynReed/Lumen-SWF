@@ -95,6 +95,9 @@ enum Cmd {
         /// Replace the raw body of the tag at path TARGET, such as 12 or 12/3
         #[arg(long)]
         raw: bool,
+        /// Characters to add to a DefineFont2/3 from the font file, besides those it has
+        #[arg(long)]
+        chars: Option<String>,
     },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
@@ -302,7 +305,7 @@ fn main() -> Result<()> {
             let src = as2_scripts(&swf).into_iter().find(|(n, _)| *n == name).map(|(_, s)| s).ok_or_else(|| anyhow!("no script named '{name}'"))?;
             print!("{}", Exporter::new(&swf).as2_source(&src));
         }
-        Cmd::Replace { input, output, target, data, method, raw } => {
+        Cmd::Replace { input, output, target, data, method, raw, chars } => {
             let mut swf = open(&input)?;
             let bytes = std::fs::read(&data).with_context(|| format!("reading {}", data.display()))?;
             let text = || String::from_utf8_lossy(&bytes).into_owned();
@@ -311,7 +314,12 @@ fn main() -> Result<()> {
                 swf.set_tag_body(&p, bytes)?;
             } else if let Ok(id) = target.parse::<u16>() {
                 let p = swf.find_character(id).ok_or_else(|| anyhow!("no character {id}"))?;
-                ffdec::importers::import(&mut swf, &p, &bytes)?;
+                match chars {
+                    Some(c) => {
+                        ffdec::importers::font(&mut swf, &p, &bytes, &c.chars().collect::<Vec<_>>())?;
+                    }
+                    None => ffdec::importers::import(&mut swf, &p, &bytes)?,
+                }
             } else if let Some(label) = method {
                 let (path, mut abc, m) = as3_method(&swf, &target, &label)?;
                 ffdec::abc::asm::assemble_method(&mut abc, m.method, m.owner, &text())?;

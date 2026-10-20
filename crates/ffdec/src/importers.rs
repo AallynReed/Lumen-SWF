@@ -1,5 +1,5 @@
 //! Asset importers: FFDec's `ImageImporter`, `SoundImporter` (DefineSound), `BinaryDataImporter`,
-//! `ShapeImporter` (images, and SVG through svg_import) and `TextImporter`.
+//! `ShapeImporter` (images, and SVG through svg_import), `TextImporter` and font glyphs.
 
 use std::io::Write;
 
@@ -343,6 +343,7 @@ pub enum Asset {
     Binary,
     Text,
     Shape,
+    Font,
 }
 
 impl Asset {
@@ -353,6 +354,7 @@ impl Asset {
             DEFINE_BINARY_DATA => Asset::Binary,
             DEFINE_TEXT | DEFINE_TEXT2 | DEFINE_EDIT_TEXT => Asset::Text,
             DEFINE_SHAPE | DEFINE_SHAPE2 | DEFINE_SHAPE3 | DEFINE_SHAPE4 => Asset::Shape,
+            DEFINE_FONT2 | DEFINE_FONT3 | DEFINE_FONT4 => Asset::Font,
             _ => return None,
         })
     }
@@ -365,8 +367,50 @@ impl Asset {
             Asset::Sound => &["mp3", "wav"],
             Asset::Binary => &[],
             Asset::Text => &["txt"],
+            Asset::Font => &["ttf", "otf"],
         }
     }
+}
+
+/// Replaces a font from a TrueType or OpenType file: a DefineFont4 takes the file as its font
+/// data; a DefineFont2/3 gets new glyphs for the characters it has and for `extra`, as FFDec's
+/// font panel adds them. Returns how many glyphs were set.
+pub fn font(swf: &mut Swf, path: &[usize], data: &[u8], extra: &[char]) -> Result<usize> {
+    let (code, old) = tag_of(swf, path)?;
+    if code == DEFINE_FONT4 {
+        let mut r = Reader::new(&old);
+        r.u16()?;
+        let flags = r.u8()?;
+        r.string()?;
+        let mut body = old[..r.pos()].to_vec();
+        body[2] = flags | 0x04;
+        body.extend_from_slice(data);
+        swf.set_tag(path, code, body)?;
+        return Ok(0);
+    }
+    let mut chars = crate::font_edit::characters(swf, path)?;
+    chars.extend(extra.iter().filter(|c| !chars.contains(c)).copied().collect::<Vec<_>>());
+    let id = swf.tag(path).and_then(|t| t.character_id()).unwrap_or(0);
+    let n = crate::font_edit::add_characters(swf, path, data, &chars)?;
+    relayout_texts(swf, id)?;
+    Ok(n)
+}
+
+/// Lays the static texts using `font` out again from their formatted text without letter
+/// spacing, so their advances follow the font's new glyphs (FFDec's font panel offers this).
+fn relayout_texts(swf: &mut Swf, font: u16) -> Result<()> {
+    let paths: Vec<usize> = swf.timeline.tags.iter().enumerate().filter(|(_, t)| t.code == DEFINE_TEXT || t.code == DEFINE_TEXT2).map(|(i, _)| i).collect();
+    for i in paths {
+        let mut t = crate::text::StaticText::read(&swf.timeline.tags[i])?;
+        if !t.records.iter().any(|r| r.font.is_some_and(|f| f.0 == font)) {
+            continue;
+        }
+        let text = crate::text::formatted(swf, &t, true);
+        crate::text::set_formatted(swf, &mut t, &text, None).map_err(|e| Error::Other(e.to_string()))?;
+        let body = t.write();
+        swf.set_tag_body(&[i], body)?;
+    }
+    Ok(())
 }
 
 fn is_svg(data: &[u8]) -> bool {
@@ -384,6 +428,7 @@ pub fn import(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
         Some(Asset::Binary) => binary(swf, path, data),
         Some(Asset::Shape) if is_svg(data) => crate::svg_import::import(swf, path, &String::from_utf8_lossy(data), true),
         Some(Asset::Shape) => shape_image(swf, path, data, true),
+        Some(Asset::Font) => font(swf, path, data, &[]).map(|_| ()),
         Some(Asset::Text) if code == DEFINE_EDIT_TEXT => edit_text(swf, path, &String::from_utf8_lossy(data)),
         Some(Asset::Text) => crate::text::import(swf, path, &String::from_utf8_lossy(data)).map_err(|e| Error::Other(e.to_string())),
         None => err(format!("{} tags cannot be replaced yet", crate::tags::display_name(code))),

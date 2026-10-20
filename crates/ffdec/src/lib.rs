@@ -7,6 +7,7 @@ pub mod edit;
 pub mod error;
 pub mod export;
 pub mod filters;
+pub mod font_edit;
 pub mod harman;
 pub mod importers;
 pub mod info;
