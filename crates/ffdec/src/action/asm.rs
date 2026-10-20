@@ -269,10 +269,13 @@ fn parse_push_values(args_str: &str) -> Result<Vec<Value>> {
             values.push(Value::Bool(true));
         } else if t == "false" {
             values.push(Value::Bool(false));
-        } else if let Some(r) = t.strip_prefix("register") {
+        } else if let Some(r) = t.strip_prefix("register:").or_else(|| t.strip_prefix("register")).or_else(|| t.strip_prefix("r:")) {
             let reg: u8 = r.parse().map_err(|e| Error::Other(format!("bad register {t}: {e}")))?;
             values.push(Value::Register(reg));
-        } else if let Some(c) = t.strip_prefix("constant") {
+        } else if t.starts_with('r') && t.len() > 1 && t[1..].chars().all(|c| c.is_ascii_digit()) {
+            let reg: u8 = t[1..].parse().map_err(|e| Error::Other(format!("bad register {t}: {e}")))?;
+            values.push(Value::Register(reg));
+        } else if let Some(c) = t.strip_prefix("constant:").or_else(|| t.strip_prefix("constant")).or_else(|| t.strip_prefix("lookup:")) {
             let idx: u16 = c.parse().map_err(|e| Error::Other(format!("bad constant {t}: {e}")))?;
             values.push(Value::Constant(idx));
         } else if t.ends_with('f') {

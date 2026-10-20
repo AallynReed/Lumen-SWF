@@ -180,7 +180,8 @@ pub fn replace_edit_text(swf: &mut Swf, path: &[usize], new_text: &str) -> Resul
 }
 
 fn is_jpeg(data: &[u8]) -> bool {
-    data.len() > 2 && data[0] == 0xff && data[1] == 0xd8
+    (data.len() > 2 && data[0] == 0xff && data[1] == 0xd8)
+        || (data.len() > 4 && data[..4] == [0xff, 0xd9, 0xff, 0xd8])
 }
 
 fn is_mp3(data: &[u8]) -> bool {
