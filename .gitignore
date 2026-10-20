@@ -1,0 +1,5 @@
+/target/
+/jpexs-decompiler/
+node_modules/
+src-tauri/gen/
+*.msi
