@@ -432,6 +432,13 @@ impl<'c, 'a> Sp<'c, 'a> {
         let inst = &abc.instances[ci];
         let class = &abc.classes[ci];
         let iface = inst.flags & instance_flags::INTERFACE != 0;
+        if let Some(d) = &self.ctx.doc {
+            if d.name == self.names().name_with_ns(inst.name, false).raw() {
+                let rate = if (d.frame_rate - d.frame_rate.round()).abs() < 0.001 { format!("{}", d.frame_rate.round() as i64) } else { format!("{}", d.frame_rate) };
+                let bg = d.background.as_ref().map(|b| format!(", backgroundColor=\"{b}\"")).unwrap_or_default();
+                w.append_no_hilight(&format!("[SWF(width=\"{}\", height=\"{}\"{bg}, frameRate=\"{rate}\")]", d.width, d.height)).new_line();
+            }
+        }
         metadata(self.ctx, t, w);
         self.class_header(ci, w, fqn);
         w.start_block();
@@ -1212,7 +1219,7 @@ pub fn print_trait_slot_const(it: &It, w: &mut Writer, ld: &LocalData) {
         _ => return,
     };
     let abc = ld.ctx.abc;
-    let traits: Option<&Vec<Trait>> = if initializer == TRAIT_SCRIPT_INITIALIZER {
+    let traits: Option<&Vec<Trait>> = if class < 0 {
         abc.scripts.get(script.max(0) as usize).map(|s| &s.traits)
     } else if is_static {
         abc.classes.get(class.max(0) as usize).map(|c| &c.traits)
