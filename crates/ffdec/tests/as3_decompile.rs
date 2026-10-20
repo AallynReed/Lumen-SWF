@@ -165,3 +165,52 @@ fn as3_decompile_fixtures() {
     std::fs::write(&out, &report).unwrap();
     eprintln!("AS3 decompile fixtures: {pass}/{total} pass (report: {})", out.display());
 }
+
+/// JPEXS's whole-class expectations (`ActionScript3ClassTest`).
+#[test]
+fn as3_class_fixtures() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib");
+    if !root.exists() {
+        eprintln!("JPEXS test corpus not found; skipping");
+        return;
+    }
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/as3_classes.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    let filter = std::env::var("AS3_CASE").ok();
+    let (mut pass, mut total) = (0, 0);
+    let mut report = String::new();
+    for c in v.as_array().unwrap() {
+        let (swf_path, path, expected) = (c["swf"].as_str().unwrap(), c["path"].as_str().unwrap(), c["expected"].as_str().unwrap());
+        if filter.as_ref().is_some_and(|f| !path.contains(f.as_str())) {
+            continue;
+        }
+        let Ok(data) = std::fs::read(root.join(swf_path)) else { continue };
+        let swf = ffdec::Swf::parse(&data).unwrap();
+        let mut abcs = Vec::new();
+        swf.walk(|_, t| {
+            if let Some((d, _)) = tag_abc(t) {
+                abcs.push(Abc::parse(d).unwrap());
+            }
+        });
+        let index = AbcIndex::for_abcs(&abcs.iter().collect::<Vec<_>>());
+        let mut actual = "NOT FOUND".to_string();
+        for abc in &abcs {
+            if let Some(e) = scripts::entries(abc).into_iter().find(|e| e.full_name() == path) {
+                actual = ffdec::abc::decomp::entry_source_with(&index, abc, &e, &ffdec::abc::decomp::SwfContext::of(&swf), Config::testing());
+                break;
+            }
+        }
+        total += 1;
+        let ok = clean(&actual) == clean(expected);
+        if ok {
+            pass += 1;
+        }
+        report.push_str(&format!("=== {} {}\n", if ok { "PASS" } else { "FAIL" }, path));
+        if !ok {
+            report.push_str(&format!("--- expected\n{}\n--- actual\n{}\n", clean(expected), clean(&actual)));
+        }
+    }
+    let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("as3_class_report.txt");
+    std::fs::write(&out, &report).unwrap();
+    eprintln!("AS3 class fixtures: {pass}/{total} pass (report: {})", out.display());
+}
