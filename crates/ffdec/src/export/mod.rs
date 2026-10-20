@@ -2,4 +2,6 @@
 
 pub mod flv;
 pub mod image;
+#[allow(dead_code)]
+mod nellymoser;
 pub mod video;
