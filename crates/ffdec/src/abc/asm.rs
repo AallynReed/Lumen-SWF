@@ -837,6 +837,7 @@ fn parse(abc: &mut Abc, method: usize, owner: Option<TraitLoc>, text: &str) -> R
     let mut p = Pool { abc };
     let mut lx = Lexer { s: text.chars().collect(), pos: 0, line: 1, params: false, pushed: Vec::new() };
     let mut code: Vec<Instruction> = Vec::new();
+    let mut lines: Vec<usize> = Vec::new();
     let mut offset = 0usize;
     let mut labels: HashMap<String, usize> = HashMap::new();
     let mut fixes: Vec<Fix> = Vec::new();
@@ -941,6 +942,7 @@ fn parse(abc: &mut Abc, method: usize, owner: Option<TraitLoc>, text: &str) -> R
                 }
             }
             Sym::Instr(name) => {
+                lines.push(lx.line);
                 let name = match name.as_str() {
                     "getlocal_0" => "getlocal0".to_string(),
                     "getlocal_1" => "getlocal1".to_string(),
@@ -1081,6 +1083,7 @@ fn parse(abc: &mut Abc, method: usize, owner: Option<TraitLoc>, text: &str) -> R
         b.code = code.iter().flat_map(encode).collect();
         b.exceptions = exceptions;
         abc.bodies[bi] = b;
+        super::stats::fit_body(abc, bi).map_err(|(at, message)| ParseError { line: lines[at], message })?;
     }
     if let (Some(loc), Some(t)) = (owner, tr) {
         *abc.trait_at_mut(loc).unwrap() = t;

@@ -44,3 +44,24 @@ fn errors_leave_the_abc_alone() {
     assert_eq!(text.lines().nth(e.line - 1).map(str::trim), Some("frobnicate"));
     assert_eq!(abc.to_bytes(), before);
 }
+
+#[test]
+fn limits_grow_to_fit_the_code() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let pushes = "pushbyte 1\n".repeat(40) + &"pop\n".repeat(40) + "getlocal 30\npop\nreturnvoid";
+    let text = with_code(&abc, m, &pushes);
+    assemble_method(&mut abc, m, None, &text).unwrap();
+    let b = &abc.bodies[0];
+    assert_eq!((b.max_stack, b.max_regs), (40, 31));
+}
+
+#[test]
+fn stack_underflow_names_its_line() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let text = with_code(&abc, m, "pushnull\npop\npop\nreturnvoid");
+    let e = assemble_method(&mut abc, m, None, &text).unwrap_err();
+    assert_eq!(text.lines().nth(e.line - 1).map(str::trim), Some("pop"));
+    assert!(text.lines().nth(e.line - 2).map(str::trim) == Some("pop"), "{e:?}");
+}

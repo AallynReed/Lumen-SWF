@@ -6,6 +6,7 @@ pub mod names;
 pub mod opcodes;
 pub mod pcode;
 pub mod scripts;
+pub mod stats;
 pub mod write;
 
 use crate::error::{Error, Result};

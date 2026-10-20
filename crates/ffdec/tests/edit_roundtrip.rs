@@ -134,6 +134,11 @@ fn as3_pcode_assembles_to_itself() {
                     None => method_pcode(&orig, m),
                 };
                 let mut abc = orig.clone();
+                let mut fitted = orig.clone();
+                if let Some(Some(bi)) = orig.body_of.get(m) {
+                    let _ = ffdec::abc::stats::fit_body(&mut fitted, *bi);
+                }
+                let data = if fitted.methods[m].flags == orig.methods[m].flags && orig.body_of[m].map_or(true, |b| format!("{:?}", fitted.bodies[b]) == format!("{:?}", orig.bodies[b])) { data.to_vec() } else { fitted.to_bytes() };
                 match assemble_method(&mut abc, m, loc, &text) {
                     Err(e) => bad.push(format!("{} {path:?} method {m}: {e}: {}", f.display(), text.lines().nth(e.line - 1).unwrap_or("").trim())),
                     // Dead bytes the disassembler skips cannot survive; the text must then.
@@ -249,4 +254,35 @@ fn as2_sources_compile_in_place() {
     }
     report("as2_source_store", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
+}
+
+/// Bodies the player accepted already declare enough stack, scope and registers, so fitting
+/// them changes nothing. as3_assembled.swf is hand-assembled with placeholder limits.
+#[test]
+fn shipped_bodies_already_fit() {
+    let (mut total, mut skipped, mut bad) = (0, 0, Vec::new());
+    for (f, swf) in swfs().filter(|(f, _)| !f.ends_with("as3_assembled.swf")) {
+        swf.walk(|path, t| {
+            let Some((data, _)) = ffdec::abc::tag_abc(t) else { return };
+            let Ok(abc) = ffdec::abc::Abc::parse(data) else { return };
+            for (bi, b) in abc.bodies.iter().enumerate() {
+                let Ok(code) = ffdec::abc::opcodes::decode(&b.code, ffdec::abc::opcodes::Dialect::of(abc.major, abc.minor)) else { continue };
+                let handlers: Vec<usize> = b.exceptions.iter().map(|e| e.target).collect();
+                total += 1;
+                let Some((st, problem)) = ffdec::abc::stats::stats(&abc, &code, &handlers, b.init_scope_depth) else {
+                    skipped += 1;
+                    continue;
+                };
+                let mut fit = abc.clone();
+                let r = ffdec::abc::stats::fit_body(&mut fit, bi);
+                let fb = &fit.bodies[bi];
+                if problem.is_some() || r.is_err() || fb.max_stack != b.max_stack || fb.max_scope_depth != b.max_scope_depth || fb.max_regs != b.max_regs || fit.methods[b.method].flags != abc.methods[b.method].flags {
+                    bad.push(format!("{} {path:?} body {bi}: {problem:?} {st:?} declared stack {} scope {}..{} regs {}", f.display(), b.max_stack, b.init_scope_depth, b.max_scope_depth, b.max_regs));
+                }
+            }
+        });
+    }
+    eprintln!("skipped {skipped}");
+    report("body_fit", total, &bad);
+    assert!(bad.is_empty(), "{} bodies change", bad.len());
 }
