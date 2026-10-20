@@ -53,7 +53,7 @@ enum Cmd {
         /// Raster scale for PNG output
         #[arg(long, default_value_t = 1.0)]
         zoom: f32,
-        /// AS3 scripts as p-code instead of decompiled ActionScript
+        /// Scripts as p-code instead of decompiled ActionScript (AS1/2 is always p-code for now)
         #[arg(long)]
         pcode: bool,
     },
@@ -67,9 +67,10 @@ enum Cmd {
     },
     /// Print the display list of a root frame (1-based)
     Frame { file: PathBuf, frame: usize },
-    /// List ActionScript 3 scripts (classes and package-level definitions)
+    /// List AS3 scripts (classes and package-level definitions) and AS1/2 scripts (export paths)
     Scripts { file: PathBuf },
-    /// Print the p-code of an AS3 script by full name, e.g. com.example.Main
+    /// Print the p-code of a script: an AS3 full name such as com.example.Main, or an AS1/2
+    /// export path such as frame_1/DoAction
     Pcode { file: PathBuf, name: String },
     /// Print the decompiled ActionScript of an AS3 script by full name
     As3 { file: PathBuf, name: String },
@@ -103,6 +104,10 @@ fn abcs(swf: &Swf) -> Vec<(Vec<usize>, ffdec::abc::Abc)> {
         }
     });
     out
+}
+
+fn as2_scripts(swf: &Swf) -> Vec<(String, ffdec::action::scripts::Source)> {
+    ffdec::action::scripts::export_paths(&ffdec::action::scripts::tree(swf))
 }
 
 fn print_tree(nodes: &[Node], depth: usize) {
@@ -202,6 +207,9 @@ fn main() -> Result<()> {
                     println!("{:<10} {}", e.kind, e.full_name());
                 }
             }
+            for (name, _) in as2_scripts(&swf) {
+                println!("{:<10} {name}", "as2");
+            }
         }
         Cmd::Pcode { file, name } => {
             let swf = open(&file)?;
@@ -212,6 +220,12 @@ fn main() -> Result<()> {
                         print!("{}", ffdec::abc::scripts::entry_pcode(&abc, &e));
                         found = true;
                     }
+                }
+            }
+            for (n, src) in as2_scripts(&swf) {
+                if n == name {
+                    print!("{}", ffdec::action::pcode::to_pcode(&src.actions(&swf)));
+                    found = true;
                 }
             }
             if !found {
