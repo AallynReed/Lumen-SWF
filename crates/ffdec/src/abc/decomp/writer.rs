@@ -110,7 +110,7 @@ impl Writer {
         if self.nul {
             return self;
         }
-        self.sb.push_str(NEW_LINE);
+        self.put(NEW_LINE);
         self.new_line = true;
         self
     }
