@@ -14,6 +14,8 @@ const state = {
     player: null,
     exportable: false,
     codeView: 'as',
+    method: null,
+    editor: null,
 };
 
 const ICONS = {
@@ -105,7 +107,8 @@ async function openPaths(paths) {
 
 async function closeSelected() {
     const doc = selectedDoc();
-    if (!doc) return;
+    if (!doc || !leaveEditor()) return;
+    if (doc.modified && !(await call('confirm_discard', { name: doc.name }))) return;
     await call('close_doc', { id: doc.id });
     state.docs = state.docs.filter((d) => d !== doc);
     state.selected = null;
@@ -172,7 +175,7 @@ function render() {
         const key = `${doc.id}:`;
         const open = state.expanded.has(key) || !!state.filter;
         nodeIndex.set(key, { docId: doc.id, key, node: { kind: 'header', label: doc.name, category: 'header' } });
-        out.push(rowHtml(key, doc.name, 'doc', 0, true, open, ' doc'));
+        out.push(rowHtml(key, doc.modified ? `${doc.name} •` : doc.name, 'doc', 0, true, open, ' doc'));
         if (open) {
             out.push('<ul role="group">');
             renderNodes(doc, doc.tree, '', 1, out);
@@ -195,15 +198,19 @@ function updateButtons() {
     const has = state.docs.length > 0;
     $('empty').hidden = has;
     $('content').hidden = !has || !state.selected;
-    $('btn-save').disabled = !has;
+    const doc = selectedDoc();
+    $('btn-save').disabled = !doc || !doc.modified;
+    $('btn-save-as').disabled = !doc;
     $('btn-close').disabled = !state.selected;
     const tagSelected = !!(state.selected && (state.selected.node.kind === 'tag' || state.selected.node.kind === 'script'));
     $('btn-export').disabled = !tagSelected;
+    $('btn-replace').disabled = !state.importable;
     $('btn-raw').disabled = !tagSelected;
     $('btn-export-all').disabled = !has;
 }
 
 function select(sel) {
+    if (state.selected && sel.key !== state.selected.key && !leaveEditor()) return;
     state.selected = sel;
     $('tree').querySelectorAll('.row.selected').forEach((r) => r.classList.remove('selected'));
     const el = [...$('tree').querySelectorAll('.row')].find((r) => r.dataset.key === sel.key);
@@ -288,6 +295,8 @@ async function showSelection() {
     stopPlayback();
     clearPreview();
     state.exportable = false;
+    state.importable = false;
+    state.editor = null;
     updateButtons();
 
     const target = previewTarget(n);
@@ -302,6 +311,7 @@ async function showSelection() {
     } else {
         const info = await call('tag_info', { id: doc.id, path: n.path });
         fields = info.fields;
+        state.importable = info.importable && n.kind === 'tag';
         if (n.kind === 'frame') fields.unshift({ name: 'Tags in frame', value: String(n.children.length) });
         hexState = { docId: doc.id, path: n.path, total: info.size, pages: new Map() };
     }
@@ -391,17 +401,101 @@ function renderPreview(info, data) {
     }
 }
 
-// Decompiled ActionScript, with a switch to p-code when the preview carries both.
-function renderCode(el, info) {
+// Decompiled ActionScript, with a switch to p-code, which can be edited: AS1/2 scripts whole,
+// AS3 scripts one method at a time.
+async function renderCode(el, info) {
+    const sel = state.selected;
+    const n = sel.node;
     const pcode = state.codeView === 'pcode' && info.alt_text != null;
-    const seg = info.alt_text == null ? '' : `<div class="seg code-switch" role="tablist" aria-label="Code view">`
+    const methods = pcode && n.kind === 'script' ? await call('script_methods', { id: sel.docId, path: n.path, script: n.script }).catch(() => []) : [];
+    if (state.selected !== sel) return;
+    if (!methods.includes(state.method)) state.method = null;
+    const editable = pcode && n.kind === 'script' && (!methods.length || state.method !== null);
+    let text = (pcode ? info.alt_text : info.text) || '';
+    if (editable && methods.length) text = await call('script_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method });
+    if (state.selected !== sel) return;
+    const seg = info.alt_text == null ? '' : `<div class="seg" role="tablist" aria-label="Code view">`
         + `<button class="seg-btn${pcode ? '' : ' active'}" data-view="as" role="tab">ActionScript</button>`
         + `<button class="seg-btn${pcode ? ' active' : ''}" data-view="pcode" role="tab">P-code</button></div>`;
-    el.innerHTML = seg + `<pre class="code-view">${esc((pcode ? info.alt_text : info.text) || '')}</pre>`;
-    el.querySelectorAll('.code-switch .seg-btn').forEach((b) => b.addEventListener('click', () => {
+    const pick = methods.length ? `<select class="method" aria-label="Method"><option value="">Whole script</option>`
+        + methods.map((m) => `<option${m === state.method ? ' selected' : ''}>${esc(m)}</option>`).join('') + '</select>' : '';
+    const edit = editable ? '<button class="btn" data-act="edit" title="Edit this p-code">Edit</button>' : '';
+    const hint = pcode && methods.length && !editable ? '<span class="code-hint">Pick a method to edit it.</span>' : '';
+    el.innerHTML = `<div class="code-bar">${seg}${pick}${edit}${hint}</div><pre class="code-view">${esc(text)}</pre>`;
+    el.querySelectorAll('.seg-btn').forEach((b) => b.addEventListener('click', () => {
         state.codeView = b.dataset.view;
         renderCode(el, info);
     }));
+    el.querySelector('.method')?.addEventListener('change', (e) => {
+        state.method = e.target.value || null;
+        renderCode(el, info);
+    });
+    el.querySelector('[data-act="edit"]')?.addEventListener('click', () => openEditor(el, info, text));
+}
+
+function openEditor(el, info, text) {
+    const sel = state.selected;
+    state.editor = { original: text };
+    el.innerHTML = `<div class="code-bar"><span class="code-title">${esc(state.method ? `Editing ${state.method}` : 'Editing p-code')}</span>`
+        + '<button class="btn primary" data-act="apply" title="Assemble and store (Ctrl+Enter)">Apply</button>'
+        + '<button class="btn" data-act="cancel" title="Discard these edits (Esc)">Cancel</button></div>'
+        + '<p class="code-error" hidden></p>'
+        + `<textarea class="code-edit" spellcheck="false" wrap="off" aria-label="P-code">${esc(text)}</textarea>`;
+    const area = el.querySelector('textarea');
+    area.focus();
+    const cancel = () => {
+        state.editor = null;
+        renderCode(el, info);
+    };
+    const apply = async () => {
+        const n = sel.node;
+        try {
+            await invoke('apply_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method, text: area.value });
+        } catch (e) {
+            showEditError(el, area, e);
+            return;
+        }
+        state.editor = null;
+        const doc = state.docs.find((d) => d.id === sel.docId);
+        doc.modified = true;
+        await loadTree(doc);
+        render();
+        status(state.method ? `Updated ${state.method}` : 'Updated the script');
+        showSelection();
+    };
+    el.querySelector('[data-act="apply"]').addEventListener('click', apply);
+    el.querySelector('[data-act="cancel"]').addEventListener('click', cancel);
+    area.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); apply(); }
+        else if (e.key === 'Escape') { e.preventDefault(); if (leaveEditor()) cancel(); }
+        else if (e.key === 'Tab') { e.preventDefault(); area.setRangeText('   ', area.selectionStart, area.selectionEnd, 'end'); }
+    });
+}
+
+// Shows an assembler error and selects the line it points at.
+function showEditError(el, area, e) {
+    const line = e && e.line ? e.line : 0;
+    const msg = e && e.message ? e.message : String(e);
+    const box = el.querySelector('.code-error');
+    box.textContent = line ? `Line ${line}: ${msg}` : msg;
+    box.hidden = false;
+    status(box.textContent, true);
+    if (!line) return;
+    const lines = area.value.split('\n');
+    const start = lines.slice(0, line - 1).reduce((a, l) => a + l.length + 1, 0);
+    area.focus();
+    area.setSelectionRange(start, start + (lines[line - 1] || '').length);
+    area.scrollTop = Math.max(0, (line - 4) * parseFloat(getComputedStyle(area).lineHeight));
+}
+
+// True when it is fine to leave the editor, asking first if its text has changed.
+function leaveEditor() {
+    const ed = state.editor;
+    const area = document.querySelector('.code-edit');
+    if (!ed || !area || area.value === ed.original) return true;
+    if (!window.confirm('Discard your p-code edits?')) return false;
+    state.editor = null;
+    return true;
 }
 
 // ---- frame player ----
@@ -554,10 +648,35 @@ $('btn-close').addEventListener('click', closeSelected);
 $('view-res').addEventListener('click', () => setView(false));
 $('view-tags').addEventListener('click', () => setView(true));
 
-$('btn-save').addEventListener('click', (e) => {
+async function saveSelected() {
+    const doc = selectedDoc();
+    if (!doc || !doc.modified) return;
+    status(`Saved ${await call('save', { id: doc.id })}`);
+    doc.modified = false;
+    render();
+}
+
+$('btn-save').addEventListener('click', saveSelected);
+
+$('btn-save-as').addEventListener('click', (e) => {
     e.stopPropagation();
     $('export-menu').hidden = true;
     $('save-menu').hidden = !$('save-menu').hidden;
+});
+
+$('btn-replace').addEventListener('click', async () => {
+    const sel = state.selected;
+    if (!sel || !state.importable) return;
+    const file = await call('replace_asset', { id: sel.docId, path: sel.node.path });
+    if (!file) return;
+    const doc = state.docs.find((d) => d.id === sel.docId);
+    doc.modified = true;
+    await loadTree(doc);
+    render();
+    status(`Replaced ${sel.node.label} with ${file}`);
+    const again = nodeIndex.get(sel.key);
+    state.selected = null;
+    if (again) select(again);
 });
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) {
@@ -568,11 +687,14 @@ document.addEventListener('click', (e) => {
 
 $('btn-save-go').addEventListener('click', async () => {
     $('save-menu').hidden = true;
-    const doc = selectedDoc() || state.docs[0];
+    const doc = selectedDoc();
     if (!doc) return;
     const compression = document.querySelector('input[name="comp"]:checked').value;
     const out = await call('save_as', { id: doc.id, compression, encrypt: $('opt-encrypt').checked });
-    if (out) status(`Saved ${out}`);
+    if (!out) return;
+    Object.assign(doc, { name: out.name, path: out.path, modified: false });
+    render();
+    status(`Saved ${out.path}`);
 });
 
 $('btn-export').addEventListener('click', async () => {
@@ -624,7 +746,8 @@ $('btn-export-go').addEventListener('click', async () => {
 document.addEventListener('keydown', (e) => {
     if (!e.ctrlKey) return;
     if (e.key === 'o') openDialog();
-    else if (e.key === 's' && state.docs.length) $('btn-save').click();
+    else if (e.key.toLowerCase() === 's' && e.shiftKey) { if (selectedDoc()) $('btn-save-as').click(); }
+    else if (e.key === 's') saveSelected();
     else if (e.key === 'f') $('filter').focus();
     else return;
     e.preventDefault();
