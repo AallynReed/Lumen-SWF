@@ -32,6 +32,13 @@ const ICONS = {
     frames: 'M2 3h12v10H2zM2 6h12M6 3v3M10 3v3',
     scripts: 'M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9 3l-2 10',
     others: 'M3 8h.01M8 8h.01M13 8h.01',
+    package: 'M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6',
+    class: 'M3 3h10v10H3zM10 6.5a2.5 2.5 0 1 0 0 3',
+    interface: 'M8 2l6 6-6 6-6-6z',
+    function: 'M6 13c2 0 2-10 4-10M5 7h5',
+    var: 'M4 5l4 7 4-7',
+    const: 'M4 5l4 7 4-7M3 13h10',
+    script: 'M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4',
 };
 
 function icon(cat) {
@@ -146,7 +153,7 @@ function renderNodes(doc, nodes, prefix, depth, out) {
         nodeIndex.set(key, { docId: doc.id, key, node: n });
         const hasKids = n.children.length > 0;
         const open = hasKids && (!!f || state.expanded.has(key));
-        const cat = n.kind === 'folder' ? 'folder' : n.category;
+        const cat = n.kind === 'folder' && n.category !== 'package' ? 'folder' : n.category;
         out.push(rowHtml(key, n.kind === 'folder' ? `${n.label} (${n.children.length})` : n.label, cat, depth, hasKids, open, '', n.path));
         if (open) {
             out.push('<ul role="group">');
@@ -189,7 +196,7 @@ function updateButtons() {
     $('content').hidden = !has || !state.selected;
     $('btn-save').disabled = !has;
     $('btn-close').disabled = !state.selected;
-    const tagSelected = !!(state.selected && state.selected.node.kind === 'tag');
+    const tagSelected = !!(state.selected && (state.selected.node.kind === 'tag' || state.selected.node.kind === 'script'));
     $('btn-export').disabled = !tagSelected;
     $('btn-raw').disabled = !tagSelected;
     $('btn-export-all').disabled = !has;
@@ -264,6 +271,7 @@ function previewTarget(n) {
         return { path: parts.length > 1 ? parts.slice(0, -1).join('/') : '', frame };
     }
     if (n.kind === 'tag') return { path: n.path, frame: 0 };
+    if (n.kind === 'script') return { path: n.path, frame: 0, script: n.script };
     return null;
 }
 
@@ -274,7 +282,7 @@ async function showSelection() {
     const doc = selectedDoc();
     const n = sel.node;
     $('sel-title').textContent = n.kind === 'header' ? doc.name : n.label;
-    const isTag = !!n.path && n.kind !== 'folder';
+    const isTag = !!n.path && n.kind !== 'folder' && n.kind !== 'script';
     document.querySelector('.tab[data-tab="hex"]').hidden = !isTag;
     stopPlayback();
     clearPreview();
@@ -282,7 +290,7 @@ async function showSelection() {
     updateButtons();
 
     const target = previewTarget(n);
-    const previewCall = target ? call('preview_info', { id: doc.id, path: target.path, frame: target.frame }).catch(() => null) : null;
+    const previewCall = target ? call('preview_info', { id: doc.id, path: target.path, frame: target.frame, script: target.script || null }).catch(() => null) : null;
     let fields;
     if (n.kind === 'header') {
         fields = await call('header_info', { id: doc.id });
@@ -377,6 +385,8 @@ function renderPreview(info, data) {
         });
     } else if (info.kind === 'text') {
         el.innerHTML = info.text ? `<pre class="text-preview">${esc(info.text)}</pre>` : '<p class="preview-empty">No text.</p>';
+    } else if (info.kind === 'code') {
+        el.innerHTML = `<pre class="code-view">${esc(info.text || '')}</pre>`;
     }
 }
 
@@ -555,7 +565,7 @@ $('btn-export').addEventListener('click', async () => {
     const sel = state.selected;
     if (!sel || !sel.node.path) return;
     const out = state.exportable
-        ? await call('export_asset', { id: sel.docId, path: sel.node.path, options: exportOptions() })
+        ? await call('export_asset', { id: sel.docId, path: sel.node.path, script: sel.node.script || null, options: exportOptions() })
         : await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
 });

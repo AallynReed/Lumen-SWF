@@ -287,3 +287,15 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     color: var(--text);
     font: inherit;
 }
+
+.code-view {
+    margin: 0;
+    padding: 10px 12px;
+    font: 12px/1.5 var(--mono);
+    white-space: pre;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    tab-size: 3;
+}
