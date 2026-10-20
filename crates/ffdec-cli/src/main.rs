@@ -64,6 +64,10 @@ enum Cmd {
     },
     /// Print the display list of a root frame (1-based)
     Frame { file: PathBuf, frame: usize },
+    /// List ActionScript 3 scripts (classes and package-level definitions)
+    Scripts { file: PathBuf },
+    /// Print the p-code of an AS3 script by full name, e.g. com.example.Main
+    Pcode { file: PathBuf, name: String },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -81,6 +85,19 @@ enum Cmd {
 fn open(path: &PathBuf) -> Result<Swf> {
     let data = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     Ok(Swf::parse(&data)?)
+}
+
+fn abcs(swf: &Swf) -> Vec<(Vec<usize>, ffdec::abc::Abc)> {
+    let mut out = Vec::new();
+    swf.walk(|path, t| {
+        if let Some((data, _)) = ffdec::abc::tag_abc(t) {
+            match ffdec::abc::Abc::parse(data) {
+                Ok(abc) => out.push((path.to_vec(), abc)),
+                Err(e) => eprintln!("tag {path:?}: {e}"),
+            }
+        }
+    });
+    out
 }
 
 fn print_tree(nodes: &[Node], depth: usize) {
@@ -171,6 +188,29 @@ fn main() -> Result<()> {
                     p.depth, p.id, p.since + 1, p.ratio, p.clip_depth, m.a, m.b, m.c, m.d, m.tx, m.ty,
                     p.name.as_deref().map(|n| format!("  name {n}")).unwrap_or_default()
                 );
+            }
+        }
+        Cmd::Scripts { file } => {
+            let swf = open(&file)?;
+            for (_, abc) in abcs(&swf) {
+                for e in ffdec::abc::scripts::entries(&abc) {
+                    println!("{:<10} {}", e.kind, e.full_name());
+                }
+            }
+        }
+        Cmd::Pcode { file, name } => {
+            let swf = open(&file)?;
+            let mut found = false;
+            for (_, abc) in abcs(&swf) {
+                for e in ffdec::abc::scripts::entries(&abc) {
+                    if e.full_name() == name {
+                        print!("{}", ffdec::abc::scripts::entry_pcode(&abc, &e));
+                        found = true;
+                    }
+                }
+            }
+            if !found {
+                return Err(anyhow!("no script named '{name}'"));
             }
         }
         Cmd::Decompress { input, output } => {
