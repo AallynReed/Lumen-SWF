@@ -1,5 +1,6 @@
 //! ActionScript 3 bytecode (ABC) as found in DoABC/DoABC2 tags, read like FFDec's `ABC`.
 
+pub mod decomp;
 pub mod names;
 pub mod opcodes;
 pub mod pcode;
