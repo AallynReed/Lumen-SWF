@@ -115,14 +115,19 @@ pub fn prepare_code(ctx: &Ctx, body: &crate::abc::MethodBody) -> Code {
 
 /// `MethodBody.convert`: decompiles to items, then prints once to a null writer like FFDec.
 pub fn convert(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>) -> Result<Converted, String> {
-    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| convert_inner(ctx, req, cd, seen)));
+    convert_into(ctx, req, cd, seen, &mut Writer::nul())
+}
+
+/// `convert` printing into a given null writer, so callers can tell whether anything was printed.
+pub fn convert_into(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>, w: &mut Writer) -> Result<Converted, String> {
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| convert_inner(ctx, req, cd, seen, w)));
     match r {
         Ok(v) => v,
         Err(e) => Err(e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_else(|| "decompilation failed".into())),
     }
 }
 
-fn convert_inner(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>) -> Result<Converted, String> {
+fn convert_inner(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>, w: &mut Writer) -> Result<Converted, String> {
     let abc = ctx.abc;
     let bi = abc.body_of.get(req.method).copied().flatten().ok_or("method has no body")?;
     let body = &abc.bodies[bi];
@@ -137,9 +142,8 @@ fn convert_inner(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSe
     ld.seen_methods = seen;
     ld.class_index = req.class_index;
     ld.call_stack = req.call_stack.clone();
-    let mut w = Writer::nul();
     let v: Vec<It> = items.borrow().clone();
-    print::graph_to_string(&v, &mut w, &ld);
+    print::graph_to_string(&v, w, &ld);
     Ok(Converted { items, local_reg_names: names })
 }
 
@@ -180,7 +184,7 @@ pub fn decompile_to_writer(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, see
     }
 }
 
-fn error_comment(w: &mut Writer, msg: &str) {
+pub fn error_comment(w: &mut Writer, msg: &str) {
     w.append("/*").new_line();
     w.append(" * Decompilation error").new_line();
     w.append(" * Code may be obfuscated").new_line();
@@ -1144,7 +1148,9 @@ pub fn value_kind_str(ctx: &Ctx, v: &crate::abc::ValueKind) -> String {
     }
 }
 
-pub fn print_trait_slot_const(_it: &It, _w: &mut Writer, _ld: &LocalData) {}
+pub fn print_trait_slot_const(it: &It, w: &mut Writer, ld: &LocalData) {
+    super::script::print_trait_slot_const(it, w, ld);
+}
 
 #[allow(dead_code)]
 fn is_debug(code: &Code, i: usize) -> bool {

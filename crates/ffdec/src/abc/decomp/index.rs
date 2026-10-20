@@ -128,6 +128,8 @@ struct ClassInfo {
     full_name: Dotted,
     full_name_no_suffix: Dotted,
     parent: Option<ClassRef>,
+    instance_traits: Vec<(String, u8)>,
+    static_traits: Vec<(String, u8)>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +169,7 @@ pub struct AbcIndex {
     instance_ambiguous: HashMap<(String, TySpec), Vec<u8>>,
     class_ambiguous: HashMap<(String, TySpec), Vec<u8>>,
     ns_maps: Vec<HashMap<String, Dotted>>,
+    trait_paths: Vec<(Dotted, String)>,
 }
 
 fn raw_names(abc: &Abc) -> (Idents, HashMap<String, Dotted>, HashSet<usize>) {
@@ -298,7 +301,14 @@ impl AbcIndex {
                 let cname = mn_spec(&names, ii.name).unwrap_or(TySpec::Unbounded);
                 let pkg = script_index.and_then(|s| Self::script_pkg(&names, abc, s));
                 let id = self.class_list.len();
-                self.class_list.push(ClassInfo { full_name: names.name_with_ns(ii.name, true), full_name_no_suffix: names.name_with_ns(ii.name, false), parent: None });
+                let tn = |ts: &[Trait]| ts.iter().map(|t| (names.name(t.name, &[], true, true), names.simple_ns_kind(t.name))).collect::<Vec<_>>();
+                self.class_list.push(ClassInfo {
+                    full_name: names.name_with_ns(ii.name, true),
+                    full_name_no_suffix: names.name_with_ns(ii.name, false),
+                    parent: None,
+                    instance_traits: tn(&ii.traits),
+                    static_traits: tn(&abc.classes[class].traits),
+                });
                 self.classes.insert(ClassKey { ty: cname.no_ns(), pkg }, id);
                 added.push((id, class));
                 self.index_traits(&names, abc, abc_id, ii.name, &ii.traits, 1);
@@ -310,6 +320,13 @@ impl AbcIndex {
             if ii.super_name > 0 {
                 let parent = TySpec::named(names.name_with_ns(ii.super_name, true));
                 self.class_list[id].parent = self.find_class_spec(&parent, None);
+            }
+        }
+        for script in &abc.scripts {
+            for t in &script.traits {
+                let ns = Self::own_ns(abc, t.name);
+                let pkg = if ns == 0 { Dotted::default() } else { names.ns_name(ns) };
+                self.trait_paths.push((pkg, names.name(t.name, &[], true, false)));
             }
         }
         let mut map = HashMap::new();
@@ -325,6 +342,101 @@ impl AbcIndex {
         }
         self.ns_maps.push(map);
         self.abc_ids.push(abc_id);
+    }
+
+    /// Object names `getPackageObjects` lists for a package.
+    pub fn package_objects(&self, pkg: &Dotted) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut add = |n: String| {
+            if !out.contains(&n) {
+                out.push(n);
+            }
+        };
+        for k in self.classes.keys() {
+            if k.pkg.as_ref() == Some(pkg) {
+                if let TySpec::Type(d, _) = &k.ty {
+                    add(d.last().to_string());
+                }
+            }
+        }
+        for k in self.script_props.keys() {
+            if k.ns == *pkg {
+                add(k.name.clone());
+            }
+        }
+        if let Some(p) = &self.parent {
+            for n in p.package_objects(pkg) {
+                add(n);
+            }
+        }
+        out
+    }
+
+    /// Names of the top-level definitions in `pkg` across the indexed ABCs (not the player library).
+    pub fn names_in_package(&self, pkg: &Dotted) -> Vec<String> {
+        self.trait_paths.iter().filter(|(p, _)| p == pkg).map(|(_, n)| n.clone()).collect()
+    }
+
+    /// Public and protected trait names of a class and its ancestors (`getAllClassTraitNames` with `isParent`).
+    pub fn inherited_trait_names(&self, class_name: &Dotted, pkg: Option<Dotted>) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = self.find_class_spec(&TySpec::named(class_name.clone()), pkg);
+        let mut guard = 0;
+        while let Some(r) = cur {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let ci = self.class(r);
+            for (n, k) in &ci.instance_traits {
+                if *k == ns_kind::PACKAGE || *k == ns_kind::PROTECTED {
+                    out.push(n.clone());
+                }
+            }
+            for (n, k) in &ci.static_traits {
+                if *k == ns_kind::PACKAGE || *k == ns_kind::STATIC_PROTECTED {
+                    out.push(n.clone());
+                }
+            }
+            cur = ci.parent;
+        }
+        out
+    }
+
+    /// Full names of a class's ancestors, nearest first.
+    pub fn ancestors(&self, class_name: &Dotted, pkg: Option<Dotted>) -> Vec<Dotted> {
+        let mut out = Vec::new();
+        let mut cur = self.find_class_spec(&TySpec::named(class_name.clone()), pkg).and_then(|r| self.class(r).parent);
+        while let Some(r) = cur {
+            if out.len() > 64 {
+                break;
+            }
+            out.push(self.class(r).full_name.clone());
+            cur = self.class(r).parent;
+        }
+        out
+    }
+
+    /// Whether the class or one of its ancestors in this index alone defines `name` (`findProperty` on the local index).
+    pub fn local_instance_property(&self, class_name: &Dotted, name: &str) -> bool {
+        let mut cur = self.classes.get(&ClassKey { ty: TySpec::named(class_name.clone()), pkg: None }).copied();
+        let mut guard = 0;
+        while let Some(id) = cur {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let ci = &self.class_list[id];
+            let key = PropKey { name: name.into(), parent: TySpec::named(ci.full_name.clone()), ns: 0, abc: 0 };
+            if self.instance_props.contains_key(&key) {
+                return true;
+            }
+            cur = match ci.parent {
+                Some(r) if r.level == self.level => Some(r.id),
+                _ => None,
+            };
+        }
+        false
     }
 
     fn find_class_spec(&self, cls: &TySpec, pkg: Option<Dotted>) -> Option<ClassRef> {
@@ -473,6 +585,15 @@ pub fn find_property_type(ctx: &Ctx, owner: &It, name: &str, ns: usize, find_sta
     let key = prop_key(name, parent, abc_id(ctx), ns, kind);
     let (t, st) = idx.find_property(&key, find_static, find_instance, find_protected, 0)?;
     Some(PropType { ty: t.ret.item(), call_ty: t.call_ret.item(), is_static: st })
+}
+
+/// The package `ClassDef` derives from a script's public traits.
+pub fn script_package(ctx: &Ctx, script: i32) -> Option<Dotted> {
+    if script >= 0 && (script as usize) < ctx.abc.scripts.len() {
+        AbcIndex::script_pkg(&ctx.names(), ctx.abc, script as usize)
+    } else {
+        None
+    }
 }
 
 /// `AbcIndexing.findClass(...) != null`.
