@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust-FFDec</title>
+    <link rel="stylesheet" href="app.css">
+    <script defer src="app.js"></script>
+</head>
+<body>
+<header class="toolbar">
+    <div class="brand">Rust-FFDec</div>
+    <button id="btn-open" class="btn primary" title="Open SWF (Ctrl+O)">Open…</button>
+    <div class="menu-wrap">
+        <button id="btn-save" class="btn" disabled title="Save a copy with chosen compression (Ctrl+S)">Save as…</button>
+        <div id="save-menu" class="menu" hidden>
+            <div class="menu-title">Compression</div>
+            <label><input type="radio" name="comp" value="none"> Uncompressed (FWS)</label>
+            <label><input type="radio" name="comp" value="zlib" checked> zlib (CWS)</label>
+            <label><input type="radio" name="comp" value="lzma"> LZMA (ZWS)</label>
+            <label><input type="radio" name="comp" value="abc"> LZMA, ABC container</label>
+            <div class="menu-sep"></div>
+            <label><input type="checkbox" id="opt-encrypt"> Harman AIR encryption</label>
+            <button id="btn-save-go" class="btn primary block">Save…</button>
+        </div>
+    </div>
+    <button id="btn-export" class="btn" disabled title="Save the selected tag's raw body">Export tag…</button>
+    <button id="btn-close" class="btn" disabled title="Close the selected file">Close</button>
+    <div class="spacer"></div>
+    <div class="seg" role="tablist" aria-label="Tree view">
+        <button id="view-res" class="seg-btn active" role="tab">Resources</button>
+        <button id="view-tags" class="seg-btn" role="tab">Tag list</button>
+    </div>
+</header>
+
+<main class="workspace">
+    <aside class="sidebar" id="sidebar">
+        <div class="filter"><input id="filter" type="search" placeholder="Filter tree" spellcheck="false"></div>
+        <div id="tree" class="tree" tabindex="0" role="tree"></div>
+    </aside>
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"></div>
+    <section class="panel">
+        <div id="empty" class="empty">
+            <div class="empty-mark">SWF</div>
+            <h1>Open a Flash file</h1>
+            <p>Drop a <code>.swf</code> here or choose one. Files open read-only; saving always writes a copy.</p>
+            <button id="btn-open-empty" class="btn primary">Open…</button>
+        </div>
+        <div id="content" class="content" hidden>
+            <div class="panel-head">
+                <h2 id="sel-title"></h2>
+                <div class="tabs" role="tablist">
+                    <button class="tab active" data-tab="details" role="tab">Details</button>
+                    <button class="tab" data-tab="hex" role="tab">Hex</button>
+                </div>
+            </div>
+            <div id="tab-details" class="tab-body">
+                <table class="fields"><tbody id="fields"></tbody></table>
+            </div>
+            <div id="tab-hex" class="tab-body hex-body" hidden>
+                <div id="hex" class="hex"><div id="hex-spacer"></div><div id="hex-rows" class="hex-rows"></div></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="status"><span id="status">Ready</span></footer>
+<div id="drop" class="drop" hidden><div>Drop to open</div></div>
+</body>
+</html>
