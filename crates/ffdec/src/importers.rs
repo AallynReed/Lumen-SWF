@@ -261,3 +261,46 @@ pub fn edit_text(swf: &mut Swf, path: &[usize], text: &str) -> Result<()> {
     body.push(0);
     swf.set_tag(path, code, body)
 }
+
+/// What an importer replaces a tag with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Asset {
+    Image,
+    Sound,
+    Binary,
+    Text,
+}
+
+impl Asset {
+    pub fn of(code: u16) -> Option<Asset> {
+        Some(match code {
+            DEFINE_BITS | DEFINE_BITS_JPEG2 | DEFINE_BITS_JPEG3 | DEFINE_BITS_JPEG4 | DEFINE_BITS_LOSSLESS | DEFINE_BITS_LOSSLESS2 => Asset::Image,
+            DEFINE_SOUND => Asset::Sound,
+            DEFINE_BINARY_DATA => Asset::Binary,
+            DEFINE_EDIT_TEXT => Asset::Text,
+            _ => return None,
+        })
+    }
+
+    /// File extensions the importer reads.
+    pub fn extensions(self) -> &'static [&'static str] {
+        match self {
+            Asset::Image => &["png", "jpg", "jpeg", "gif", "bmp", "webp"],
+            Asset::Sound => &["mp3", "wav"],
+            Asset::Binary => &[],
+            Asset::Text => &["txt"],
+        }
+    }
+}
+
+/// Replaces the asset at `path` with the contents of a file.
+pub fn import(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
+    let code = swf.tag(path).map(|t| t.code).ok_or_else(|| Error::Other(format!("no tag at {path:?}")))?;
+    match Asset::of(code) {
+        Some(Asset::Image) => image(swf, path, data),
+        Some(Asset::Sound) => sound(swf, path, data),
+        Some(Asset::Binary) => binary(swf, path, data),
+        Some(Asset::Text) => edit_text(swf, path, &String::from_utf8_lossy(data)),
+        None => err(format!("{} tags cannot be replaced yet", crate::tags::display_name(code))),
+    }
+}

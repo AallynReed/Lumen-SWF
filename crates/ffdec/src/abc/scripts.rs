@@ -100,3 +100,87 @@ pub fn entry_pcode(abc: &Abc, e: &Entry) -> String {
     }
     out
 }
+
+/// A method that can be edited on its own, as FFDec's p-code trait list offers them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodRef {
+    pub label: String,
+    pub method: usize,
+    pub owner: Option<super::asm::TraitLoc>,
+}
+
+impl MethodRef {
+    /// Its p-code: the trait with its method, or the bare method for initializers.
+    pub fn pcode(&self, abc: &Abc) -> String {
+        match self.owner.and_then(|l| abc.trait_at(l)) {
+            Some(t) => super::pcode::trait_pcode(abc, t),
+            None => super::pcode::method_pcode(abc, self.method),
+        }
+    }
+}
+
+/// The methods shown in an entry's p-code, in the same order.
+pub fn methods(abc: &Abc, e: &Entry) -> Vec<MethodRef> {
+    use super::asm::TraitLoc;
+    let mut out: Vec<MethodRef> = Vec::new();
+    let mut add = |label: String, method: usize, owner: Option<TraitLoc>| {
+        let n = out.iter().filter(|m| m.label == label || m.label.starts_with(&format!("{label} ("))).count();
+        let label = if n == 0 { label } else { format!("{label} ({})", n + 1) };
+        out.push(MethodRef { label, method, owner });
+    };
+    let trait_label = |t: &super::Trait, prefix: &str| {
+        let kind = match t.data {
+            TraitData::Getter { .. } => "get ",
+            TraitData::Setter { .. } => "set ",
+            _ => "",
+        };
+        format!("{prefix}{kind}{}", abc.local_name(t.name))
+    };
+    let Some(script) = abc.scripts.get(e.script) else { return out };
+    add("script initializer".into(), script.init, None);
+    let mut class = |c: usize, prefix: &str, add: &mut dyn FnMut(String, usize, Option<TraitLoc>)| {
+        if let Some(ii) = abc.instances.get(c) {
+            add(format!("{prefix}instance initializer"), ii.iinit, None);
+        }
+        if let Some(cl) = abc.classes.get(c) {
+            add(format!("{prefix}class initializer"), cl.cinit, None);
+            for (i, t) in cl.traits.iter().enumerate() {
+                if let Some(m) = t.method() {
+                    add(trait_label(t, &format!("{prefix}static ")), m, Some(TraitLoc::Class(c, i)));
+                }
+            }
+        }
+        if let Some(ii) = abc.instances.get(c) {
+            for (i, t) in ii.traits.iter().enumerate() {
+                if let Some(m) = t.method() {
+                    add(trait_label(t, prefix), m, Some(TraitLoc::Instance(c, i)));
+                }
+            }
+        }
+    };
+    let public = |t: &super::Trait| matches!(abc.ns_kind_of(t.name), ns_kind::PACKAGE | ns_kind::PACKAGE_INTERNAL);
+    match class_of(abc, e) {
+        Some(c) => class(c, "", &mut add),
+        None => {
+            if let Some((ti, t)) = e.trait_index.and_then(|ti| script.traits.get(ti).map(|t| (ti, t))) {
+                if let Some(m) = t.method() {
+                    add(trait_label(t, ""), m, Some(TraitLoc::Script(e.script, ti)));
+                }
+            }
+        }
+    }
+    for (ti, t) in script.traits.iter().enumerate() {
+        if public(t) {
+            continue;
+        }
+        match t.data {
+            TraitData::Class { class: c, .. } => class(c, &format!("{}.", abc.local_name(t.name)), &mut add),
+            _ => {
+                if let Some(m) = t.method() {
+                    add(trait_label(t, ""), m, Some(TraitLoc::Script(e.script, ti)));
+                }
+            }
+        }
+    }
+    out
+}
