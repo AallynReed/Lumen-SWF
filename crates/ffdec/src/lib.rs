@@ -5,6 +5,7 @@ pub mod error;
 pub mod harman;
 pub mod info;
 pub mod io;
+pub mod names;
 pub mod swf;
 pub mod tags;
 pub mod tree;
