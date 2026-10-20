@@ -12,6 +12,7 @@ pub mod io;
 pub mod morph;
 pub mod names;
 pub mod render;
+pub mod replace;
 pub mod swf;
 pub mod shape;
 pub mod tags;
