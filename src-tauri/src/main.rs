@@ -223,11 +223,15 @@ struct PreviewInfo {
 
 /// A preview of a tag, or of the root timeline when `path` is empty.
 #[tauri::command]
-async fn preview_info(docs: State<'_, Docs>, id: u32, path: String, frame: usize) -> Res<Option<PreviewInfo>> {
+async fn preview_info(docs: State<'_, Docs>, id: u32, path: String, frame: usize, script: Option<String>) -> Res<Option<PreviewInfo>> {
     let p = if path.is_empty() { Vec::new() } else { tree::parse_path(&path).ok_or("bad tag path")? };
     let (info, data) = with_doc(&docs, id, |d| {
         let exportable = d.swf().tag(&p).is_some_and(|t| Kind::of(t.code).is_some());
-        match d.exporter().preview(&p, frame).map_err(|e| e.to_string())? {
+        let preview = match &script {
+            Some(s) => d.exporter().script_preview(&p, s).map(Some),
+            None => d.exporter().preview(&p, frame),
+        };
+        match preview.map_err(|e| e.to_string())? {
             Some(pv) => Ok((
                 Some(PreviewInfo {
                     kind: pv.kind,
@@ -278,9 +282,12 @@ impl From<ExportOpts> for Options {
 
 /// Exports one asset: a save dialog for a single file, a folder for several.
 #[tauri::command]
-async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, options: ExportOpts) -> Res<Option<String>> {
+async fn export_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path: String, script: Option<String>, options: ExportOpts) -> Res<Option<String>> {
     let p = tree::parse_path(&path).ok_or("bad tag path")?;
-    let files = with_doc(&docs, id, |d| d.exporter().export(&p, options.into()).map_err(|e| e.to_string()))?;
+    let files = with_doc(&docs, id, |d| match &script {
+        Some(s) => d.exporter().export_script(&p, s).map(|f| vec![f]).map_err(|e| e.to_string()),
+        None => d.exporter().export(&p, options.into()).map_err(|e| e.to_string()),
+    })?;
     match files.len() {
         0 => Err("this tag is not an exportable asset".into()),
         1 => {
