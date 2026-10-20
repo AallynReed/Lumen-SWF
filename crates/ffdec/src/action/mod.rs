@@ -1,10 +1,11 @@
 //! ActionScript 1/2 bytecode (SWF actions), read like FFDec's `ActionListReader`.
 
+pub mod decomp;
 pub mod pcode;
 pub mod scripts;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Text encoding of SWF strings: UTF-8 from SWF 6, FFDec's default ANSI charset before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,7 +151,7 @@ pub enum Op {
     WaitForFrame { frame: u16, skip: usize },
     SetTarget(String),
     GoToLabel(String),
-    Push { values: Vec<Value>, pool: Option<Rc<Vec<String>>> },
+    Push { values: Vec<Value>, pool: Option<Arc<Vec<String>>> },
     Jump { offset: i32, deobfuscate: bool },
     If { offset: i32 },
     GetUrl2 { load_variables: bool, load_target: bool, method: u8 },
@@ -624,7 +625,7 @@ impl Action {
         matches!(self.op, Op::DefineFunction { .. } | Op::DefineFunction2(_)).then_some("function")
     }
 
-    fn store_size(&self) -> Option<usize> {
+    pub fn store_size(&self) -> Option<usize> {
         match self.op {
             Op::WaitForFrame { skip, .. } | Op::WaitForFrame2 { skip } => Some(skip),
             _ => None,
@@ -711,7 +712,7 @@ fn read_at(
     next: &mut HashMap<u64, u64>,
     ip: u64,
     end_ip: u64,
-    mut pool: Option<Rc<Vec<String>>>,
+    mut pool: Option<Arc<Vec<String>>>,
     visited: &mut Vec<u64>,
 ) -> Option<u64> {
     let mut entry = None;
@@ -742,7 +743,7 @@ fn read_at(
                         *p = pool.clone();
                     }
                 }
-                Op::ConstantPool(c) => pool = Some(Rc::new(c.clone())),
+                Op::ConstantPool(c) => pool = Some(Arc::new(c.clone())),
                 Op::If { offset } => {
                     let n = ip as i64 + len as i64 + *offset as i64;
                     if n >= 0 {

@@ -64,6 +64,16 @@ pub enum Bin {
     IsType,
     AsType,
     NullCoalesce,
+    // AS1/2 operators.
+    AAnd,
+    AOr,
+    StrAdd,
+    StrEq,
+    StrNe,
+    StrLt,
+    StrLe,
+    StrGt,
+    StrGe,
 }
 
 impl Bin {
@@ -96,6 +106,15 @@ impl Bin {
             IsType => "is",
             AsType => "as",
             NullCoalesce => "??",
+            AAnd => "and",
+            AOr => "or",
+            StrAdd => "add",
+            StrEq => "eq",
+            StrNe => "ne",
+            StrLt => "lt",
+            StrLe => "le",
+            StrGt => "gt",
+            StrGe => "ge",
         }
     }
 
@@ -113,6 +132,11 @@ impl Bin {
             Eq | Neq | StrictEq | StrictNeq => prec::EQUALITY,
             Lt | Le | Gt | Ge | In | InstanceOf | IsType | AsType => prec::RELATIONAL,
             NullCoalesce => prec::NULLCOALESCE,
+            AAnd => prec::LOGICALAND,
+            AOr => prec::LOGICALOR,
+            StrAdd => prec::ADDITIVE,
+            StrEq | StrNe => prec::EQUALITY,
+            StrLt | StrLe | StrGt | StrGe => prec::RELATIONAL,
         }
     }
 
@@ -158,6 +182,12 @@ impl Bin {
             Ge => Lt,
             Gt => Le,
             Le => Gt,
+            StrEq => StrNe,
+            StrNe => StrEq,
+            StrLt => StrGe,
+            StrGe => StrLt,
+            StrGt => StrLe,
+            StrLe => StrGt,
             _ => return None,
         })
     }
@@ -326,6 +356,90 @@ pub enum K {
     WithEnd { scope: It },
     WithObject { scope: It },
     Xml { parts: List },
+
+    // AS1/2 items (`flash.action.model`).
+    ADirect { v: AVal, computed: Option<It> },
+    AUnresolved(i32),
+    AGetVar { name: It, print_obf: bool, computed: Option<It> },
+    ASetVar { name: It, compound_value: Option<It>, compound_op: Option<String> },
+    AGetMember { obj: It, member: It, print_obf: bool, getter: bool },
+    ASetMember { obj: It, member: It, compound_value: Option<It>, compound_op: Option<String>, setter: bool },
+    AGetProp { target: It, index: i32, use_fn: bool },
+    ASetProp { target: It, index: i32 },
+    ADefineLocal { name: It },
+    ADelete { obj: Option<It>, prop: It },
+    AStoreReg { reg: i32, name: Option<String>, define: bool, temporary: bool, compound_value: Option<It>, compound_op: Option<String> },
+    ACallFunction { name: It, args: List, calculated: Option<It> },
+    ACallMethod { obj: It, name: It, args: List },
+    ANewMethod { obj: It, name: It, args: List },
+    ANewObject { name: It, args: List },
+    AInitArray { values: List },
+    AInitObject { names: List, values: List },
+    AInc { obj: It },
+    ADec { obj: It },
+    APostInc { obj: It },
+    APostDec { obj: It },
+    AEnumerate { obj: It },
+    AEnumerated,
+    AEnumAssign,
+    AFunction(Box<AFunction>),
+    AReturn,
+    AEval,
+    ATypeOf,
+    ATellTarget { target: It, cmds: List },
+    ASetTarget(String),
+    ASetTarget2 { target: It },
+    AWith { scope: It, items: List },
+    ATry { try_cmds: List, names: List, types: Vec<Option<It>>, catch_cmds: Vec<List>, finally: List },
+    AForIn { loop_id: i64, var: It, obj: It, cmds: List, label_used: bool },
+    AIfFrameLoaded { frame: It, actions: List },
+    AClass(Box<AClass>),
+    AInterface { name: It, supers: List },
+    ATempReg { reg: i32, used: std::rc::Rc<std::cell::Cell<bool>> },
+    ATempRegMark { reg: It },
+    AStrict(i32),
+    AGotoFrame(i32),
+    AExtends { sub: It, sup: It },
+    AImplements { sub: It, supers: List },
+    ACastOp { ctor: It, obj: It },
+    /// Call-like statements and expressions printed as `name(args)`.
+    AFn { name: &'static str, args: List, sep: &'static str, suffix: String, ret: bool, side: bool },
+    AUnsupported(String),
+}
+
+/// `DirectValueActionItem.value`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AVal {
+    Str(String),
+    Float(f32),
+    Double(f64),
+    Int(i64),
+    Null,
+    Undefined,
+    Register { num: i32, name: Option<String> },
+}
+
+#[derive(Debug, Clone)]
+pub struct AFunction {
+    pub name: String,
+    pub params: Vec<String>,
+    pub reg_names: Vec<(i32, String)>,
+    pub actions: List,
+    pub calculated_name: Option<It>,
+    pub getter: bool,
+    pub setter: bool,
+    pub reg_start: i32,
+    pub param_registers: Option<Vec<i32>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AClass {
+    pub name: It,
+    pub extends: Option<It>,
+    pub implements: List,
+    pub traits: Vec<(It, Option<It>)>,
+    pub statics: Vec<bool>,
+    pub uninitialized: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -339,6 +453,8 @@ pub struct Item {
     pub first_part: Option<PartId>,
     pub comment: String,
     pub pos: i32,
+    /// Created by the AS1/2 translator (`ActionGraphTargetDialect`).
+    pub as2: bool,
 }
 
 pub fn new_list(v: Vec<It>) -> List {
@@ -350,7 +466,7 @@ pub fn empty_list() -> List {
 }
 
 pub fn mk(k: K, src: Option<usize>, line_start: Option<usize>, prec: u8, value: Option<It>) -> It {
-    Rc::new(RefCell::new(Item { k, src, line_start, prec, value, first_part: None, comment: String::new(), pos: 0 }))
+    Rc::new(RefCell::new(Item { k, src, line_start, prec, value, first_part: None, comment: String::new(), pos: 0, as2: false }))
 }
 
 /// A source-less item.
@@ -565,13 +681,14 @@ pub mod is {
         matches!(it.borrow().k, K::While { .. } | K::DoWhile { .. } | K::For { .. } | K::Switch { .. } | K::ForIn { .. } | K::ForEachIn { .. })
     }
     pub fn exit(it: &It) -> bool {
-        matches!(it.borrow().k, K::ScriptEnd | K::ReturnValue | K::ReturnVoid | K::Throw)
+        matches!(it.borrow().k, K::ScriptEnd | K::ReturnValue | K::ReturnVoid | K::Throw | K::AReturn)
     }
     /// Classes implementing `Block`.
     pub fn block(it: &It) -> bool {
         matches!(
             it.borrow().k,
             K::If { .. } | K::While { .. } | K::DoWhile { .. } | K::For { .. } | K::Switch { .. } | K::Goto { .. } | K::ForIn { .. } | K::ForEachIn { .. } | K::Try { .. }
+                | K::ATellTarget { .. } | K::AForIn { .. } | K::AIfFrameLoaded { .. } | K::ATry { .. } | K::AClass(_)
         )
     }
     /// Classes implementing `SimpleValue`, with `isSimpleValue()` true.
@@ -579,6 +696,7 @@ pub mod is {
         let b = it.borrow();
         match &b.k {
             K::True | K::False | K::DNan | K::Nan | K::Null | K::Undefined | K::Str(_) => true,
+            K::ADirect { v, .. } => !matches!(v, AVal::Register { .. }),
             K::DecimalValue(_) | K::DoubleValue(_) | K::FloatValue(_) | K::Float4Value(_) | K::IntegerValueA { .. } => true,
             K::Duplicate { .. } | K::DuplicateSource { .. } | K::SetTemporary { .. } | K::Temporary { .. } => b.value.as_ref().is_some_and(simple_value),
             _ => false,
@@ -602,6 +720,14 @@ pub fn subs(it: &It) -> Vec<List> {
             if let Some(f) = finally {
                 v.push(f.clone());
             }
+            v
+        }
+        K::ATellTarget { cmds, .. } | K::AForIn { cmds, .. } => vec![cmds.clone()],
+        K::AIfFrameLoaded { actions, .. } => vec![actions.clone()],
+        K::ATry { try_cmds, catch_cmds, finally, .. } => {
+            let mut v = vec![try_cmds.clone()];
+            v.extend(catch_cmds.iter().cloned());
+            v.push(finally.clone());
             v
         }
         _ => Vec::new(),
@@ -812,6 +938,86 @@ pub fn children(it: &It, no_block: bool) -> Vec<It> {
         }
         K::WithEnd { scope } | K::WithObject { scope } => v.push(scope.clone()),
         K::Xml { parts } => all(&mut v, parts),
+        K::AGetVar { name, .. } => v.push(name.clone()),
+        K::AGetMember { obj, member, .. } => {
+            v.push(obj.clone());
+            v.push(member.clone());
+        }
+        K::ASetMember { obj, member, .. } => {
+            v.push(obj.clone());
+            v.push(member.clone());
+            value(&mut v);
+        }
+        K::AGetProp { target, .. } => v.push(target.clone()),
+        K::ADefineLocal { name } => {
+            v.push(name.clone());
+            value(&mut v);
+        }
+        K::ADelete { obj, prop } => {
+            if let Some(o) = obj {
+                v.push(o.clone());
+            }
+            v.push(prop.clone());
+        }
+        K::ACallFunction { args, .. } => all(&mut v, args),
+        K::ACallMethod { obj, args, .. } => {
+            all(&mut v, args);
+            v.push(obj.clone());
+        }
+        K::ANewMethod { obj, args, .. } => {
+            v.push(obj.clone());
+            all(&mut v, args);
+        }
+        K::ANewObject { name, args } => {
+            v.push(name.clone());
+            all(&mut v, args);
+        }
+        K::AInitArray { values } => all(&mut v, values),
+        K::AInitObject { names, values } => {
+            all(&mut v, names);
+            all(&mut v, values);
+        }
+        K::AInc { obj } | K::ADec { obj } | K::APostInc { obj } | K::APostDec { obj } | K::AEnumerate { obj } => v.push(obj.clone()),
+        K::AFunction(f) => {
+            if !no_block {
+                all(&mut v, &f.actions);
+            }
+        }
+        K::ATry { try_cmds, catch_cmds, finally, .. } => {
+            if !no_block {
+                all(&mut v, try_cmds);
+                for c in catch_cmds {
+                    all(&mut v, c);
+                }
+                all(&mut v, finally);
+            }
+        }
+        K::AForIn { var, obj, cmds, .. } => {
+            v.push(var.clone());
+            v.push(obj.clone());
+            if !no_block {
+                all(&mut v, cmds);
+            }
+        }
+        K::AIfFrameLoaded { frame, actions } => {
+            v.push(frame.clone());
+            if !no_block {
+                all(&mut v, actions);
+            }
+        }
+        K::AClass(c) => {
+            if !no_block {
+                for t in c.traits.iter().filter_map(|(_, t)| t.as_ref()) {
+                    v.push(t.clone());
+                }
+            }
+        }
+        K::ACastOp { ctor, obj } => {
+            v.push(ctor.clone());
+            v.push(obj.clone());
+        }
+        K::AFn { args, .. } => all(&mut v, args),
+        K::ATellTarget { .. } | K::ASetTarget2 { .. } | K::AWith { .. } | K::AInterface { .. } | K::AExtends { .. } | K::AImplements { .. } => {}
         _ => value(&mut v),
     }
     v

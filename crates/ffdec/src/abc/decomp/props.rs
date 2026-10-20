@@ -27,6 +27,11 @@ fn num_like(t: &It) -> bool {
 }
 
 pub fn return_type(it: &It) -> It {
+    if it.borrow().as2 {
+        if let Some(t) = as2_return_type(it) {
+            return t;
+        }
+    }
     let k = it.borrow().k.clone();
     match k {
         K::Bin { op, l, r } => match op {
@@ -131,6 +136,22 @@ pub fn return_type(it: &It) -> It {
     }
 }
 
+/// `returnType()` of AS1/2 items (`ActionItem` defaults to `*`).
+fn as2_return_type(it: &It) -> Option<It> {
+    let k = it.borrow().k.clone();
+    Some(match k {
+        K::Bin { op, .. } => match op {
+            Bin::Add | Bin::AOr | Bin::Eq | Bin::Neq | Bin::StrictEq | Bin::StrictNeq | Bin::Lt | Bin::Le | Bin::Gt | Bin::Ge | Bin::In | Bin::InstanceOf => ty("Boolean"),
+            Bin::StrEq | Bin::StrNe | Bin::StrLt | Bin::StrLe | Bin::StrGt | Bin::StrGe => ty("Boolean"),
+            _ => unbounded(),
+        },
+        K::Un { op: Un::PreIncrement | Un::PreDecrement, .. } => value_rt(it),
+        K::True | K::False => ty("Boolean"),
+        _ if crate::action::decomp::items::is_action_kind(&k) => unbounded(),
+        _ => return None,
+    })
+}
+
 /// Java `toString()` of items, used for type names and a few `"this"` checks.
 pub fn java_to_string(it: &It) -> String {
     let b = it.borrow();
@@ -164,6 +185,12 @@ pub fn has_return_value(it: &It) -> bool {
         K::InitProperty { .. } | K::Package { .. } | K::ReturnValue | K::ReturnVoid | K::Throw | K::SetLocal { .. } | K::SetProperty { .. } => false,
         K::SetSlot { .. } | K::SetSuper { .. } | K::StoreNewActivation { .. } | K::TraitSlotConst { .. } | K::Try { .. } | K::Unparsed(_) => false,
         K::With { .. } | K::WithEnd { .. } | K::WithObject { .. } => false,
+        K::ADefineLocal { .. } | K::AEnumerate { .. } | K::AEnumerated | K::AExtends { .. } | K::AFunction(_) | K::AReturn => false,
+        K::ASetVar { .. } | K::ASetMember { .. } | K::ASetProp { .. } | K::ATellTarget { .. } | K::ASetTarget(_) | K::ASetTarget2 { .. } => false,
+        K::AWith { .. } | K::ATry { .. } | K::AForIn { .. } | K::AIfFrameLoaded { .. } | K::AClass(_) | K::AInterface { .. } | K::ATempRegMark { .. } => false,
+        K::AStrict(_) | K::AGotoFrame(_) | K::AUnsupported(_) => false,
+        K::AFn { ret, .. } => *ret,
+        K::ATempReg { .. } => b.value.as_ref().is_some_and(has_return_value),
         _ => true,
     }
 }
@@ -175,12 +202,14 @@ pub fn needs_semicolon(it: &It) -> bool {
         K::Goto { target, .. } => target.is_none(),
         K::ForEachIn { .. } | K::ForIn { .. } | K::Package { .. } | K::StoreNewActivation { .. } | K::TraitSlotConst { .. } | K::Try { .. } => false,
         K::With { .. } | K::WithEnd { .. } => false,
+        K::AClass(_) | K::AForIn { .. } | K::AFunction(_) | K::AIfFrameLoaded { .. } | K::AInterface { .. } | K::ATellTarget { .. } => false,
+        K::ATempRegMark { .. } | K::ATry { .. } | K::AWith { .. } | K::AStrict(_) => false,
         _ => true,
     }
 }
 
-pub fn needs_new_line(_it: &It) -> bool {
-    false
+pub fn needs_new_line(it: &It) -> bool {
+    matches!(it.borrow().k, K::AFunction(_))
 }
 
 pub fn handles_new_line(it: &It) -> bool {
@@ -194,7 +223,7 @@ pub fn has_single_new_line_around(it: &It) -> bool {
 pub fn is_empty(it: &It) -> bool {
     match &it.borrow().k {
         K::NewFunction { name, .. } => name.is_empty(),
-        K::StoreNewActivation { .. } => true,
+        K::StoreNewActivation { .. } | K::ATempRegMark { .. } => true,
         _ => false,
     }
 }
@@ -284,6 +313,12 @@ pub fn has_side_effect(it: &It) -> bool {
         K::NameValuePair { name } => has_side_effect(name) || b.value.as_ref().is_some_and(has_side_effect),
         K::NewArray { values } => values.borrow().iter().any(has_side_effect),
         K::NewObject { pairs } => pairs.borrow().iter().any(has_side_effect),
+        K::ACallFunction { .. } | K::ACallMethod { .. } | K::ANewMethod { .. } | K::ANewObject { .. } | K::ADefineLocal { .. } | K::ADelete { .. } => true,
+        K::ASetVar { .. } | K::ASetMember { .. } | K::ASetProp { .. } | K::AStoreReg { .. } | K::APostInc { .. } | K::APostDec { .. } | K::AEnumerate { .. } => true,
+        K::AFunction(_) | K::AReturn | K::ASetTarget(_) | K::ASetTarget2 { .. } | K::AGotoFrame(_) | K::AStrict(_) | K::AUnsupported(_) => true,
+        K::AFn { side: true, .. } => true,
+        K::AInitArray { values } => values.borrow().iter().any(has_side_effect),
+        K::AInitObject { names, values } => names.borrow().iter().any(has_side_effect) || values.borrow().iter().any(has_side_effect),
         _ => {
             drop(b);
             let mut found = false;

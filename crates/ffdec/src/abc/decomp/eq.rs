@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::item::{It, List, K};
+use super::item::{AVal, It, List, K};
 
 fn opt_eq(a: &Option<It>, b: &Option<It>) -> bool {
     match (a, b) {
@@ -97,7 +97,45 @@ pub fn eq(a: &It, b: &It) -> bool {
         (K::With { scope: s1, items: i1 }, K::With { scope: s2, items: i2 }) => eq(s1, s2) && list_eq(i1, i2),
         (K::WithEnd { scope: s1 }, K::WithEnd { scope: s2 }) | (K::WithObject { scope: s1 }, K::WithObject { scope: s2 }) => eq(s1, s2),
         (K::Xml { parts: a }, K::Xml { parts: b }) => list_eq(a, b),
+        (K::ADirect { v: a, .. }, K::ADirect { v: b, .. }) => aval_eq(a, b),
+        (K::AUnresolved(a), K::AUnresolved(b)) => a == b,
+        (K::AGetVar { name: a, .. }, K::AGetVar { name: b, .. }) => eq(a, b),
+        (K::ASetVar { name: a, .. }, K::ASetVar { name: b, .. }) => eq(a, b) && v(),
+        (K::AGetMember { obj: o1, member: m1, .. }, K::AGetMember { obj: o2, member: m2, .. }) => eq(o1, o2) && eq(m1, m2),
+        (K::ASetMember { obj: o1, member: m1, .. }, K::ASetMember { obj: o2, member: m2, .. }) => eq(o1, o2) && eq(m1, m2) && v(),
+        (K::AGetProp { target: t1, index: i1, .. }, K::AGetProp { target: t2, index: i2, .. }) => i1 == i2 && eq(t1, t2),
+        (K::ASetProp { target: t1, index: i1 }, K::ASetProp { target: t2, index: i2 }) => i1 == i2 && eq(t1, t2) && v(),
+        (K::ADefineLocal { name: a }, K::ADefineLocal { name: b }) => eq(a, b) && v(),
+        (K::ADelete { obj: o1, prop: p1 }, K::ADelete { obj: o2, prop: p2 }) => opt_eq(o1, o2) && eq(p1, p2),
+        (K::AStoreReg { reg: r1, .. }, K::AStoreReg { reg: r2, .. }) => r1 == r2 && v(),
+        (K::ACallFunction { name: n1, args: a1, .. }, K::ACallFunction { name: n2, args: a2, .. }) => eq(n1, n2) && list_eq(a1, a2),
+        (K::ACallMethod { obj: o1, name: n1, args: a1 }, K::ACallMethod { obj: o2, name: n2, args: a2 })
+        | (K::ANewMethod { obj: o1, name: n1, args: a1 }, K::ANewMethod { obj: o2, name: n2, args: a2 }) => eq(n1, n2) && eq(o1, o2) && list_eq(a1, a2),
+        (K::ANewObject { name: n1, args: a1 }, K::ANewObject { name: n2, args: a2 }) => eq(n1, n2) && list_eq(a1, a2),
+        (K::AInitArray { values: a }, K::AInitArray { values: b }) => list_eq(a, b),
+        (K::AInitObject { names: n1, values: a }, K::AInitObject { names: n2, values: b }) => list_eq(n1, n2) && list_eq(a, b),
+        (K::AInc { obj: a }, K::AInc { obj: b }) | (K::ADec { obj: a }, K::ADec { obj: b }) => eq(a, b),
+        (K::APostInc { obj: a }, K::APostInc { obj: b }) | (K::APostDec { obj: a }, K::APostDec { obj: b }) => eq(a, b),
+        (K::AEnumerate { obj: a }, K::AEnumerate { obj: b }) => eq(a, b),
+        (K::AReturn, K::AReturn) | (K::AEval, K::AEval) | (K::ATypeOf, K::ATypeOf) => v(),
+        (K::ATempReg { .. }, K::ATempReg { .. }) => v(),
+        (K::AGotoFrame(a), K::AGotoFrame(b)) | (K::AStrict(a), K::AStrict(b)) => a == b,
+        (K::ASetTarget(a), K::ASetTarget(b)) => a == b,
+        (K::ASetTarget2 { target: a }, K::ASetTarget2 { target: b }) => eq(a, b),
+        (K::ACastOp { ctor: c1, obj: o1 }, K::ACastOp { ctor: c2, obj: o2 }) => eq(c1, c2) && eq(o1, o2),
+        (K::AExtends { sub: a1, sup: b1 }, K::AExtends { sub: a2, sup: b2 }) => eq(a1, a2) && eq(b1, b2),
+        (K::AFn { name: n1, args: a1, suffix: s1, .. }, K::AFn { name: n2, args: a2, suffix: s2, .. }) => n1 == n2 && s1 == s2 && list_eq(a1, a2),
         _ => false,
+    }
+}
+
+/// `Objects.equals` of `DirectValueActionItem.value`; registers compare by number.
+fn aval_eq(a: &AVal, b: &AVal) -> bool {
+    match (a, b) {
+        (AVal::Register { num: x, .. }, AVal::Register { num: y, .. }) => x == y,
+        (AVal::Double(x), AVal::Double(y)) => x.to_bits() == y.to_bits(),
+        (AVal::Float(x), AVal::Float(y)) => x.to_bits() == y.to_bits(),
+        _ => a == b,
     }
 }
 

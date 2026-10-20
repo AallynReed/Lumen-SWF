@@ -350,6 +350,10 @@ fn pool<T>(r: &mut Reader, zero: T, mut item: impl FnMut(&mut Reader) -> Result<
 }
 
 impl Abc {
+    /// An ABC with no definitions, for printing items outside AS3.
+    pub fn empty() -> Abc {
+        Abc { minor: 16, major: 46, constants: Constants::default(), methods: vec![], metadata: vec![], instances: vec![], classes: vec![], scripts: vec![], bodies: vec![], body_of: vec![] }
+    }
     pub fn parse(data: &[u8]) -> Result<Abc> {
         let mut r = Reader::new(data);
         let minor = r.u16()?;

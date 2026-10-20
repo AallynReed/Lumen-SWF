@@ -40,7 +40,7 @@ pub fn to_str(it: &It, ld: LD) -> String {
 
 pub fn append_try(it: &It, w: &mut Writer, ld: LD, coerce: &str, no_paren: bool) {
     let mut t = it.clone();
-    if !coerce.is_empty() {
+    if !coerce.is_empty() && !ld.as2 {
         let rt = return_type(&t);
         let rts = java_to_string(&rt);
         let nums = ["int", "uint", "Number"];
@@ -522,6 +522,14 @@ fn super_receiver(w: &mut Writer, ld: LD, obj: &It) {
 }
 
 pub fn append_to(it: &It, w: &mut Writer, ld: LD) {
+    if crate::action::decomp::print::handles(it) {
+        return crate::action::decomp::print::append(it, w, ld);
+    }
+    append_to_generic(it, w, ld)
+}
+
+/// `appendTo` of the items shared with AS3 and of the AVM2 items.
+pub fn append_to_generic(it: &It, w: &mut Writer, ld: LD) {
     let (k, p, value) = {
         let b = it.borrow();
         (b.k.clone(), b.prec, b.value.clone())
@@ -1350,6 +1358,7 @@ pub fn append_to(it: &It, w: &mut Writer, ld: LD) {
         }
         K::WithObject { .. } => {}
         K::Xml { parts } => super::values::xml_append(&parts, w, ld),
+        _ => {}
     }
 }
 
