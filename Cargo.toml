@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ffdec"]
+members = ["crates/ffdec", "crates/ffdec-cli"]
 resolver = "2"
 
 [workspace.package]
