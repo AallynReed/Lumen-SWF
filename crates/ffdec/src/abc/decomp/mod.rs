@@ -33,11 +33,45 @@ pub fn index_for(abcs: &[&Abc]) -> Arc<index::AbcIndex> {
     index::AbcIndex::for_abcs(abcs)
 }
 
+/// What the decompiler needs to know about the SWF around an ABC.
+#[derive(Debug, Clone, Default)]
+pub struct SwfContext {
+    pub version: u8,
+    pub doc: Option<ctx::DocClass>,
+}
+
+impl SwfContext {
+    pub fn of(swf: &crate::Swf) -> SwfContext {
+        let names = crate::names::Names::new(swf);
+        let doc = names.classes.get(&0).and_then(|v| v.first()).map(|name| {
+            let r = &swf.frame_rect;
+            let bg = swf.timeline.tags.iter().find(|t| t.code == crate::tags::code::SET_BACKGROUND_COLOR).and_then(|t| crate::types::Rgba::read_rgb(&mut crate::io::Reader::new(&t.body)).ok()).map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b));
+            ctx::DocClass {
+                name: name.clone(),
+                width: ((r.x_max - r.x_min) as f64 / 20.0).round() as i64,
+                height: ((r.y_max - r.y_min) as f64 / 20.0).round() as i64,
+                background: bg,
+                frame_rate: swf.frame_rate,
+            }
+        });
+        SwfContext { version: swf.header.version, doc }
+    }
+}
+
 /// Decompiled ActionScript of one script entry.
-pub fn entry_source(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf_version: u8) -> String {
-    let mut ctx = ctx::Ctx::new(abc, ctx::Config::default()).with_index(index.clone());
-    ctx.swf_version = swf_version;
+pub fn entry_source(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf: &SwfContext) -> String {
+    entry_source_with(index, abc, e, swf, ctx::Config::default())
+}
+
+/// `entry_source` with explicit decompiler settings.
+pub fn entry_source_with(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf: &SwfContext, cfg: ctx::Config) -> String {
+    let mut ctx = ctx::Ctx::new(abc, cfg).with_index(index.clone());
+    ctx.swf_version = swf.version;
+    ctx.doc = swf.doc.clone();
     let pack = script::pack_of(&ctx, e.script, e.trait_index);
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| script::pack_source(&ctx, &pack)));
-    r.unwrap_or_else(|_| "/*\r\n * Decompilation error\r\n */\r\n".into())
+    r.unwrap_or_else(|_| "/*
+ * Decompilation error
+ */
+".into())
 }

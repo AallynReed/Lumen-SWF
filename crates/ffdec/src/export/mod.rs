@@ -165,6 +165,7 @@ pub struct Exporter<'a> {
 struct As3 {
     abcs: Vec<(Vec<usize>, crate::abc::Abc)>,
     index: Arc<crate::abc::decomp::index::AbcIndex>,
+    swf: crate::abc::decomp::SwfContext,
 }
 
 const BUTTON_FRAMES: [(u8, &str); 4] = [(BUTTON_UP, "1_up"), (BUTTON_OVER, "2_over"), (BUTTON_DOWN, "3_down"), (BUTTON_HIT, "4_hittest")];
@@ -187,7 +188,7 @@ impl<'a> Exporter<'a> {
             });
             let refs: Vec<&crate::abc::Abc> = abcs.iter().map(|(_, a)| a).collect();
             let index = crate::abc::decomp::index_for(&refs);
-            As3 { abcs, index }
+            As3 { abcs, index, swf: crate::abc::decomp::SwfContext::of(self.swf) }
         })
     }
 
@@ -198,7 +199,7 @@ impl<'a> Exporter<'a> {
     /// Decompiled ActionScript of a script entry of the ABC at `path`.
     pub fn script_source(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
         let abc = self.abc_at(path)?;
-        Ok(crate::abc::decomp::entry_source(&self.as3().index, abc, e, self.swf.header.version))
+        Ok(crate::abc::decomp::entry_source(&self.as3().index, abc, e, &self.as3().swf))
     }
 
     pub fn renderer(&self) -> &Renderer<'a> {

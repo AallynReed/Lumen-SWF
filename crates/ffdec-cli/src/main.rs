@@ -223,11 +223,12 @@ fn main() -> Result<()> {
             let all = abcs(&swf);
             let refs: Vec<&ffdec::abc::Abc> = all.iter().map(|(_, a)| a).collect();
             let index = ffdec::abc::decomp::index_for(&refs);
+            let ctx = ffdec::abc::decomp::SwfContext::of(&swf);
             let mut found = false;
             for (_, abc) in &all {
                 for e in ffdec::abc::scripts::entries(abc) {
                     if e.full_name() == name {
-                        print!("{}", ffdec::abc::decomp::entry_source(&index, abc, &e, swf.header.version));
+                        print!("{}", ffdec::abc::decomp::entry_source(&index, abc, &e, &ctx));
                         found = true;
                     }
                 }

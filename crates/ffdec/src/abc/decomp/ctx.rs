@@ -40,11 +40,22 @@ pub struct Ctx<'a> {
     pub cfg: Config,
     pub swf_version: u8,
     pub index: Option<std::sync::Arc<super::index::AbcIndex>>,
+    pub doc: Option<DocClass>,
+}
+
+/// The SWF's document class and stage settings, printed as `[SWF(...)]` on that class.
+#[derive(Debug, Clone)]
+pub struct DocClass {
+    pub name: String,
+    pub width: i64,
+    pub height: i64,
+    pub background: Option<String>,
+    pub frame_rate: f32,
 }
 
 impl<'a> Ctx<'a> {
     pub fn new(abc: &'a Abc, cfg: Config) -> Ctx<'a> {
-        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: HashSet::new(), cfg, swf_version: 10, index: None }
+        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: HashSet::new(), cfg, swf_version: 10, index: None, doc: None }
     }
 
     /// Attaches type information about the ABC's classes and the player library.
