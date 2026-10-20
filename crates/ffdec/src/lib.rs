@@ -7,6 +7,7 @@ pub mod filters;
 pub mod harman;
 pub mod info;
 pub mod io;
+pub mod morph;
 pub mod names;
 pub mod swf;
 pub mod shape;
