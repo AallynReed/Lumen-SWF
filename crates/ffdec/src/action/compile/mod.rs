@@ -224,7 +224,8 @@ pub enum Target {
 /// Event flags and key code from an `on(...)` or `onClipEvent(...)` header.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Events {
-    /// ButtonCond: the 16-bit condition word without the key; clip actions: CLIPEVENTFLAGS bits.
+    /// Condition bits as stored, most significant first: BUTTONCONDACTION's 16 without the key,
+    /// or CLIPEVENTFLAGS' 32.
     pub flags: u32,
     pub key: u32,
 }

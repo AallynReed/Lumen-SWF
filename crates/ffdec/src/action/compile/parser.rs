@@ -407,29 +407,30 @@ impl<'a> Parser<'a> {
             while s.t == T::Identifier {
                 empty = false;
                 let name = s.text();
+                let clip = |n: u32| Some(1u32 << (31 - n));
                 let bit: Option<u32> = if target == Target::ButtonCond {
                     match name.as_str() {
-                        "press" => Some(1 << 2),
-                        "release" => Some(1 << 3),
-                        "releaseOutside" => Some(1 << 6),
-                        "rollOver" => Some(1 << 0),
-                        "rollOut" => Some(1 << 1),
-                        "dragOut" => Some(1 << 4),
-                        "dragOver" => Some(1 << 5),
+                        "press" => Some(0x0400),
+                        "release" => Some(0x0800),
+                        "releaseOutside" => Some(0x4000),
+                        "rollOver" => Some(0x0100),
+                        "rollOut" => Some(0x0200),
+                        "dragOut" => Some(0x1000),
+                        "dragOver" => Some(0x2000),
                         "keyPress" => None,
                         _ => return err(self.line(), "Unrecognized event type"),
                     }
                 } else {
                     match name.as_str() {
-                        "press" => Some(1 << 21),
-                        "release" => Some(1 << 20),
-                        "releaseOutside" => Some(1 << 19),
-                        "rollOver" => Some(1 << 18),
-                        "rollOut" => Some(1 << 17),
-                        "dragOut" => Some(1 << 16),
-                        "dragOver" => Some(1 << 31),
-                        "initialize" => Some(1 << 9),
-                        "construct" => Some(1 << 13),
+                        "press" => clip(13),
+                        "release" => clip(12),
+                        "releaseOutside" => clip(11),
+                        "rollOver" => clip(10),
+                        "rollOut" => clip(9),
+                        "dragOut" => clip(23),
+                        "dragOver" => clip(8),
+                        "initialize" => clip(14),
+                        "construct" => clip(21),
                         "keyPress" => None,
                         _ => return err(self.line(), "Unrecognized event type"),
                     }
@@ -443,7 +444,7 @@ impl<'a> Parser<'a> {
                         }
                         ev.key = string_to_key(&k.text()).ok_or_else(|| CompileError { line: self.line(), message: "Invalid key".into() })?;
                         if target == Target::ClipAction {
-                            ev.flags |= 1 << 22;
+                            ev.flags |= 1 << (31 - 22);
                         }
                     }
                 }
@@ -463,18 +464,19 @@ impl<'a> Parser<'a> {
             if s.t != T::Identifier {
                 return err(self.line(), format!("Identifier expected but {:?} found", s.t));
             }
-            ev.flags |= match s.text().as_str() {
-                "keyUp" => 1 << 23,
-                "keyDown" => 1 << 24,
-                "mouseUp" => 1 << 25,
-                "mouseDown" => 1 << 26,
-                "mouseMove" => 1 << 27,
-                "unload" => 1 << 28,
-                "enterFrame" => 1 << 29,
-                "load" => 1 << 30,
-                "data" => 1 << 8,
+            let n = match s.text().as_str() {
+                "keyUp" => 0,
+                "keyDown" => 1,
+                "mouseUp" => 2,
+                "mouseDown" => 3,
+                "mouseMove" => 4,
+                "unload" => 5,
+                "enterFrame" => 6,
+                "load" => 7,
+                "data" => 15,
                 _ => return err(self.line(), "Unrecognized clipEvent type"),
             };
+            ev.flags |= 1 << (31 - n);
             self.expected_type(&[T::ParentClose])?;
         }
         self.expected_type(&[T::CurlyOpen])?;

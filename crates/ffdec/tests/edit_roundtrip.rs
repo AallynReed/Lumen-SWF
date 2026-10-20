@@ -190,3 +190,63 @@ Pop
     report("as2_store", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
 }
+
+/// Decompiling every script, compiling it and storing it back must keep the file's records,
+/// event headers included, and read back as what was compiled.
+#[test]
+fn as2_sources_compile_in_place() {
+    use ffdec::action::compile::{compile, swf_classes, Target};
+    use ffdec::action::scripts::Kind;
+    let (mut total, mut bad) = (0, Vec::new());
+    let target = |k: Kind| match k {
+        Kind::ButtonCond => Target::ButtonCond,
+        Kind::ClipAction => Target::ClipAction,
+        _ => Target::Actions,
+    };
+    for (f, mut swf) in swfs() {
+        let sources = |swf: &ffdec::Swf| scripts::export_paths(&scripts::tree(swf));
+        let count = sources(&swf).len();
+        if count == 0 {
+            continue;
+        }
+        let classes = swf_classes(&swf);
+        let mut first = Vec::new();
+        for i in 0..count {
+            let (name, src) = sources(&swf).swap_remove(i);
+            let text = ffdec::export::Exporter::new(&swf).as2_source(&src);
+            total += 1;
+            match compile(&text, swf.header.version, target(src.kind), &classes, Some(&swf)) {
+                Ok(c) => {
+                    first.push((name, src.header.clone(), c.actions.to_bytes()));
+                    src.set_compiled(&mut swf, &c).unwrap();
+                }
+                Err(e) => {
+                    bad.push(format!("{} {name}: {e}", f.display()));
+                    first.push((name, src.header.clone(), Vec::new()));
+                }
+            }
+        }
+        let saved = ffdec::Swf::parse(&swf.save(&ffdec::SaveOptions { compression: ffdec::Compression::None, encrypt: false }).unwrap()).unwrap();
+        let after = sources(&saved);
+        if after.len() != count {
+            bad.push(format!("{}: {count} scripts became {}", f.display(), after.len()));
+            continue;
+        }
+        for ((name, header, bytes), (_, src)) in first.iter().zip(&after) {
+            if bytes.is_empty() {
+                continue;
+            }
+            if *header != src.header {
+                bad.push(format!("{} {name}: header {header:?} became {:?}", f.display(), src.header));
+                continue;
+            }
+            let v = saved.header.version;
+            let stored = action::pcode::to_pcode(&src.actions(&saved));
+            if stored != action::pcode::to_pcode(&action::read_action_list(bytes, 0, bytes.len(), v)) {
+                bad.push(format!("{} {name}: reads back differently", f.display()));
+            }
+        }
+    }
+    report("as2_source_store", total, &bad);
+    assert!(bad.is_empty(), "{} scripts differ", bad.len());
+}

@@ -48,6 +48,51 @@ impl Source {
         super::read_action_list(body, self.start.min(end), end, swf.header.version)
     }
 
+    /// Stores compiled actions and, for a button condition or clip event, the events of its
+    /// `on(...)`/`onClipEvent(...)` header.
+    pub fn set_compiled(&self, swf: &mut Swf, c: &super::compile::Compiled) -> crate::error::Result<()> {
+        let Some(ev) = &c.events else { return self.set_actions(swf, &c.actions) };
+        let version = swf.header.version;
+        let tag = swf.tag(&self.tag).ok_or_else(|| crate::error::Error::Other("script tag not found".into()))?;
+        let mut body = tag.body.clone();
+        let bytes = c.actions.to_bytes();
+        match self.kind {
+            Kind::ButtonCond => {
+                let at = self.start - 2;
+                let flags = (ev.flags as u16) | ((ev.key as u16 & 0x7f) << 1);
+                body[at..at + 2].copy_from_slice(&flags.to_be_bytes());
+                let size_at = self.start - 4;
+                if u16::from_le_bytes([body[size_at], body[size_at + 1]]) != 0 {
+                    let size = u16::try_from(bytes.len() + 4).map_err(|_| crate::error::Error::Other("button actions are too large".into()))?;
+                    body[size_at..size_at + 2].copy_from_slice(&size.to_le_bytes());
+                }
+                body.splice(self.start..self.end, bytes);
+            }
+            Kind::ClipAction => {
+                let (_, _, recs, all_at) = clip_actions(tag, version).unwrap_or_default();
+                let rec = recs.iter().find(|r| r.2 == self.start).ok_or_else(|| crate::error::Error::Other("clip event not found".into()))?;
+                let flag_len = if version >= 6 { 4 } else { 2 };
+                let old_key = (rec.0 & (1 << (31 - 22)) != 0) as usize;
+                let key = ev.flags & (1 << (31 - 22)) != 0;
+                let mut new = ev.flags.to_be_bytes()[..flag_len].to_vec();
+                new.extend(((bytes.len() + key as usize) as u32).to_le_bytes());
+                if key {
+                    new.push(ev.key as u8);
+                }
+                new.extend(bytes);
+                body.splice(self.start - old_key - 4 - flag_len..self.end, new);
+                let mut all = 0u32;
+                let probe = Tag { body: body.clone(), ..tag.clone() };
+                for r in clip_actions(&probe, version).map(|c| c.2).unwrap_or_default() {
+                    all |= r.0;
+                }
+                body[all_at..all_at + flag_len].copy_from_slice(&all.to_be_bytes()[..flag_len]);
+            }
+            _ => return self.set_actions(swf, &c.actions),
+        }
+        swf.set_tag_body(&self.tag, body)
+    }
+
     /// Stores `list` in place of these actions, updating the record's size field.
     pub fn set_actions(&self, swf: &mut Swf, list: &ActionList) -> crate::error::Result<()> {
         let tag = swf.tag(&self.tag).ok_or_else(|| crate::error::Error::Other("script tag not found".into()))?;
@@ -65,7 +110,7 @@ impl Source {
                 }
             }
             Kind::ClipAction => {
-                let (_, _, recs) = clip_actions(tag, swf.header.version).unwrap_or_default();
+                let (_, _, recs, _) = clip_actions(tag, swf.header.version).unwrap_or_default();
                 let key = recs.iter().find(|r| r.2 == self.start).is_some_and(|r| r.0 & (1 << (31 - 22)) != 0) as usize;
                 let at = self.start - key - 4;
                 body[at..at + 4].copy_from_slice(&((bytes.len() + key) as u32).to_le_bytes());
@@ -252,8 +297,9 @@ fn clip_flags(r: &mut Reader, version: u8) -> crate::error::Result<u32> {
     Ok(f)
 }
 
-/// The clip action records of a PlaceObject2/3 body as (flags, key, start, end).
-fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usize, usize)>)> {
+/// The clip action records of a PlaceObject2/3 body as (flags, key, start, end), with the
+/// placed character, depth and the offset of AllEventFlags.
+fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usize, usize)>, usize)> {
     let mut r = Reader::new(&tag.body);
     let f1 = r.u8().ok()?;
     let f2 = if tag.code == PLACE_OBJECT3 { r.u8().ok()? } else { 0 };
@@ -265,7 +311,7 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
         character = r.u16().ok()? as i32;
     }
     if f1 & 0x80 == 0 {
-        return Some((character, depth, vec![]));
+        return Some((character, depth, vec![], 0));
     }
     if f1 & 0x04 != 0 {
         skip_matrix(&mut r).ok()?;
@@ -300,6 +346,7 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
         }
     }
     r.u16().ok()?;
+    let all_at = r.pos();
     clip_flags(&mut r, version).ok()?;
     let mut out = Vec::new();
     loop {
@@ -324,7 +371,7 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
             break;
         }
     }
-    Some((character, depth, out))
+    Some((character, depth, out, all_at))
 }
 
 fn skip_button_records(r: &mut Reader, v2: bool) -> crate::error::Result<()> {
@@ -435,7 +482,7 @@ impl Ctx<'_> {
                 })
                 .collect(),
             PLACE_OBJECT2 | PLACE_OBJECT3 => {
-                let Some((_, _, recs)) = clip_actions(t, version) else { return vec![] };
+                let Some((_, _, recs, _)) = clip_actions(t, version) else { return vec![] };
                 recs.into_iter()
                     .enumerate()
                     .map(|(i, (flags, key, s, e))| {
@@ -449,7 +496,7 @@ impl Ctx<'_> {
     }
 
     fn place_file(&self, t: &Tag) -> String {
-        let (ch, depth, _) = clip_actions(t, self.swf.header.version).unwrap_or((-1, 0, vec![]));
+        let (ch, depth, _, _) = clip_actions(t, self.swf.header.version).unwrap_or((-1, 0, vec![], 0));
         let mut s = format!("{}_{ch}", t.name());
         if ch >= 0 {
             if let Some(e) = self.export_name(ch as u16) {
