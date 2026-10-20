@@ -1005,6 +1005,7 @@ dependencies = [
  "lzma-rust2",
  "resvg",
  "serde",
+ "serde_json",
  "symphonia",
  "thiserror 2.0.21",
 ]
