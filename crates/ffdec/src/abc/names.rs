@@ -32,7 +32,7 @@ pub fn escape_pcode(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '"' => out.push_str("\\\""),
             '\'' => out.push_str("\\'"),
-            c if (c as u32) < 32 => out.push_str(&format!("\\x{:02X}", c as u32)),
+            c if (c as u32) < 32 => out.push_str(&format!("\\x{:02x}", c as u32)),
             c => {
                 let run = chars[i..].iter().take_while(|&&x| x == c).count();
                 if run > 20 {
@@ -60,7 +60,7 @@ pub fn escape_as(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '"' => out.push_str("\\\""),
             '\'' => out.push_str("\\'"),
-            c if (c as u32) < 32 => out.push_str(&format!("\\x{:02X}", c as u32)),
+            c if (c as u32) < 32 => out.push_str(&format!("\\x{:02x}", c as u32)),
             c => out.push(c),
         }
     }
