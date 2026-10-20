@@ -1,7 +1,9 @@
 //! JPEXS's AS1/2 decompiler expectations (`ActionScript2Test`, `ActionScript2ClassesTest`).
 
+use std::collections::HashMap;
 use std::path::Path;
 
+use ffdec::action::decomp::uninit::Uninitialized;
 use ffdec::action::{decomp, read_action_list, tag_actions};
 use ffdec::tags::code::{DO_ACTION, DO_INIT_ACTION, SHOW_FRAME};
 
@@ -35,14 +37,12 @@ fn clean(s: &str) -> String {
 #[test]
 fn as2_decompile_fixtures() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let swf_path = root.join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/as2/as2.swf");
-    let Ok(data) = std::fs::read(&swf_path) else {
+    let testdata = root.join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    if !testdata.is_dir() {
         eprintln!("JPEXS test corpus not found; skipping");
         return;
-    };
-    let swf = ffdec::Swf::parse(&data).unwrap();
-    let names = ffdec::names::Names::new(&swf);
-    let uninit = decomp::swf_uninitialized(&swf);
+    }
+    let mut swfs: HashMap<String, (ffdec::Swf, ffdec::names::Names, Uninitialized)> = HashMap::new();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(root.join("tests/fixtures/as2_decompile.json")).unwrap()).unwrap();
     let only = std::env::var("AS2_CASE").ok();
     let (mut pass, mut total) = (0, 0);
@@ -52,6 +52,13 @@ fn as2_decompile_fixtures() {
         if only.as_deref().is_some_and(|o| !name.contains(o)) {
             continue;
         }
+        let file = c["swf"].as_str().unwrap();
+        let (swf, names, uninit) = swfs.entry(file.to_string()).or_insert_with(|| {
+            let swf = ffdec::Swf::parse(&std::fs::read(testdata.join(file)).unwrap()).unwrap();
+            let names = ffdec::names::Names::new(&swf);
+            let uninit = decomp::swf_uninitialized(&swf);
+            (swf, names, uninit)
+        });
         let expected = c["expected"].as_str().unwrap();
         let tag = if let Some(frame) = c["frame"].as_u64() {
             let mut f = 0;
@@ -83,7 +90,7 @@ fn as2_decompile_fixtures() {
         let body = tag_actions(tag.code, &tag.body).unwrap();
         let list = read_action_list(body, 0, body.len(), swf.header.version);
         let empty = Default::default();
-        let u = if tag.code == DO_INIT_ACTION { &uninit } else { &empty };
+        let u = if tag.code == DO_INIT_ACTION { &*uninit } else { &empty };
         let actual = decomp::actions_to_source(&list, tag.code == DO_INIT_ACTION, None, "", u);
         if clean(&actual) == clean(expected) {
             pass += 1;
