@@ -1,6 +1,7 @@
 //! AS1/2 decompiler: a port of FFDec's `ActionGraph` on the shared graph engine.
 
 pub mod class;
+pub mod cleaner;
 pub mod graph;
 pub mod items;
 pub mod print;
@@ -129,6 +130,7 @@ pub fn translate_via_graph(mut tr: ActTr, start_ip: usize) -> Result<List, Strin
 
 /// `Action.actionsToTree` for a whole action record.
 pub fn actions_to_tree(list: &ActionList, inside_do_init: bool, path: &str, uninit: &Rc<uninit::Uninitialized>) -> Result<List, String> {
+    let list = &cleaner::clean(list);
     let actions = Rc::new(list.actions.clone());
     let len = actions.len();
     let vars = Rc::new(RefCell::new(JMap::default()));
