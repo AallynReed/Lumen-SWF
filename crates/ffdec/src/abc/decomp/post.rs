@@ -2,7 +2,6 @@
 
 use super::graph::*;
 use super::item::*;
-use super::item::PartId as P;
 use super::props::*;
 use super::structure::{br_id, cont_id, fix_switch_end, if_branches, if_expr};
 
