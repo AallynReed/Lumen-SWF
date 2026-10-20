@@ -2,8 +2,8 @@
 
 pub mod names;
 pub mod opcodes;
-
-
+pub mod pcode;
+pub mod scripts;
 
 use crate::error::{Error, Result};
 use crate::io::Reader;
