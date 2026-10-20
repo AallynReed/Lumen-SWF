@@ -345,6 +345,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
 
     /// AVM2Graph's `finalProcessAfter`.
     pub fn final_process_after(&self, list: &List, level: i32, fd: &FinalData) {
+        if self.as2() {
+            return self.as2_final_process_after(list, level);
+        }
         self.final_process_after_generic(list, level);
         let mut i = 0;
         while i < list.borrow().len() {
@@ -370,6 +373,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     pub fn final_process(&self, parent: Option<&It>, list: &List, level: i32, fd: &FinalData) {
         if self.do_not_process_ifs {
             return;
+        }
+        if self.as2() {
+            return self.as2_final_process(list, level);
         }
         self.merge_double_switches(list);
         if level == 0 && last(list).is_some_and(|x| matches!(x.borrow().k, K::ReturnVoid)) {
@@ -832,7 +838,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         Ok(ret)
     }
 
-    fn process_gotos(&self, pc: &mut Pc, ret: &List) {
+    pub fn process_gotos(&self, pc: &mut Pc, ret: &List) {
         let mut processed: Vec<List> = Vec::new();
         process_if_gotos2(&mut processed, ret);
         process_if_gotos(&mut pc.found_gotos, ret);
@@ -972,7 +978,7 @@ fn expand_gotos(list: &List) {
     }
 }
 
-fn contains_pop_items(list: &List) -> bool {
+pub fn contains_pop_items(list: &List) -> bool {
     for item in list.borrow().iter() {
         if is::pop(item) {
             return true;
@@ -992,7 +998,7 @@ fn contains_pop_items(list: &List) -> bool {
     false
 }
 
-fn promote_push_items(list: &List) {
+pub fn promote_push_items(list: &List) {
     let items: Vec<It> = list.borrow().clone();
     for ti in items {
         if is::push(&ti) {
@@ -1010,7 +1016,7 @@ fn promote_push_items(list: &List) {
     }
 }
 
-fn handle_set_temporary_declarations(items: &List) {
+pub fn handle_set_temporary_declarations(items: &List) {
     let mut i = 0;
     while i < items.borrow().len() {
         let item = items.borrow()[i].clone();

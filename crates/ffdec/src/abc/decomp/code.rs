@@ -114,11 +114,16 @@ pub struct Ins {
     pub ignored: bool,
     pub line: i32,
     pub file: Option<String>,
+    /// AS1/2 container actions (functions, `with`, `try`): body address ranges.
+    pub bodies: Vec<(i64, i64)>,
+    /// Address after a container's bodies.
+    pub container_end: Option<i64>,
+    pub define_function: bool,
 }
 
 impl Ins {
     fn from(i: Instruction) -> Ins {
-        Ins { addr: i.offset as i64, len: i.len as i64, code: i.code, name: i.name, kinds: i.kinds, ops: i.operands, ignored: false, line: 0, file: None }
+        Ins { addr: i.offset as i64, len: i.len as i64, code: i.code, name: i.name, kinds: i.kinds, ops: i.operands, ignored: false, line: 0, file: None, bodies: vec![], container_end: None, define_function: false }
     }
 
     pub fn op(&self, i: usize) -> i32 {
@@ -182,6 +187,8 @@ impl Ins {
 pub struct Code {
     pub ins: Vec<Ins>,
     pub exceptions: Vec<Exception>,
+    /// `GraphSource.startIp`: where the graph starts (AS1/2 function bodies).
+    pub start_ip: i32,
 }
 
 impl Code {
@@ -189,7 +196,7 @@ impl Code {
         let handlers: Vec<usize> = body.exceptions.iter().map(|e| e.target).collect();
         let dialect = Dialect::of(abc.major, abc.minor);
         let ins = disassemble(&body.code, &handlers, dialect).into_iter().map(Ins::from).collect();
-        Code { ins, exceptions: body.exceptions.clone() }
+        Code { ins, exceptions: body.exceptions.clone(), start_ip: 0 }
     }
 
     pub fn len(&self) -> usize {
@@ -311,12 +318,12 @@ impl Code {
     pub fn graph_refs(&self, alternate: &[i32]) -> Vec<Vec<i32>> {
         let n = self.ins.len();
         let mut refs: Vec<Vec<i32>> = vec![Vec::new(); n];
-        let mut q: VecDeque<(i32, i32)> = VecDeque::from([(0, 0)]);
+        let mut q: VecDeque<(i32, i32, i32)> = VecDeque::from([(self.start_ip, 0, -1)]);
         for (k, &e) in alternate.iter().enumerate() {
-            q.push_back((e, -(k as i32 + 1)));
+            q.push_back((e, -(k as i32 + 1), -1));
         }
-        while let Some((mut ip, mut last)) = q.pop_front() {
-            while ip >= 0 && (ip as usize) < n {
+        while let Some((mut ip, mut last, end)) = q.pop_front() {
+            while ip >= 0 && (ip as usize) < n && (end == -1 || ip < end) {
                 let u = ip as usize;
                 refs[u].push(last);
                 last = ip;
@@ -331,10 +338,20 @@ impl Code {
                 if ins.is_exit() {
                     break;
                 }
+                if let Some(cend) = ins.container_end {
+                    let p = |a: i64| self.adr2pos(a).map_or(-1, |x| x as i32);
+                    for &(s, e) in &ins.bodies {
+                        if e > s {
+                            q.push_back((p(s), ip, p(e)));
+                        }
+                    }
+                    ip = p(cend);
+                    continue;
+                }
                 if ins.is_branch() || ins.is_jump() {
                     for b in self.branches(u) {
                         if b >= 0 {
-                            q.push_back((b, ip));
+                            q.push_back((b, ip, end));
                         }
                     }
                     break;

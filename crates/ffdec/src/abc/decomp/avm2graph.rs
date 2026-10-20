@@ -156,6 +156,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     }
 
     pub fn is_part_empty(&self, part: P) -> bool {
+        if self.as2() {
+            return false;
+        }
         let p = &self.parts[part];
         if p.next.len() > 1 || p.start < 0 {
             return false;
@@ -223,6 +226,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     }
 
     pub fn prepare_branch_local_data(&self, ld: &Ld) -> Ld {
+        if self.as2() {
+            return ld.clone();
+        }
         let mut r = ld.copy();
         let items = ld.local_scope_stack.borrow().items.clone();
         r.new_local_scope();
@@ -279,6 +285,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     }
 
     pub fn check_switch(&self, ld: &Ld, sw: &It, other_sides: &[It], output: &List) {
+        if self.as2() {
+            return;
+        }
         let Some(sl) = last(output) else { return };
         let Some(reg) = set_local_reg(&sl) else { return };
         let Some(ip) = sl.borrow().src else { return };
@@ -418,6 +427,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     /// `checkTry` (AVM2's `checkPartOutput`).
     #[allow(clippy::too_many_arguments)]
     pub fn check_part_output(&mut self, pc: &mut Pc, current_ret: &List, visited: &mut Vec<P>, ld: &mut Ld, stack: &St, _parent: Option<P>, part: P, stop: &Stops, _current_loop: Option<usize>, recursion: usize) -> bool {
+        if self.as2() {
+            return false;
+        }
         let prev_ids = ld.parsed_exception_ids.borrow().clone();
         let mut catched_ids: Vec<i32> = Vec::new();
         let finally_index = self.get_catched_exception_ids(ld, part, &prev_ids, &mut catched_ids, pc);
@@ -745,6 +757,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     /// `check`: switches compiled as chains of `ifstricteq`/`ifstrictne`.
     #[allow(clippy::too_many_arguments)]
     pub fn check(&mut self, pc: &mut Pc, current_ret: &List, visited: &mut Vec<P>, ld: &mut Ld, stack: &St, _parent: Option<P>, part: P, stop: &Stops, output: &List) -> Option<List> {
+        if self.as2() {
+            return self.as2_check(pc, current_ret, visited, ld, stack, part, stop, output);
+        }
         let top_strict = stack.borrow().items.last().is_some_and(|x| matches!(x.borrow().k, K::Bin { op: Bin::StrictEq | Bin::StrictNeq, .. }));
         if self.parts[part].next.len() != 2 || stack.borrow().is_empty() || !top_strict {
             return None;

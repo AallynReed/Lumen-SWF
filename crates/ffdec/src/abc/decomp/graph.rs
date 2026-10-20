@@ -47,11 +47,25 @@ pub struct G<'t, 'c, 'a> {
     pub heads: Vec<P>,
     pub tr: &'t Tr<'c, 'a>,
     pub do_not_process_ifs: bool,
+    /// The AS1/2 translator; `tr` then only carries the action list as `Code`.
+    pub act: Option<&'t crate::action::decomp::translate::ActTr>,
 }
 
 impl<'t, 'c, 'a> G<'t, 'c, 'a> {
     pub fn new(tr: &'t Tr<'c, 'a>) -> Self {
-        G { parts: Vec::new(), arena: Vec::new(), heads: Vec::new(), tr, do_not_process_ifs: false }
+        G { parts: Vec::new(), arena: Vec::new(), heads: Vec::new(), tr, do_not_process_ifs: false, act: None }
+    }
+
+    pub fn as2(&self) -> bool {
+        self.act.is_some()
+    }
+
+    /// `checkIp`.
+    pub fn check_ip(&self, ip: i32) -> i32 {
+        match self.act {
+            Some(a) => a.check_ip(&self.tr.code, ip),
+            None => ip,
+        }
     }
 
     pub fn code_len(&self) -> i32 {
@@ -435,7 +449,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             last: i32,
         }
         let mut q: VecDeque<W> = VecDeque::new();
-        q.push_back(W { parent: None, path: GraphPath::default(), start: 0, last: 0 });
+        let start_ip = code.start_ip;
+        q.push_back(W { parent: None, path: GraphPath::default(), start: start_ip, last: 0 });
         for &pos in alternate {
             let e1 = self.new_part(-1, -1);
             self.parts[e1].path = GraphPath::root("e");
@@ -459,7 +474,11 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 self.parts[par].next.push(ret);
             }
             while ip < n {
-                let aip = ip;
+                let aip = self.check_ip(ip);
+                if aip >= n {
+                    ip = aip;
+                    break;
+                }
                 if visited[ip as usize] || (ip != start && refs[ip as usize].len() > 1) {
                     self.parts[part].end = last;
                     let found = self.search_part(aip, &all);
@@ -487,6 +506,20 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     ip += 1;
                     continue;
                 }
+                if let Some(cend) = ins.container_end {
+                    let define = ins.define_function;
+                    ip = self.tr.code.adr2pos(cend).map_or(n, |x| x as i32);
+                    if define {
+                        self.parts[part].end = last;
+                        all.push(part);
+                        let np = self.new_part(ip, -1);
+                        self.parts[np].path = path.clone();
+                        self.parts[part].next.push(np);
+                        self.parts[np].refs.push(part);
+                        part = np;
+                    }
+                    continue;
+                }
                 if ins.is_exit() {
                     self.parts[part].end = ip;
                     all.push(part);
@@ -494,7 +527,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 } else if ins.is_jump() {
                     self.parts[part].end = ip;
                     all.push(part);
-                    let target = self.tr.code.branches(ip as usize)[0];
+                    let target = self.check_ip(self.tr.code.branches(ip as usize)[0]);
                     q.push_back(W { parent: Some(part), path: path.clone(), start: target, last });
                     break;
                 } else if ins.is_branch() {
@@ -502,7 +535,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     all.push(part);
                     let branches = self.tr.code.branches(ip as usize);
                     for (i, &b) in branches.iter().enumerate() {
-                        q.push_back(W { parent: Some(part), path: path.sub(i as i32, ip), start: b, last: ip });
+                        q.push_back(W { parent: Some(part), path: path.sub(i as i32, ip), start: self.check_ip(b), last: ip });
                     }
                     break;
                 }
@@ -529,7 +562,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             }
         }
         let mut heads = Vec::new();
-        if let Some(h) = self.search_part(0, &all) {
+        if let Some(h) = self.search_part(start_ip, &all) {
             heads.push(h);
         }
         for &pos in alternate {
@@ -555,7 +588,18 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         }
         stack.borrow_mut().set_connected_output(Some(output.clone()));
         let (s, e) = (self.parts[part].start, self.parts[part].end);
-        self.tr.translate_range(output, ld, stack, s as usize, e as usize);
+        self.translate_range(output, ld, stack, s as usize, e as usize);
+    }
+
+    /// `GraphSource.translatePart`; AS1/2 can report the ip a container ran past.
+    pub fn translate_range(&self, output: &List, ld: &mut Ld, stack: &St, s: usize, e: usize) -> Option<i32> {
+        match self.act {
+            Some(a) => a.translate_range(self, output, ld, stack, s, e),
+            None => {
+                self.tr.translate_range(output, ld, stack, s, e);
+                None
+            }
+        }
     }
 
     /// `translatePartGetStack` with an output list.
@@ -616,6 +660,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
 
     /// `makeAllCommands`: AVM2 drops pending function literals, then the stack becomes pushes.
     pub fn make_all_commands(&self, commands: &List, stack: &St) {
+        if self.as2() {
+            return self.as2_make_all_commands(commands, stack);
+        }
         {
             let mut s = stack.borrow_mut();
             s.items.retain(|i| !is::new_function(i));

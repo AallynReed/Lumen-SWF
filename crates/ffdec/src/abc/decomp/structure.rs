@@ -22,6 +22,11 @@ struct LoopLocal {
     s_pre_loop: St,
 }
 
+/// The AS1/2 for..in enumeration value kept on the stack across branches (`BranchStackResistant`).
+fn top_branch_stack_resistant(stack: &St) -> Option<It> {
+    stack.borrow().items.last().filter(|t| matches!(t.borrow().k, K::AEnumerated)).cloned()
+}
+
 fn last_is(l: &List, f: fn(&It) -> bool) -> bool {
     l.borrow().last().is_some_and(f)
 }
@@ -110,7 +115,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 panic!("printGraph max recursion level reached.");
             }
             let Some(p0) = part else { return original_ret };
-            let Some(p) = self.check_part_with_output(Some(&ret), &stack, ld, parent, p0) else { return original_ret };
+            let Some(mut p) = self.check_part_with_output(Some(&ret), &stack, ld, parent, p0) else { return original_ret };
             part = Some(p);
             precontinue = empty_list();
             let can_handle = self.can_handle_loop(ld, p, pc);
@@ -226,7 +231,11 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             if is_loop {
                 let cl = current_loop.unwrap();
                 let ns = st_clone(&stack);
+                let top_bsr = top_branch_stack_resistant(&stack);
                 ns.borrow_mut().clear();
+                if let Some(b) = top_bsr {
+                    ns.borrow_mut().push(b);
+                }
                 stack = ns;
                 let lit = mk(K::While { loop_id: self.arena[cl].id, expr: new_list(vec![true_item(None, ld.line_start)]), cmds: empty_list(), label_used: false, universal: true }, None, ld.line_start, prec::NOPRECEDENCE, None);
                 current_ret.borrow_mut().push(lit.clone());
@@ -272,9 +281,25 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             if self.check_part_output(pc, &current_ret, visited, ld, &stack, parent, p, &stop, current_loop, recursion) {
                 parse_next = false;
             } else {
-                stack.borrow_mut().set_connected_output(Some(output.clone()));
-                let (s, e) = (self.parts[p].start as usize, self.parts[p].end as usize);
-                self.tr.translate_range(&output, ld, &stack, s, e);
+                let mut ip_start = self.parts[p].start as usize;
+                let mut tp = p;
+                loop {
+                    stack.borrow_mut().set_connected_output(Some(output.clone()));
+                    let e = self.parts[tp].end as usize;
+                    let Some(nip) = self.translate_range(&output, ld, &stack, ip_start, e) else { break };
+                    let found = pc.all_parts.iter().into_iter().find(|&x| self.parts[x].contains_ip(nip));
+                    let Some(np) = found else { break };
+                    if nip == self.parts[np].start {
+                        let v = output.borrow().clone();
+                        current_ret.borrow_mut().extend(v);
+                        part = Some(np);
+                        ret = current_ret;
+                        continue 'main;
+                    }
+                    ip_start = nip as usize;
+                    tp = np;
+                }
+                p = tp;
                 if stack.borrow().empty_pop_count > 0 {
                     pc.has_empty_stack_pops = true;
                 }
@@ -565,15 +590,20 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         let nps = self.next_parts(p);
         let is_empty = nps[0] == nps[1];
         let mut next = self.get_common_part(ld, Some(p), &nps, pc);
-        if ld.second_pass.is_some() {
+        if ld.second_pass.is_some() || self.act.is_some_and(|a| a.second_pass.is_some()) {
             if let Some(nx) = next {
                 self.detect_always_break(pc, visited, ld, p, nx, current_ret, ret, is_loop, current_loop, loop_item, li, loop_type_found, do_while_candidate, precontinue, s_pre_loop, stop, recursion);
             }
         }
         let true_stack = st_clone(stack);
         let false_stack = st_clone(stack);
+        let top_bsr = top_branch_stack_resistant(stack);
         true_stack.borrow_mut().clear();
         false_stack.borrow_mut().clear();
+        if let Some(b) = top_bsr {
+            true_stack.borrow_mut().items.push(b.clone());
+            false_stack.borrow_mut().items.push(b);
+        }
         if is_empty {
             next = Some(nps[0]);
         }

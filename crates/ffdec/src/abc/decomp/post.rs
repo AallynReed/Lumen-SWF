@@ -364,6 +364,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
 
     /// AVM2Graph's `processOther`: trailing continues inside a final try.
     pub fn process_other(&self, list: &List, last_loop_id: i64) {
+        if self.as2() {
+            return;
+        }
         let n = list.borrow().len();
         if n == 0 {
             return;
