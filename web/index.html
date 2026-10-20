@@ -28,6 +28,7 @@
     <button id="btn-export" class="btn" disabled title="Export the selected asset (images, sounds, fonts…), or the raw tag body">Export…</button>
     <button id="btn-replace" class="btn" disabled title="Replace the selected image, sound, binary data or edit text with a file">Replace…</button>
     <button id="btn-raw" class="btn" disabled title="Save the selected tag's raw body">Raw…</button>
+    <button id="btn-remove" class="btn" disabled title="Remove the selected tag">Remove</button>
     <div class="menu-wrap">
         <button id="btn-export-all" class="btn" disabled title="Export every asset of the chosen types into a folder">Export all…</button>
         <div id="export-menu" class="menu" hidden>
@@ -90,6 +91,7 @@
                 <p id="preview-note" class="preview-note"></p>
             </div>
             <div id="tab-details" class="tab-body">
+                <div id="details-bar" class="code-bar" hidden><button id="btn-edit-header" class="btn" title="Edit the version, frame rate, stage size and background">Edit</button></div>
                 <table class="fields"><tbody id="fields"></tbody></table>
             </div>
             <div id="tab-hex" class="tab-body hex-body" hidden>

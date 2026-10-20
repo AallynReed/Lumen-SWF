@@ -206,6 +206,7 @@ function updateButtons() {
     $('btn-export').disabled = !tagSelected;
     $('btn-replace').disabled = !state.importable;
     $('btn-raw').disabled = !tagSelected;
+    $('btn-remove').disabled = !(state.selected && state.selected.node.kind === 'tag');
     $('btn-export-all').disabled = !has;
 }
 
@@ -318,6 +319,7 @@ async function showSelection() {
     const preview = await previewCall;
     if (state.selected !== sel) return;
     $('fields').innerHTML = fieldRows(fields);
+    $('details-bar').hidden = n.kind !== 'header';
     if (isTag) resetHex();
 
     const hasPreview = !!preview;
@@ -787,6 +789,62 @@ $('btn-raw').addEventListener('click', async () => {
     if (!sel || !sel.node.path) return;
     const out = await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
+});
+
+$('btn-remove').addEventListener('click', async () => {
+    const sel = state.selected;
+    if (!sel || sel.node.kind !== 'tag' || !leaveEditor()) return;
+    if (!window.confirm(`Remove ${sel.node.label}? Tags that refer to it are kept.`)) return;
+    try {
+        await invoke('remove_tag', { id: sel.docId, path: sel.node.path });
+    } catch (e) {
+        status(String(e), true);
+        return;
+    }
+    const doc = state.docs.find((d) => d.id === sel.docId);
+    doc.modified = true;
+    state.selected = null;
+    await loadTree(doc);
+    render();
+    status(`Removed ${sel.node.label}`);
+});
+
+// The header's editable fields as a form in place of the details table.
+$('btn-edit-header').addEventListener('click', async () => {
+    const sel = state.selected;
+    if (!sel || sel.node.kind !== 'header') return;
+    const h = await call('get_header', { id: sel.docId });
+    const row = (label, input) => `<tr><td>${label}</td><td>${input}</td></tr>`;
+    const bg = h.background || '#ffffff';
+    $('details-bar').hidden = true;
+    $('fields').innerHTML = row('SWF version', `<input class="field-input" id="h-version" type="number" min="1" max="255" value="${h.version}">`)
+        + row('Frame rate', `<input class="field-input" id="h-rate" type="number" min="0" max="255.99" step="0.01" value="${h.frame_rate}"> fps`)
+        + row('Width', `<input class="field-input" id="h-width" type="number" min="0.05" step="0.05" value="${h.width}"> px`)
+        + row('Height', `<input class="field-input" id="h-height" type="number" min="0.05" step="0.05" value="${h.height}"> px`)
+        + row('Background', `<input id="h-bg-on" type="checkbox"${h.background ? ' checked' : ''} aria-label="Set a background colour"> <input id="h-bg" type="color" value="${esc(bg)}" aria-label="Background colour">`)
+        + row('', '<button class="btn primary" id="h-apply">Apply</button> <button class="btn" id="h-cancel">Cancel</button> <span class="code-error" id="h-error" hidden></span>');
+    $('h-cancel').addEventListener('click', () => showSelection());
+    $('h-apply').addEventListener('click', async () => {
+        const header = {
+            version: parseInt($('h-version').value, 10) || 0,
+            frame_rate: parseFloat($('h-rate').value),
+            width: parseFloat($('h-width').value),
+            height: parseFloat($('h-height').value),
+            background: $('h-bg-on').checked ? $('h-bg').value : null,
+        };
+        try {
+            await invoke('set_header', { id: sel.docId, header });
+        } catch (e) {
+            $('h-error').textContent = String(e);
+            $('h-error').hidden = false;
+            return;
+        }
+        const doc = state.docs.find((d) => d.id === sel.docId);
+        doc.modified = true;
+        render();
+        status('Updated the header');
+        showSelection();
+    });
 });
 
 function exportOptions() {

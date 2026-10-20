@@ -192,6 +192,9 @@ mark { background: none; color: var(--accent); font-weight: 650; }
 .fields td:first-child { color: var(--muted); width: 200px; white-space: nowrap; }
 .fields td:last-child { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 .fields tr.warn td:last-child { color: var(--warn); }
+.field-input { width: 120px; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+#tab-details .code-bar { max-width: 980px; }
+.fields .btn { font-family: var(--sans); font-size: 13px; }
 
 .hex-body { padding: 0; }
 .hex { position: relative; height: 100%; overflow: auto; font: 12px/20px var(--mono); }

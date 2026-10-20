@@ -287,6 +287,22 @@ async fn add_font_chars(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, p
     Ok(Some(n))
 }
 
+#[tauri::command]
+fn get_header(docs: State<'_, Docs>, id: u32) -> Res<ffdec::edit::HeaderEdit> {
+    with_doc(&docs, id, |d| Ok(ffdec::edit::header(d.swf())))
+}
+
+#[tauri::command]
+fn set_header(docs: State<'_, Docs>, id: u32, header: ffdec::edit::HeaderEdit) -> Res<()> {
+    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::edit::set_header(swf, &header)))
+}
+
+#[tauri::command]
+fn remove_tag(docs: State<'_, Docs>, id: u32, path: String) -> Res<()> {
+    let p = tag_path(&path)?;
+    with_doc_mut(&docs, id, |d| d.edit(|swf| swf.remove_tag(&p).map(|_| ()).map_err(|e| e.to_string())))
+}
+
 #[derive(Serialize)]
 struct EditError {
     line: usize,
@@ -558,6 +574,9 @@ fn main() {
             script_pcode,
             apply_pcode,
             text_source,
+            get_header,
+            set_header,
+            remove_tag,
             add_font_chars,
             apply_text,
             apply_source,
