@@ -2,3 +2,4 @@
 //! and rasterising that SVG to PNG.
 
 pub mod paths;
+pub mod svg;
