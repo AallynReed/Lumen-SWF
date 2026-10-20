@@ -46,3 +46,51 @@ fn shapes_write_back() {
     assert!(bad.is_empty(), "{:?}", &bad[..bad.len().min(10)]);
 }
 
+/// Compares image-to-shape import with JPEXS 26.4's ShapeImporter, read from
+/// `FFDEC_SHAPE_REF` (the ShapeDump driver's output: per SWF, per image and fill mode, the new
+/// image tag and the shape body).
+#[test]
+fn shape_images_match_jpexs() {
+    let Ok(dir) = std::env::var("FFDEC_SHAPE_REF") else { return };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let images = [("png", std::fs::read(root.join("as2/as2/LIBRARY/Database-Delete-32.png")).unwrap()), ("jpg", std::fs::read(root.join("gfx/test_images/LIBRARY/pony_small.jpg")).unwrap())];
+    let (mut total, mut bad) = (0, Vec::new());
+    for d in std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()) {
+        let Ok(swf_path) = std::fs::read_to_string(d.join("swf.txt")) else { continue };
+        let Ok(data) = std::fs::read(swf_path.trim()) else { continue };
+        let Ok(orig) = ffdec::Swf::parse(&data) else { continue };
+        let Some(at) = orig.timeline.tags.iter().position(|t| is_shape(t.code)) else { continue };
+        for (name, img) in &images {
+            for fill in [true, false] {
+                let case = format!("{name}_{}", if fill { "fill" } else { "size" });
+                let Ok(want_shape) = std::fs::read(d.join(format!("{case}.shape"))) else { continue };
+                total += 1;
+                let want_img = std::fs::read(d.join(format!("{case}.img"))).unwrap();
+                let want_code: u16 = std::fs::read_to_string(d.join(format!("{case}.code"))).unwrap().trim().parse().unwrap();
+                let mut swf = orig.clone();
+                let label = format!("{} {case}", swf_path.trim());
+                if let Err(e) = ffdec::importers::shape_image(&mut swf, &[at], img, fill) {
+                    bad.push(format!("{label}: {e}"));
+                    continue;
+                }
+                let (t_img, t_shape) = (&swf.timeline.tags[at], &swf.timeline.tags[at + 1]);
+                let inflate = |b: &[u8]| -> Vec<u8> {
+                    use std::io::Read;
+                    let mut out = b[..7.min(b.len())].to_vec();
+                    flate2::read::ZlibDecoder::new(b.get(7..).unwrap_or(&[])).read_to_end(&mut out).ok();
+                    out
+                };
+                let same_img = t_img.body == want_img || (t_img.code == 36 && inflate(&t_img.body) == inflate(&want_img));
+                if t_img.code != want_code || !same_img {
+                    bad.push(format!("{label}: image differs (code {} vs {want_code}, {} vs {} bytes)", t_img.code, t_img.body.len(), want_img.len()));
+                } else if t_shape.body != want_shape {
+                    bad.push(format!("{label}: shape differs
+ got {:02x?}
+want {:02x?}", t_shape.body, want_shape));
+                }
+            }
+        }
+    }
+    eprintln!("shape images: {}/{total} ok", total - bad.len());
+    assert!(bad.is_empty(), "{:#?}", &bad[..bad.len().min(10)]);
+}

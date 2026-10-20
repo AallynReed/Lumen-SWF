@@ -158,6 +158,50 @@ impl Swf {
         go(&mut self.timeline, path, code, body).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))
     }
 
+    /// Inserts a tag before the one at `path`, in the same timeline, rewriting the sprites
+    /// that contain it.
+    pub fn insert_tag(&mut self, path: &[usize], tag: Tag) -> Result<()> {
+        fn go(tl: &mut Timeline, path: &[usize], tag: Tag) -> Option<()> {
+            let (first, rest) = path.split_first()?;
+            if rest.is_empty() {
+                (*first <= tl.tags.len()).then(|| tl.tags.insert(*first, tag))?;
+                return Some(());
+            }
+            let parent = tl.tags.get_mut(*first)?;
+            go(parent.sprite.as_mut()?, rest, tag)?;
+            let mut w = Writer::new();
+            w.bytes(parent.body.get(..4)?);
+            parent.sprite.as_ref()?.write(&mut w);
+            parent.body = w.data;
+            parent.declared_len = None;
+            Some(())
+        }
+        go(&mut self.timeline, path, tag).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))
+    }
+
+    /// One more than the highest character id defined or imported, as FFDec picks new ids.
+    pub fn next_character_id(&self) -> u16 {
+        let mut max = 0;
+        self.walk(|_, t| {
+            if crate::tags::defines_character(t.code) {
+                max = max.max(t.character_id().unwrap_or(0));
+            }
+            if t.code == code::IMPORT_ASSETS || t.code == code::IMPORT_ASSETS2 {
+                let mut r = Reader::new(&t.body);
+                let ids = (|| -> Result<Vec<u16>> {
+                    r.string()?;
+                    if t.code == code::IMPORT_ASSETS2 {
+                        r.skip(2)?;
+                    }
+                    let n = r.u16()?;
+                    (0..n).map(|_| { let id = r.u16()?; r.string()?; Ok(id) }).collect()
+                })();
+                max = ids.unwrap_or_default().into_iter().fold(max, u16::max);
+            }
+        });
+        max + 1
+    }
+
     /// Path of the tag defining a character.
     pub fn find_character(&self, id: u16) -> Option<Vec<usize>> {
         let mut found = None;

@@ -8,6 +8,7 @@ use flate2::Compression;
 
 use crate::error::{Error, Result};
 use crate::io::Reader;
+use crate::shape::{Fill, Record, Shape, Styles};
 use crate::tags::code::*;
 use crate::Swf;
 
@@ -37,12 +38,7 @@ fn decode(data: &[u8]) -> Result<image::DynamicImage> {
 /// image tags keep their type.
 pub fn image(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
     let (code, old) = tag_of(swf, path)?;
-    let mut data = data.to_vec();
-    if data.starts_with(b"BM") || data.starts_with(b"RIFF") {
-        let mut png = Vec::new();
-        decode(&data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).or_else(|e| err(format!("converting the image: {e}")))?;
-        data = png;
-    }
+    let data = to_png(data)?;
     let id = old.get(..2).ok_or_else(|| Error::Other("image tag without a character id".into()))?.to_vec();
     let mut body = id;
     let new_code = match code {
@@ -63,31 +59,100 @@ pub fn image(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
             code
         }
         DEFINE_BITS_LOSSLESS | DEFINE_BITS_LOSSLESS2 => {
-            let img = decode(&data)?;
-            let has_alpha = img.color().has_alpha();
-            let rgba = img.to_rgba8();
-            let mut pixels = Vec::with_capacity(rgba.len());
-            for p in rgba.pixels() {
-                let [r, g, b, a] = p.0;
-                if code == DEFINE_BITS_LOSSLESS {
-                    pixels.extend_from_slice(&[0xff, r, g, b]);
-                } else {
-                    let a = if has_alpha { a as u32 } else { 255 };
-                    let m = |c: u8| (c as u32 * a / 255) as u8;
-                    pixels.extend_from_slice(&[a as u8, m(r), m(g), m(b)]);
-                }
-            }
-            let (w, h) = (u16::try_from(rgba.width()), u16::try_from(rgba.height()));
-            let (Ok(w), Ok(h)) = (w, h) else { return err("the image is too large for a lossless bitmap") };
-            body.push(5);
-            body.extend_from_slice(&w.to_le_bytes());
-            body.extend_from_slice(&h.to_le_bytes());
-            body.extend_from_slice(&zlib(&pixels));
+            body.extend(lossless(&decode(&data)?, code == DEFINE_BITS_LOSSLESS2)?);
             code
         }
         _ => return err("not an image tag"),
     };
     swf.set_tag(path, new_code, body)
+}
+
+/// A lossless bitmap after its character id: format 5, premultiplied for DefineBitsLossless2.
+fn lossless(img: &image::DynamicImage, alpha: bool) -> Result<Vec<u8>> {
+    let has_alpha = img.color().has_alpha();
+    let rgba = img.to_rgba8();
+    let mut pixels = Vec::with_capacity(rgba.len());
+    for p in rgba.pixels() {
+        let [r, g, b, a] = p.0;
+        if !alpha {
+            pixels.extend_from_slice(&[0xff, r, g, b]);
+        } else {
+            let a = if has_alpha { a as u32 } else { 255 };
+            let m = |c: u8| (c as u32 * a / 255) as u8;
+            pixels.extend_from_slice(&[a as u8, m(r), m(g), m(b)]);
+        }
+    }
+    let (w, h) = (u16::try_from(rgba.width()), u16::try_from(rgba.height()));
+    let (Ok(w), Ok(h)) = (w, h) else { return err("the image is too large for a lossless bitmap") };
+    let mut body = vec![5];
+    body.extend_from_slice(&w.to_le_bytes());
+    body.extend_from_slice(&h.to_le_bytes());
+    body.extend_from_slice(&zlib(&pixels));
+    Ok(body)
+}
+
+fn to_png(data: &[u8]) -> Result<Vec<u8>> {
+    if !(data.starts_with(b"BM") || data.starts_with(b"RIFF")) {
+        return Ok(data.to_vec());
+    }
+    let mut png = Vec::new();
+    decode(data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).or_else(|e| err(format!("converting the image: {e}")))?;
+    Ok(png)
+}
+
+fn edge(records: &mut Vec<Record>, dx: i32, dy: i32) {
+    let bits = crate::io::bits_s(&[dx, dy]).saturating_sub(2);
+    if (dx != 0 || dy != 0) && bits > 15 {
+        let (x1, y1) = (dx / 2, dy / 2);
+        let (x2, y2) = (x1 + (2 * x1 < dx) as i32, y1 + (2 * y1 < dy) as i32);
+        edge(records, x1, y1);
+        edge(records, x2, y2);
+        return;
+    }
+    records.push(Record::Straight { dx, dy });
+}
+
+/// `ShapeImporter.importImage`: the image goes into a new DefineBitsJPEG2 (JPEG) or
+/// DefineBitsLossless2 tag before the shape, which becomes a rectangle filled with it, stretched
+/// over the shape's bounds when `fill`, else at the image's own size.
+pub fn shape_image(swf: &mut Swf, path: &[usize], data: &[u8], fill: bool) -> Result<()> {
+    let tag = swf.tag(path).ok_or_else(|| Error::Other(format!("no tag at {path:?}")))?;
+    let mut shape = crate::shape::ShapeTag::read(tag)?;
+    let data = to_png(data)?;
+    let img = decode(&data)?;
+    let id = swf.next_character_id();
+    let mut body = id.to_le_bytes().to_vec();
+    let code = if is_jpeg(&data) {
+        body.extend_from_slice(&data);
+        DEFINE_BITS_JPEG2
+    } else {
+        body.extend(lossless(&img, true)?);
+        DEFINE_BITS_LOSSLESS2
+    };
+    let (iw, ih) = (img.width() as i32 * 20, img.height() as i32 * 20);
+    let mut rect = shape.bounds;
+    if !fill {
+        rect.x_max = rect.x_min + iw;
+        rect.y_max = rect.y_min + ih;
+        shape.bounds = rect;
+    }
+    let (w, h) = (rect.x_max - rect.x_min, rect.y_max - rect.y_min);
+    let translated = rect.x_min != 0 || rect.y_min != 0;
+    let scale = |a: i32, b: i32| if fill { (20.0 * a as f64 / b as f64) as f32 as f64 } else { 20.0 };
+    let mut matrix = crate::types::Matrix::scale(scale(w, iw), scale(h, ih));
+    if translated {
+        (matrix.tx, matrix.ty) = (rect.x_min as f64, rect.y_min as f64);
+    }
+    let mut records = vec![Record::StyleChange { move_to: Some((rect.x_min, rect.y_min)), fill0: Some(1), fill1: None, line: None, new_styles: None }];
+    edge(&mut records, w, 0);
+    edge(&mut records, 0, h);
+    edge(&mut records, -w, 0);
+    edge(&mut records, 0, -h);
+    shape.shape = Shape { styles: Styles { fills: vec![Fill::Bitmap { id, matrix, repeat: false, smooth: true }], lines: vec![] }, records };
+    swf.insert_tag(path, crate::tags::Tag::new(code, body))?;
+    let mut moved = path.to_vec();
+    *moved.last_mut().unwrap() += 1;
+    swf.set_tag_body(&moved, shape.write())
 }
 
 /// MPEG audio frames of `data` as (sampling rate, stereo, samples per channel).
@@ -269,6 +334,7 @@ pub enum Asset {
     Sound,
     Binary,
     Text,
+    Shape,
 }
 
 impl Asset {
@@ -278,6 +344,7 @@ impl Asset {
             DEFINE_SOUND => Asset::Sound,
             DEFINE_BINARY_DATA => Asset::Binary,
             DEFINE_TEXT | DEFINE_TEXT2 | DEFINE_EDIT_TEXT => Asset::Text,
+            DEFINE_SHAPE | DEFINE_SHAPE2 | DEFINE_SHAPE3 | DEFINE_SHAPE4 => Asset::Shape,
             _ => return None,
         })
     }
@@ -285,7 +352,7 @@ impl Asset {
     /// File extensions the importer reads.
     pub fn extensions(self) -> &'static [&'static str] {
         match self {
-            Asset::Image => &["png", "jpg", "jpeg", "gif", "bmp", "webp"],
+            Asset::Image | Asset::Shape => &["png", "jpg", "jpeg", "gif", "bmp", "webp"],
             Asset::Sound => &["mp3", "wav"],
             Asset::Binary => &[],
             Asset::Text => &["txt"],
@@ -300,6 +367,7 @@ pub fn import(swf: &mut Swf, path: &[usize], data: &[u8]) -> Result<()> {
         Some(Asset::Image) => image(swf, path, data),
         Some(Asset::Sound) => sound(swf, path, data),
         Some(Asset::Binary) => binary(swf, path, data),
+        Some(Asset::Shape) => shape_image(swf, path, data, true),
         Some(Asset::Text) if code == DEFINE_EDIT_TEXT => edit_text(swf, path, &String::from_utf8_lossy(data)),
         Some(Asset::Text) => crate::text::import(swf, path, &String::from_utf8_lossy(data)).map_err(|e| Error::Other(e.to_string())),
         None => err(format!("{} tags cannot be replaced yet", crate::tags::display_name(code))),
