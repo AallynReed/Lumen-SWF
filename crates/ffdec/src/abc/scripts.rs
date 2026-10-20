@@ -138,7 +138,7 @@ pub fn methods(abc: &Abc, e: &Entry) -> Vec<MethodRef> {
     };
     let Some(script) = abc.scripts.get(e.script) else { return out };
     add("script initializer".into(), script.init, None);
-    let mut class = |c: usize, prefix: &str, add: &mut dyn FnMut(String, usize, Option<TraitLoc>)| {
+    let class = |c: usize, prefix: &str, add: &mut dyn FnMut(String, usize, Option<TraitLoc>)| {
         if let Some(ii) = abc.instances.get(c) {
             add(format!("{prefix}instance initializer"), ii.iinit, None);
         }
