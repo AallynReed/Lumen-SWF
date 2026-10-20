@@ -439,6 +439,13 @@ impl<'a> Exporter<'a> {
 
     /// One AS3 script entry as an `.as` file, or `.pcode` with `pcode`.
     pub fn export_script(&self, path: &[usize], script: &str, pcode: bool) -> Result<File> {
+        if let Some(index) = script.strip_prefix("as2:") {
+            let index = index.parse().map_err(|_| Error::Other("bad script id".into()))?;
+            let s = crate::action::scripts::find(self.swf, path, index).ok_or_else(|| Error::Other("script not found".into()))?;
+            let text = crate::action::pcode::to_pcode(&s.actions(self.swf));
+            let _ = pcode;
+            return Ok(File { name: make_file_name(&format!("{}.pcode", s.export_name)), mime: "text/plain", data: text.into_bytes() });
+        }
         let pv = self.script_preview(path, script)?;
         let name = pv.note.as_deref().and_then(|n| n.split(' ').nth(1)).unwrap_or("script").rsplit('.').next().unwrap_or("script").to_string();
         let (ext, text) = if pcode { ("pcode", pv.alt_text) } else { ("as", pv.text) };
@@ -448,6 +455,22 @@ impl<'a> Exporter<'a> {
     /// Decompiled ActionScript, with p-code as `alt_text`, of one AS3 script entry (`script` as
     /// `script:trait`) in the DoABC tag at `path`.
     pub fn script_preview(&self, path: &[usize], script: &str) -> Result<Preview> {
+        if let Some(index) = script.strip_prefix("as2:") {
+            let index = index.parse().map_err(|_| Error::Other("bad script id".into()))?;
+            let s = crate::action::scripts::find(self.swf, path, index).ok_or_else(|| Error::Other("script not found".into()))?;
+            let pcode = crate::action::pcode::to_pcode(&s.actions(self.swf));
+            return Ok(Preview {
+                kind: "code",
+                mime: "text/plain",
+                data: Vec::new(),
+                text: Some(pcode.clone()),
+                alt_text: Some(pcode),
+                note: Some(format!("ActionScript 1/2 {}", s.export_name)),
+                frames: 1,
+                frame: 0,
+                frame_rate: self.swf.frame_rate,
+            });
+        }
         let abc = self.abc_at(path)?;
         let (s, t) = crate::abc::scripts::parse_id(script).ok_or_else(|| Error::Other("bad script id".into()))?;
         let e = crate::abc::scripts::entries(&abc)
@@ -484,7 +507,22 @@ impl<'a> Exporter<'a> {
         if kinds.contains(&Kind::Frames) {
             out.extend(self.export_frames(opts).into_iter().map(|r| (Kind::Frames, Vec::new(), r)));
         }
+        if kinds.contains(&Kind::Scripts) {
+            out.extend(self.export_as2_scripts().into_iter().map(|(p, f)| (Kind::Scripts, p, Ok(f))));
+        }
         out
+    }
+
+    /// AS1/2 scripts as `.pcode` files laid out like FFDec's script export.
+    pub fn export_as2_scripts(&self) -> Vec<(Vec<usize>, File)> {
+        let tree = crate::action::scripts::tree(self.swf);
+        crate::action::scripts::export_paths(&tree)
+            .into_iter()
+            .map(|(name, s)| {
+                let text = crate::action::pcode::to_pcode(&s.actions(self.swf));
+                (s.tag.clone(), File { name: format!("{name}.pcode"), mime: "text/plain", data: text.into_bytes() })
+            })
+            .collect()
     }
 
     /// Writes `export_all` into `dir/<kind>/…`. Returns written paths and per-asset errors.
