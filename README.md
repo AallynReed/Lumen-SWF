@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 2 of 7.** Opens, inspects and re-saves SWF files, and previews and exports their assets. Rendering and ActionScript decompilation are still to come; see [Roadmap](#roadmap).
+> **Status: phase 3 of 7.** Opens, inspects and re-saves SWF files, exports their assets, and renders shapes, sprites and frames. ActionScript decompilation is still to come; see [Roadmap](#roadmap).
 
 ## What works
 
@@ -17,6 +17,12 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
   - sounds: MP3 as stored, PCM/ADPCM streams as WAV, other codecs in FLV (or WAV for everything, decoding ADPCM, Nellymoser and MP3);
   - fonts as TrueType (DefineFont4 as OpenType), texts as plain text, binary data (embedded SWFs saved as `.swf`), video streams as FLV.
 - Export a single asset, or every asset of the chosen types into a folder.
+- Rendering to SVG and PNG, following FFDec's renderer:
+  - shapes with solid, gradient (including focal and linear-RGB) and bitmap fills, and strokes with caps, joins and FFDec's 1 px minimum width;
+  - morph shapes, as an animated SVG or start/end PNGs;
+  - static text from embedded fonts, and dynamic text with system fonts;
+  - sprites, buttons (all four states) and root frames, with nested sprite timing, clip masks, colour transforms, blend modes and the common filters (blur, drop shadow, glow, colour matrix, convolution).
+- Previews of every shape, sprite, button and text, with a frame player for sprites, buttons and the root timeline.
 - Drag and drop, and the installer adds an "Open with" entry for `.swf`.
 
 ## Download
@@ -32,7 +38,10 @@ ffdec-cli info movie.swf
 ffdec-cli tags movie.swf [--raw]
 ffdec-cli tag movie.swf 12/3
 ffdec-cli extract-tag movie.swf 12 body.bin
-ffdec-cli export movie.swf outdir [--kinds images,sounds] [--png] [--wav]
+ffdec-cli export movie.swf outdir [--kinds shapes,sprites] [--png] [--wav] [--shapes-png] [--frames-svg] [--texts-svg] [--zoom 2]
+ffdec-cli render movie.swf 12 shape.svg
+ffdec-cli render movie.swf frame:5 frame.png --zoom 2
+ffdec-cli frame movie.swf 5
 ffdec-cli decompress in.swf out.swf
 ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
 ```
@@ -61,7 +70,7 @@ cargo test -p ffdec --release
 
 | Path | What |
 | --- | --- |
-| `crates/ffdec` | Core library: container, tags, tree, details, export |
+| `crates/ffdec` | Core library: container, tags, tree, details, export, rendering |
 | `crates/ffdec-cli` | Command-line tool |
 | `src-tauri` | Desktop shell (Tauri 2) |
 | `web` | UI |
@@ -70,7 +79,7 @@ cargo test -p ffdec --release
 
 1. **Container and tags.** Done.
 2. **Asset export:** images, sounds, binary data, fonts, texts, video. Done.
-3. **Rendering:** shapes, morph shapes, sprites and frames to SVG/PNG, with previews.
+3. **Rendering:** shapes, morph shapes, sprites and frames to SVG/PNG, with previews. Done; bevel and gradient filters still to come.
 4. **ActionScript 3:** ABC bytecode, p-code, decompiler, deobfuscation.
 5. **ActionScript 1/2:** actions, p-code, decompiler.
 6. **Editing:** replacing assets, editing tags, recompiling scripts.
