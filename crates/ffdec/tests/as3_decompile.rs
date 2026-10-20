@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use ffdec::abc::decomp::ctx::{Config, Ctx};
+use ffdec::abc::decomp::index::AbcIndex;
 use ffdec::abc::decomp::method::{self, ConvertData, MethodReq};
 use ffdec::abc::decomp::writer::Writer;
 use ffdec::abc::{scripts, tag_abc, Abc, TraitData};
@@ -75,7 +76,7 @@ fn cases() -> Vec<Case> {
         .collect()
 }
 
-fn decompile(abcs: &[Abc], version: u8, method_name: &str, is_static: bool) -> Option<String> {
+fn decompile(abcs: &[Abc], index: &std::sync::Arc<AbcIndex>, version: u8, method_name: &str, is_static: bool) -> Option<String> {
     let class_name = format!("{}{}", method_name[..1].to_uppercase(), &method_name[1..]);
     for abc in abcs {
         for e in scripts::entries(abc) {
@@ -84,7 +85,7 @@ fn decompile(abcs: &[Abc], version: u8, method_name: &str, is_static: bool) -> O
             }
             let ci = scripts::class_of(abc, &e)?;
             let inst = &abc.instances[ci];
-            let mut ctx = Ctx::new(abc, Config::testing());
+            let mut ctx = Ctx::new(abc, Config::testing()).with_index(index.clone());
             ctx.swf_version = version;
             let run = inst.traits.iter().find_map(|t| match t.data {
                 TraitData::Method { method, .. } | TraitData::Getter { method, .. } | TraitData::Setter { method, .. } if ctx.names().name(t.name, &[], true, true) == "run" => Some(method),
@@ -125,6 +126,7 @@ fn as3_decompile_fixtures() {
     }
     let filter = std::env::var("AS3_CASE").ok();
     let mut swfs: HashMap<String, (u8, Vec<Abc>)> = HashMap::new();
+    let mut indexes: HashMap<String, std::sync::Arc<AbcIndex>> = HashMap::new();
     let (mut pass, mut total) = (0, 0);
     let mut report = String::new();
     for c in cases() {
@@ -143,8 +145,9 @@ fn as3_decompile_fixtures() {
             });
             (swf.header.version, abcs)
         });
+        let index = indexes.entry(c.swf.clone()).or_insert_with(|| AbcIndex::for_abcs(&entry.1.iter().collect::<Vec<_>>())).clone();
         total += 1;
-        let actual = decompile(&entry.1, entry.0, &c.method, c.is_static).unwrap_or_else(|| "NOT FOUND".into());
+        let actual = decompile(&entry.1, &index, entry.0, &c.method, c.is_static).unwrap_or_else(|| "NOT FOUND".into());
         let ok = clean(&actual) == clean(&c.expected);
         if ok {
             pass += 1;
