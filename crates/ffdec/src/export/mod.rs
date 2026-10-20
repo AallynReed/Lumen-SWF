@@ -35,10 +35,11 @@ pub enum Kind {
     Frames,
     Sprites,
     Buttons,
+    Scripts,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 11] = [
+    pub const ALL: [Kind; 12] = [
         Kind::Images,
         Kind::Sounds,
         Kind::BinaryData,
@@ -50,6 +51,7 @@ impl Kind {
         Kind::Frames,
         Kind::Sprites,
         Kind::Buttons,
+        Kind::Scripts,
     ];
 
     /// Folder name, matching FFDec's export layout.
@@ -66,6 +68,7 @@ impl Kind {
             Kind::Frames => "frames",
             Kind::Sprites => "sprites",
             Kind::Buttons => "buttons",
+            Kind::Scripts => "scripts",
         }
     }
 
@@ -91,6 +94,7 @@ impl Kind {
             c if crate::morph::is_morph(c) => Kind::MorphShapes,
             DEFINE_SPRITE => Kind::Sprites,
             DEFINE_BUTTON | DEFINE_BUTTON2 => Kind::Buttons,
+            DO_ABC | DO_ABC2 => Kind::Scripts,
             _ => return None,
         })
     }
@@ -293,6 +297,18 @@ impl<'a> Exporter<'a> {
                 }
                 Ok(out)
             }
+            Kind::Scripts => {
+                let Some((data, _)) = crate::abc::tag_abc(tag) else { return Ok(Vec::new()) };
+                let abc = crate::abc::Abc::parse(data)?;
+                Ok(crate::abc::scripts::entries(&abc)
+                    .iter()
+                    .map(|e| {
+                        let mut name: Vec<String> = if e.package.is_empty() { Vec::new() } else { e.package.split('.').map(make_file_name).collect() };
+                        name.push(make_file_name(&format!("{}.pcode", e.name)));
+                        File { name: name.join("/"), mime: "text/plain", data: crate::abc::scripts::entry_pcode(&abc, e).into_bytes() }
+                    })
+                    .collect())
+            }
             Kind::Frames => Ok(Vec::new()),
         }
     }
@@ -376,6 +392,35 @@ impl<'a> Exporter<'a> {
             }
             _ => return Ok(None),
         }))
+    }
+
+    /// One AS3 script entry as a `.pcode` file.
+    pub fn export_script(&self, path: &[usize], script: &str) -> Result<File> {
+        let pv = self.script_preview(path, script)?;
+        let name = pv.note.as_deref().and_then(|n| n.split(' ').nth(1)).unwrap_or("script").rsplit('.').next().unwrap_or("script").to_string();
+        Ok(File { name: make_file_name(&format!("{name}.pcode")), mime: "text/plain", data: pv.text.unwrap_or_default().into_bytes() })
+    }
+
+    /// P-code of one AS3 script entry (`script` as `script:trait`) in the DoABC tag at `path`.
+    pub fn script_preview(&self, path: &[usize], script: &str) -> Result<Preview> {
+        let tag = self.swf.tag(path).ok_or_else(|| Error::Other("no such tag".into()))?;
+        let (data, _) = crate::abc::tag_abc(tag).ok_or_else(|| Error::Other("not an ABC tag".into()))?;
+        let abc = crate::abc::Abc::parse(data)?;
+        let (s, t) = crate::abc::scripts::parse_id(script).ok_or_else(|| Error::Other("bad script id".into()))?;
+        let e = crate::abc::scripts::entries(&abc)
+            .into_iter()
+            .find(|e| e.script == s && e.trait_index == t)
+            .ok_or_else(|| Error::Other("script not found".into()))?;
+        Ok(Preview {
+            kind: "code",
+            mime: "text/plain",
+            data: Vec::new(),
+            text: Some(crate::abc::scripts::entry_pcode(&abc, &e)),
+            note: Some(format!("{} {}, ABC {}.{}", e.kind, e.full_name(), abc.major, abc.minor)),
+            frames: 1,
+            frame: 0,
+            frame_rate: self.swf.frame_rate,
+        })
     }
 
     /// Every asset of the given kinds, as (kind, tag path, result).
