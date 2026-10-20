@@ -171,7 +171,7 @@ pub fn has_return_value(it: &It) -> bool {
 pub fn needs_semicolon(it: &It) -> bool {
     let b = it.borrow();
     match &b.k {
-        K::If { .. } | K::While { .. } | K::DoWhile { .. } | K::For { .. } | K::Switch { .. } | K::Label { .. } | K::Comment(_) | K::ScriptEnd => false,
+        K::If { .. } | K::While { .. } | K::For { .. } | K::Switch { .. } | K::Label { .. } | K::Comment(_) | K::ScriptEnd => false,
         K::Goto { target, .. } => target.is_none(),
         K::ForEachIn { .. } | K::ForIn { .. } | K::Package { .. } | K::StoreNewActivation { .. } | K::TraitSlotConst { .. } | K::Try { .. } => false,
         K::With { .. } | K::WithEnd { .. } => false,
