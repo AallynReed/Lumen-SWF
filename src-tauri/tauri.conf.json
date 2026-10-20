@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rust-FFDec",
+  "mainBinaryName": "Rust-FFDec",
+  "version": "0.1.0",
+  "identifier": "net.aallyn.rustffdec",
+  "build": {
+    "frontendDist": "../web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Rust-FFDec",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../LICENSE": "LICENSE"
+    },
+    "fileAssociations": [
+      {
+        "ext": ["swf"],
+        "name": "SWF",
+        "description": "Flash movie",
+        "role": "Viewer"
+      }
+    ],
+    "copyright": "Aallyn Reed 2026-Present. Based on JPEXS Free Flash Decompiler.",
+    "shortDescription": "Flash SWF decompiler",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "wix": {
+        "upgradeCode": "e3bbe3bc-a58a-4e1c-89e7-cb3c4f820119"
+      }
+    }
+  }
+}
