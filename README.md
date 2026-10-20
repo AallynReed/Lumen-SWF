@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 6 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets and p-code. See [Roadmap](#roadmap).
+> **Status: phase 6 of 7, in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets, AS1/2 ActionScript and p-code. See [Roadmap](#roadmap).
 
 ## What works
 
@@ -29,7 +29,9 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
 - ActionScript 1/2 decompiler, a port of FFDec's: AS2 classes and interfaces rebuilt from `__Packages` scripts, with their undeclared fields. It reproduces all 84 of JPEXS's AS1/2 expectations, and its ActionScript and p-code match FFDec 26.4's on every one of the corpus's 192 AS1/2 scripts. Scripts export to `scripts/` as `.as` (or `.pcode` with `--pcode`).
 - Editing, ported from FFDec's importers and assemblers:
   - replace images (DefineBits becomes DefineBitsJPEG2, as in FFDec), sounds (MP3, or WAV stored uncompressed), binary data and edit text;
-  - edit AS1/2 p-code per script and AS3 p-code per method, with errors reported by line. Every corpus script and all 12,229 AS3 methods re-assemble to themselves, and re-serialized ABCs match byte for byte.
+  - edit AS1/2 scripts as ActionScript, compiled by a port of FFDec's compiler that matches FFDec 26.4's bytes on all 192 corpus scripts;
+  - edit AS1/2 p-code per script and AS3 p-code per method, with errors reported by line. Every corpus script and all 12,229 AS3 methods re-assemble to themselves, and re-serialized ABCs match byte for byte;
+  - an edited AS3 method's stack, scope and register limits grow to fit its code. FFDec keeps the old limits, so its p-code edits can fail Flash Player's verifier.
 - Drag and drop, and the installer adds an "Open with" entry for `.swf`.
 
 ## Download
@@ -58,12 +60,13 @@ ffdec-cli decompress in.swf out.swf
 ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
 ffdec-cli pcode movie.swf com.example.Main --method "instance initializer"
 ffdec-cli replace in.swf out.swf 4 image.png
+ffdec-cli replace in.swf out.swf frame_1/DoAction script.as
 ffdec-cli replace in.swf out.swf frame_1/DoAction script.pcode
 ffdec-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 ffdec-cli replace in.swf out.swf 12/3 body.bin --raw
 ```
 
-A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path.
+A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path. A script is assembled from `.pcode` and compiled from anything else (AS1/2 only).
 
 ## Building
 
@@ -99,7 +102,7 @@ cargo test -p ffdec --release
 3. **Rendering:** shapes, morph shapes, sprites and frames to SVG/PNG, with previews. Done; bevel and gradient filters still to come.
 4. **ActionScript 3:** ABC bytecode, p-code and decompiler done; deobfuscation next.
 5. **ActionScript 1/2:** actions, p-code and decompiler. Done.
-6. **Editing:** asset replacement and p-code editing done; shapes, fonts and texts, tag editing and the ActionScript compilers next.
+6. **Editing:** asset replacement, p-code editing and the AS1/2 compiler done; the AS3 compiler, shapes, fonts and texts, and tag editing next.
 7. **Extras:** SWC/ZIP bundles, search, XFL/FLA export, Iggy, AMF.
 
 ## License
