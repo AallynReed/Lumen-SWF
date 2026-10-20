@@ -11,6 +11,7 @@ const state = {
     expanded: new Set(),
     tab: 'details',
     tabPref: 'preview',
+    player: null,
     exportable: false,
 };
 
@@ -254,6 +255,18 @@ function fieldRows(fields) {
 
 let hexState = null;
 
+// Which timeline a node previews: the root (path '') or a sprite, and at which frame.
+function previewTarget(n) {
+    if (n.kind === 'header') return { path: '', frame: 0 };
+    if (n.kind === 'frame') {
+        const frame = Math.max(0, (parseInt(n.label.replace(/\D+/g, ''), 10) || 1) - 1);
+        const parts = (n.path || '').split('/');
+        return { path: parts.length > 1 ? parts.slice(0, -1).join('/') : '', frame };
+    }
+    if (n.kind === 'tag') return { path: n.path, frame: 0 };
+    return null;
+}
+
 async function showSelection() {
     const sel = state.selected;
     $('content').hidden = !sel;
@@ -263,12 +276,14 @@ async function showSelection() {
     $('sel-title').textContent = n.kind === 'header' ? doc.name : n.label;
     const isTag = !!n.path && n.kind !== 'folder';
     document.querySelector('.tab[data-tab="hex"]').hidden = !isTag;
+    stopPlayback();
     clearPreview();
     state.exportable = false;
     updateButtons();
 
+    const target = previewTarget(n);
+    const previewCall = target ? call('preview_info', { id: doc.id, path: target.path, frame: target.frame }).catch(() => null) : null;
     let fields;
-    let preview = null;
     if (n.kind === 'header') {
         fields = await call('header_info', { id: doc.id });
     } else if (n.kind === 'folder') {
@@ -276,25 +291,23 @@ async function showSelection() {
     } else if (n.kind === 'frame' && !n.path) {
         fields = [{ name: 'Tags in frame', value: String(n.children.length) }];
     } else {
-        const [info, pv] = await Promise.all([
-            call('tag_info', { id: doc.id, path: n.path }),
-            n.kind === 'tag' ? call('preview_info', { id: doc.id, path: n.path }).catch(() => null) : null,
-        ]);
+        const info = await call('tag_info', { id: doc.id, path: n.path });
         fields = info.fields;
         if (n.kind === 'frame') fields.unshift({ name: 'Tags in frame', value: String(n.children.length) });
         hexState = { docId: doc.id, path: n.path, total: info.size, pages: new Map() };
-        preview = pv;
     }
+    const preview = await previewCall;
     if (state.selected !== sel) return;
     $('fields').innerHTML = fieldRows(fields);
     if (isTag) resetHex();
 
     const hasPreview = !!preview;
     document.querySelector('.tab[data-tab="preview"]').hidden = !hasPreview;
-    state.exportable = !!(preview && preview.exportable);
+    state.exportable = !!(preview && preview.exportable && n.kind === 'tag');
     updateButtons();
     if (hasPreview) {
-        const data = preview.size ? await invoke('preview_data', { id: doc.id, path: n.path }) : new ArrayBuffer(0);
+        state.player = { docId: doc.id, path: target.path, info: preview };
+        const data = preview.size ? await invoke('preview_data', { id: doc.id, path: target.path }) : new ArrayBuffer(0);
         if (state.selected !== sel) return;
         renderPreview(preview, data);
     }
@@ -317,19 +330,34 @@ function clearPreview() {
     $('preview-note').textContent = '';
 }
 
+function frameControls(info) {
+    if (info.frames <= 1) return '';
+    return `<div class="player" role="group" aria-label="Frames">`
+        + `<button class="btn icon" data-act="prev" title="Previous frame">◀</button>`
+        + `<button class="btn icon" data-act="play" title="Play">▶</button>`
+        + `<button class="btn icon" data-act="next" title="Next frame">▶|</button>`
+        + `<input type="range" min="1" max="${info.frames}" value="${info.frame + 1}" aria-label="Frame">`
+        + `<span class="frame-no">${info.frame + 1} / ${info.frames}</span></div>`;
+}
+
 function renderPreview(info, data) {
     clearPreview();
     const el = $('preview');
     $('preview-note').textContent = info.note || '';
-    if (info.kind === 'image') {
+    if (info.kind === 'image' || info.kind === 'vector') {
         previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
-        el.innerHTML = `<div class="checker"><img alt="" src="${previewUrl}"></div>`;
+        const cls = info.kind === 'vector' ? 'checker vector' : 'checker';
+        el.innerHTML = frameControls(info) + `<div class="${cls}"><img alt="" src="${previewUrl}"></div>`;
         const img = el.querySelector('img');
         img.addEventListener('load', () => {
-            // Blow small bitmaps up by a whole factor so pixels stay crisp.
-            const k = Math.max(1, Math.floor(256 / Math.max(img.naturalWidth, img.naturalHeight)));
+            // Blow small pictures up by a whole factor so pixels and lines stay crisp.
+            const k = Math.max(1, Math.floor(256 / Math.max(img.naturalWidth, img.naturalHeight, 1)));
             img.style.width = `${img.naturalWidth * k}px`;
         });
+        bindPlayer(el);
+        if (info.kind === 'vector' && info.text) {
+            el.insertAdjacentHTML('beforeend', `<pre class="text-preview">${esc(info.text)}</pre>`);
+        }
     } else if (info.kind === 'audio') {
         previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
         el.innerHTML = `<audio controls preload="metadata" src="${previewUrl}"></audio>`;
@@ -350,6 +378,72 @@ function renderPreview(info, data) {
     } else if (info.kind === 'text') {
         el.innerHTML = info.text ? `<pre class="text-preview">${esc(info.text)}</pre>` : '<p class="preview-empty">No text.</p>';
     }
+}
+
+// ---- frame player ----
+
+let playTimer = null;
+
+function stopPlayback() {
+    if (playTimer) clearTimeout(playTimer);
+    playTimer = null;
+    const b = document.querySelector('.player [data-act="play"]');
+    if (b) {
+        b.textContent = '▶';
+        b.title = 'Play';
+    }
+}
+
+// Swaps in another frame of the current preview without rebuilding the controls.
+async function showFrame(frame) {
+    const p = state.player;
+    if (!p) return false;
+    const n = p.info.frames;
+    frame = ((frame % n) + n) % n;
+    const info = await call('preview_info', { id: p.docId, path: p.path, frame });
+    if (!info || state.player !== p) return false;
+    const data = await invoke('preview_data', { id: p.docId, path: p.path });
+    if (state.player !== p) return false;
+    p.info = info;
+    const url = URL.createObjectURL(new Blob([data], { type: info.mime }));
+    const img = $('preview').querySelector('img');
+    if (img) img.src = url;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = url;
+    const range = $('preview').querySelector('.player input');
+    if (range) range.value = String(info.frame + 1);
+    const label = $('preview').querySelector('.frame-no');
+    if (label) label.textContent = `${info.frame + 1} / ${info.frames}`;
+    $('preview-note').textContent = info.note || '';
+    return true;
+}
+
+function bindPlayer(el) {
+    const bar = el.querySelector('.player');
+    if (!bar) return;
+    bar.addEventListener('click', (e) => {
+        const act = e.target.closest('button')?.dataset.act;
+        const p = state.player;
+        if (!act || !p) return;
+        if (act === 'prev') { stopPlayback(); showFrame(p.info.frame - 1); }
+        if (act === 'next') { stopPlayback(); showFrame(p.info.frame + 1); }
+        if (act === 'play') {
+            if (playTimer) return stopPlayback();
+            e.target.textContent = '❚❚';
+            e.target.title = 'Pause';
+            const step = async () => {
+                const started = performance.now();
+                if (!(await showFrame(state.player.info.frame + 1)) || !playTimer) return;
+                const delay = 1000 / Math.max(1, state.player.info.frameRate || 24);
+                playTimer = setTimeout(step, Math.max(0, delay - (performance.now() - started)));
+            };
+            playTimer = setTimeout(step, 0);
+        }
+    });
+    bar.querySelector('input').addEventListener('input', (e) => {
+        stopPlayback();
+        showFrame(parseInt(e.target.value, 10) - 1);
+    });
 }
 
 function setTab(tab, remember = true) {
@@ -461,7 +555,7 @@ $('btn-export').addEventListener('click', async () => {
     const sel = state.selected;
     if (!sel || !sel.node.path) return;
     const out = state.exportable
-        ? await call('export_asset', { id: sel.docId, path: sel.node.path, png: $('opt-png').checked, wav: $('opt-wav').checked })
+        ? await call('export_asset', { id: sel.docId, path: sel.node.path, options: exportOptions() })
         : await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
 });
@@ -472,6 +566,17 @@ $('btn-raw').addEventListener('click', async () => {
     const out = await call('export_tag', { id: sel.docId, path: sel.node.path });
     if (out) status(`Exported ${out}`);
 });
+
+function exportOptions() {
+    return {
+        png: $('opt-png').checked,
+        wav: $('opt-wav').checked,
+        shapesPng: $('opt-shapes-png').checked,
+        framesSvg: $('opt-frames-svg').checked,
+        textsSvg: $('opt-texts-svg').checked,
+        zoom: parseFloat($('opt-zoom').value) || 1,
+    };
+}
 
 $('btn-export-all').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -485,7 +590,7 @@ $('btn-export-go').addEventListener('click', async () => {
     if (!doc) return;
     const kinds = [...document.querySelectorAll('input[name="kind"]:checked')].map((i) => i.value);
     status('Exporting…');
-    const r = await call('export_all', { id: doc.id, kinds, png: $('opt-png').checked, wav: $('opt-wav').checked });
+    const r = await call('export_all', { id: doc.id, kinds, options: exportOptions() });
     if (!r) return status('Ready');
     if (r.errors.length) status(`Exported ${r.written} files to ${r.dir}; ${r.errors.length} failed: ${r.errors[0]}`, true);
     else status(`Exported ${r.written} files to ${r.dir}`);
