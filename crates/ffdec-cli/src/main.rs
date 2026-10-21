@@ -122,6 +122,16 @@ enum Cmd {
         #[arg(long)]
         no_scripts: bool,
     },
+    /// Convert a SWF to an Iggy file, skipping what Iggy cannot store (warnings go to stderr)
+    Swf2iggy {
+        input: PathBuf,
+        output: PathBuf,
+        /// 64, 32 or 32_legacy
+        #[arg(long, default_value = "64")]
+        variant: String,
+    },
+    /// Convert an Iggy file to a SWF
+    Iggy2swf { input: PathBuf, output: PathBuf },
     /// Print a shared object (.sol) as FFDec's AMF text, or with --set store edited text in OUT
     Sol {
         file: PathBuf,
@@ -411,6 +421,21 @@ fn main() -> Result<()> {
             let dir = output.parent().map(Path::to_path_buf).unwrap_or_default();
             let out = ffdec::xfl::convert(&swf, &base, &opts)?;
             ffdec::xfl::convert::write(&out, &dir, &base, compressed)?;
+        }
+        Cmd::Swf2iggy { input, output, variant } => {
+            let variant = ffdec::iggy::file::Variant::parse(&variant)?;
+            let name = input.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "movie.swf".into());
+            let (mut file, warnings) = ffdec::iggy::from_swf::create(&open(&input)?, variant, &name)?;
+            for w in warnings {
+                eprintln!("Warning: {w}");
+            }
+            std::fs::write(&output, file.save()?)?;
+        }
+        Cmd::Iggy2swf { input, output } => {
+            let data = std::fs::read(&input).with_context(|| format!("reading {}", input.display()))?;
+            let name = input.file_name().map(|n| n.to_string_lossy().into_owned());
+            let file = ffdec::iggy::file::IggyFile::read(&data, name.as_deref())?;
+            std::fs::write(&output, ffdec::iggy::to_swf::swf_bytes(&file)?)?;
         }
         Cmd::Sol { file, set, out } => {
             let mut sol = ffdec::amf::Sol::parse(&std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?)?;
