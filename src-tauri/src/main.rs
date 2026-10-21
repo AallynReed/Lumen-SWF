@@ -694,6 +694,23 @@ async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool,
 }
 
 #[tauri::command]
+fn set_auto_deobfuscate(on: bool) {
+    ffdec::set_auto_deobfuscate(on);
+}
+
+#[tauri::command]
+fn deobfuscate(docs: State<'_, Docs>, id: u32, traps: bool) -> Res<usize> {
+    let mut n = 0;
+    with_doc_mut(&docs, id, |d| {
+        d.edit(|swf| {
+            n = ffdec::edit::deobfuscate(swf, traps)?;
+            Ok(())
+        })
+    })?;
+    Ok(n)
+}
+
+#[tauri::command]
 fn startup_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect()
 }
@@ -741,6 +758,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             open_dialog,
             open_path,
+            set_auto_deobfuscate,
+            deobfuscate,
             close_doc,
             get_tree,
             header_info,

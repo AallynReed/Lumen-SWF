@@ -209,6 +209,7 @@ function updateButtons() {
     $('btn-remove').disabled = !(state.selected && state.selected.node.kind === 'tag');
     const sol = !!(doc && doc.kind === 'sol');
     $('btn-export-all').disabled = !has || sol;
+    for (const b of document.querySelectorAll('[data-deob]')) b.disabled = !doc || sol;
     $('btn-find').disabled = !state.docs.some((d) => d.kind !== 'sol');
     if (!has) $('find').hidden = true;
 }
@@ -804,6 +805,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) {
         $('save-menu').hidden = true;
         $('export-menu').hidden = true;
+        $('deob-menu').hidden = true;
     }
 });
 
@@ -906,8 +908,53 @@ function exportOptions() {
 $('btn-export-all').addEventListener('click', (e) => {
     e.stopPropagation();
     $('save-menu').hidden = true;
+    $('deob-menu').hidden = true;
     $('export-menu').hidden = !$('export-menu').hidden;
 });
+
+// ---- deobfuscation ----
+
+function storedAutoDeob() {
+    try {
+        return localStorage.getItem('autoDeobfuscate') === '1';
+    } catch {
+        return false;
+    }
+}
+
+$('opt-auto-deob').checked = storedAutoDeob();
+invoke('set_auto_deobfuscate', { on: $('opt-auto-deob').checked });
+
+$('btn-deob').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('save-menu').hidden = true;
+    $('export-menu').hidden = true;
+    $('deob-menu').hidden = !$('deob-menu').hidden;
+});
+
+$('opt-auto-deob').addEventListener('change', async () => {
+    const on = $('opt-auto-deob').checked;
+    try {
+        localStorage.setItem('autoDeobfuscate', on ? '1' : '0');
+    } catch {}
+    await invoke('set_auto_deobfuscate', { on });
+    showSelection();
+});
+
+for (const b of document.querySelectorAll('[data-deob]')) {
+    b.addEventListener('click', async () => {
+        $('deob-menu').hidden = true;
+        const doc = selectedDoc();
+        if (!doc) return;
+        status('Deobfuscating…');
+        const n = await call('deobfuscate', { id: doc.id, traps: b.dataset.deob === 'traps' });
+        doc.modified = true;
+        await loadTree(doc);
+        render();
+        status(`Rewrote ${n} AS3 methods`);
+        showSelection();
+    });
+}
 
 $('btn-export-go').addEventListener('click', async () => {
     $('export-menu').hidden = true;

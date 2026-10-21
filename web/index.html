@@ -62,6 +62,16 @@
             <button class="btn block" data-doc-export="iggy" title="A 64-bit Iggy movie for games using the Iggy runtime">As Iggy…</button>
         </div>
     </div>
+    <div class="menu-wrap">
+        <button id="btn-deob" class="btn" title="Deobfuscation of obfuscated scripts">Deobfuscate…</button>
+        <div id="deob-menu" class="menu" hidden>
+            <label title="Remove obfuscation traps from scripts before decompiling them; the file is not changed"><input type="checkbox" id="opt-auto-deob"> Automatic deobfuscation</label>
+            <div class="menu-sep"></div>
+            <div class="menu-title">Rewrite AS3 code</div>
+            <button class="btn block" data-deob="traps" title="Remove obfuscation traps from every AS3 method of the file">Remove traps</button>
+            <button class="btn block" data-deob="deadcode" title="Remove unreachable code from every AS3 method of the file">Remove dead code</button>
+        </div>
+    </div>
     <button id="btn-close" class="btn" disabled title="Close the selected file">Close</button>
     <div class="spacer"></div>
     <div class="seg" role="tablist" aria-label="Tree view">
