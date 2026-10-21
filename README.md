@@ -2,9 +2,9 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: all seven phases done.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, edits assets, texts, shapes, fonts, ActionScript and p-code, and handles SWC/ZIP bundles, XFL/FLA export, Iggy files and AMF/shared objects. See [Roadmap](#roadmap).
+Opens, inspects, edits and re-saves SWF files: asset export, rendering, ActionScript 1/2 and 3 decompiling and compiling, p-code editing, SWC/ZIP bundles, XFL/FLA and SWC export, Iggy files and AMF/shared objects.
 
-## What works
+## Features
 
 - Opens `FWS`, `CWS` (zlib), `ZWS` (LZMA), `ABC` (non-standard LZMA) and Scaleform `GFX`/`CFX` files, including Harman AIR encrypted SWFs (`fWS`/`cWS`/`zWS`).
 - Unmodified files re-save byte for byte. This is checked against all 332 SWFs in the JPEXS test corpus.
@@ -48,7 +48,7 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
 
 ## Download
 
-Grab the MSI from [Releases](https://github.com/AallynReed/Rust-FFDec/releases). Every push to `main` publishes a release, versioned `0.<phase>.<n>`.
+Grab the MSI from [Releases](https://github.com/AallynReed/Rust-FFDec/releases). Every push to `main` publishes a release.
 
 ## Command line
 
@@ -113,20 +113,16 @@ cargo test -p ffdec --release
 
 | Path | What |
 | --- | --- |
-| `crates/ffdec` | Core library: container, tags, tree, details, export, rendering |
+| `crates/ffdec` | Core library: container, tags, tree, export, rendering, ActionScript, editing, XFL, Iggy, AMF |
 | `crates/ffdec-cli` | Command-line tool |
 | `src-tauri` | Desktop shell (Tauri 2) |
 | `web` | UI |
 
-## Roadmap
+## Not ported
 
-1. **Container and tags.** Done.
-2. **Asset export:** images, sounds, binary data, fonts, texts, video. Done.
-3. **Rendering:** shapes, morph shapes, sprites and frames to SVG/PNG, with previews. Done; bevel and gradient filters still to come.
-4. **ActionScript 3:** ABC bytecode, p-code and decompiler done; deobfuscation next.
-5. **ActionScript 1/2:** actions, p-code and decompiler. Done.
-6. **Editing:** asset, text, shape and font import, header editing, p-code editing and the AS1/2 and AS3 compilers. Done.
-7. **Extras:** SWC/ZIP bundles, search, SWC export, AMF, XFL/FLA export and Iggy. Done.
+- Bevel and gradient bevel/glow filters in the renderer.
+- AS3 deobfuscation.
+- FFDec's embedded Flash Player, debugger, Swf2Exe and uploader.
 
 ## License
 
