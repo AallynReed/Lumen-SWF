@@ -150,8 +150,11 @@ enum Cmd {
         input: PathBuf,
         output: PathBuf,
         /// Only remove unreachable code
-        #[arg(long)]
+        #[arg(long, conflicts_with = "group_parts")]
         dead_code: bool,
+        /// Move blocks reached by a single jump to where they are jumped to (FFDec's GroupParts)
+        #[arg(long)]
+        group_parts: bool,
     },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
@@ -225,9 +228,17 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     ffdec::set_auto_deobfuscate(cli.deobfuscate);
     match cli.cmd {
-        Cmd::Deobfuscate { input, output, dead_code } => {
+        Cmd::Deobfuscate { input, output, dead_code, group_parts } => {
+            use ffdec::edit::Deobfuscation as D;
+            let level = if dead_code {
+                D::DeadCode
+            } else if group_parts {
+                D::GroupParts
+            } else {
+                D::Traps
+            };
             let mut swf = open(&input)?;
-            let n = ffdec::edit::deobfuscate(&mut swf, if dead_code { ffdec::edit::Deobfuscation::DeadCode } else { ffdec::edit::Deobfuscation::Traps }).map_err(|e| anyhow!(e))?;
+            let n = ffdec::edit::deobfuscate(&mut swf, level).map_err(|e| anyhow!(e))?;
             save(&swf, &output)?;
             println!("{n} methods deobfuscated");
         }
