@@ -146,6 +146,10 @@ enum Cmd {
     /// Print one AMF3 value (such as ByteArray.writeObject output) as FFDec's AMF text
     Amf { file: PathBuf },
     /// Rewrite every AS3 method with obfuscation traps removed, like FFDec's -deobfuscate
+    #[command(after_help = "Examples:
+  ffdec-cli deobfuscate in.swf out.swf
+  ffdec-cli deobfuscate in.swf out.swf --dead-code
+  ffdec-cli deobfuscate in.swf out.swf --group-parts")]
     Deobfuscate {
         input: PathBuf,
         output: PathBuf,
