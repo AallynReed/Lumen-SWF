@@ -88,6 +88,12 @@ pub fn entry_renames(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf: &S
     })
 }
 
+/// Every script pack's class path, with its script's dependencies when `deps` is set.
+pub fn script_packs(index: &Arc<index::AbcIndex>, abc: &Abc, deps: bool) -> Vec<(names::Dotted, Vec<(names::Dotted, u8)>)> {
+    let ctx = ctx::Ctx::new(abc, ctx::Config::default()).with_index(index.clone());
+    script::swc_packs(&ctx, deps)
+}
+
 /// Runs `f` on a thread with a large stack: the structuring code recurses once per nested block.
 pub fn with_big_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     std::thread::scope(|s| std::thread::Builder::new().stack_size(1 << 30).spawn_scoped(s, f).expect("decompiler thread").join().unwrap_or_else(|e| std::panic::resume_unwind(e)))

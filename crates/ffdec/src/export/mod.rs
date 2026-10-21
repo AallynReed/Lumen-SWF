@@ -6,6 +6,7 @@ pub mod font;
 pub mod image;
 mod nellymoser;
 pub mod sound;
+pub mod swc;
 pub mod text;
 pub mod ttf;
 pub mod video;

@@ -77,6 +77,34 @@ pub fn packs(ctx: &Ctx, script: usize) -> Vec<Pack> {
     ret
 }
 
+/// Each pack's class path with its script's dependencies, as `SwfToSwcExporter` lists them.
+pub fn swc_packs(ctx: &Ctx, with_deps: bool) -> Vec<(Dotted, Vec<(Dotted, u8)>)> {
+    let names = ctx.names();
+    let sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true };
+    let mut out = Vec::new();
+    for script in 0..ctx.abc.scripts.len() {
+        let mut deps = Vec::new();
+        if with_deps {
+            let ignore = Some(Dotted::new(&["NO:PACKAGE"]));
+            for t in &ctx.abc.scripts[script].traits {
+                sp.trait_deps(t, script, -1, false, &None, &mut deps, &ignore, &mut Vec::new());
+            }
+        }
+        let deps: Vec<(Dotted, u8)> = deps.into_iter().map(|d| (d.id, d.ty)).collect();
+        for p in packs(ctx, script) {
+            let path = match p.traits.first() {
+                Some(&t) => {
+                    let n = ctx.abc.scripts[script].traits[t].name;
+                    names.simple_ns_name(n).unwrap_or_default().add(&names.name(n, &[], true, false), "")
+                }
+                None => Dotted::new(&[&format!("script_{script}")]),
+            };
+            out.push((path, deps.clone()));
+        }
+    }
+    out
+}
+
 /// The pack a script entry of the tree belongs to.
 pub fn pack_of(ctx: &Ctx, script: usize, trait_index: Option<usize>) -> Pack {
     let all = packs(ctx, script);

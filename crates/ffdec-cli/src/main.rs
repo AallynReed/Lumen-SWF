@@ -101,6 +101,14 @@ enum Cmd {
     },
     /// List the SWFs in a ZIP, SWC or any other file, or extract them into OUTDIR
     Bundle { file: PathBuf, outdir: Option<PathBuf> },
+    /// Export an AS3 SWF as an SWC library
+    Swc {
+        input: PathBuf,
+        output: PathBuf,
+        /// Leave the dependencies out of catalog.xml
+        #[arg(long)]
+        no_deps: bool,
+    },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -363,6 +371,9 @@ fn main() -> Result<()> {
                     std::fs::write(&out, bytes).with_context(|| format!("writing {}", out.display()))?;
                 }
             }
+        }
+        Cmd::Swc { input, output, no_deps } => {
+            std::fs::write(&output, ffdec::export::swc::swc(&open(&input)?, no_deps)?)?;
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;
