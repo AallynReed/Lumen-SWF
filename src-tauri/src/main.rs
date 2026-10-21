@@ -658,6 +658,7 @@ async fn export_document(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, 
     })?;
     let (label, ext) = match format.as_str() {
         "swc" => ("SWC library", "swc"),
+        "iggy" => ("Iggy movie", "iggy"),
         _ => ("Flash document", "fla"),
     };
     let Some(out) = save_dialog(&app, &format!("{stem}.{ext}"), (label, &[ext])) else { return Ok(None) };
@@ -666,6 +667,13 @@ async fn export_document(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, 
             let data = ffdec::export::swc::swc(d.swf(), false).map_err(|e| e.to_string())?;
             std::fs::write(&out, data).map_err(|e| e.to_string())?;
             return Ok(Some(out.display().to_string()));
+        }
+        if format == "iggy" {
+            let name = format!("{stem}.swf");
+            let (mut file, warnings) = ffdec::iggy::from_swf::create(d.swf(), ffdec::iggy::file::Variant::X64, &name).map_err(|e| e.to_string())?;
+            std::fs::write(&out, file.save().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            let skipped = if warnings.is_empty() { String::new() } else { format!(" ({} tags Iggy cannot store were left out)", warnings.len()) };
+            return Ok(Some(format!("{}{skipped}", out.display())));
         }
         let compressed = format == "fla";
         let version = if as3 { ffdec::xfl::FlaVersion::Cc } else { ffdec::xfl::FlaVersion::Cs6 };
