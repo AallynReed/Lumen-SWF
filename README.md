@@ -22,6 +22,7 @@ Everything is ported from FFDec and checked against FFDec 26.4 on the 332 SWFs o
 - FFDec's resource tree or the raw tag list, with filtering.
 - Decoded fields for every common tag, and a hex view of each tag body.
 - Previews of shapes, sprites, buttons, texts, images and sounds, with a frame player.
+- Play the whole file, edits included, in the bundled [Ruffle](https://ruffle.rs) player.
 - Search through ActionScript, p-code or texts, plain or by regular expression, across all open files.
 
 ### Export
@@ -130,7 +131,7 @@ cargo test -p ffdec --release
 
 ## Not ported
 
-- FFDec's embedded Flash Player, debugger, Swf2Exe and uploader.
+- FFDec's embedded Flash Player (Ruffle plays files instead), debugger, Swf2Exe and uploader.
 
 ## License
 
