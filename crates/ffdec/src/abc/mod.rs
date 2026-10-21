@@ -8,6 +8,7 @@ pub mod opcodes;
 pub mod pcode;
 pub mod scripts;
 pub mod stats;
+pub mod usages;
 pub mod write;
 
 use crate::error::{Error, Result};

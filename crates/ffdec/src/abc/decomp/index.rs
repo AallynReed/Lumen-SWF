@@ -173,8 +173,7 @@ pub struct AbcIndex {
 }
 
 fn raw_names(abc: &Abc) -> (Idents, HashMap<String, Dotted>, HashSet<usize>) {
-    let _ = abc;
-    (Idents::default(), HashMap::new(), HashSet::new())
+    (Idents::default(), HashMap::new(), crate::abc::usages::colliding_multinames(abc))
 }
 
 impl AbcIndex {
