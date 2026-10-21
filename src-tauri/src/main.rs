@@ -94,9 +94,24 @@ impl Drop for Doc {
     }
 }
 
+/// An open shared object (.sol) file.
+struct SolDoc {
+    id: u32,
+    path: PathBuf,
+    sol: ffdec::amf::Sol,
+    modified: bool,
+}
+
+impl SolDoc {
+    fn name(&self) -> String {
+        self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+}
+
 #[derive(Default)]
 struct Docs {
     open: Mutex<Vec<Doc>>,
+    sols: Mutex<Vec<SolDoc>>,
     next_id: AtomicU32,
     /// Bytes of the last preview, fetched separately as a raw IPC response.
     preview: Mutex<Option<(u32, String, Vec<u8>)>>,
@@ -110,6 +125,8 @@ struct Opened {
     name: String,
     path: String,
     warnings: Vec<String>,
+    /// `swf`, or `sol` for a shared object.
+    kind: &'static str,
 }
 
 #[derive(Serialize)]
@@ -155,7 +172,7 @@ fn add(docs: &Docs, path: PathBuf, bundle: Option<(String, bool)>, swf: Swf) -> 
     let id = docs.next_id.fetch_add(1, Ordering::Relaxed) + 1;
     let mut doc = Doc::new(id, path, swf);
     doc.bundle = bundle;
-    let opened = Opened { id, name: doc.name(), path: doc.path.display().to_string(), warnings: doc.swf().warnings.clone() };
+    let opened = Opened { id, name: doc.name(), path: doc.path.display().to_string(), warnings: doc.swf().warnings.clone(), kind: "swf" };
     docs.open.lock().push(doc);
     opened
 }
@@ -164,6 +181,14 @@ fn add(docs: &Docs, path: PathBuf, bundle: Option<(String, bool)>, swf: Swf) -> 
 fn load(docs: &Docs, path: PathBuf) -> Res<Vec<Opened>> {
     let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
     let data = std::fs::read(&path).map_err(|e| err(&e))?;
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("sol")) {
+        let sol = ffdec::amf::Sol::parse(&data).map_err(|e| err(&e))?;
+        let id = docs.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+        let doc = SolDoc { id, path, sol, modified: false };
+        let opened = Opened { id, name: doc.name(), path: doc.path.display().to_string(), warnings: Vec::new(), kind: "sol" };
+        docs.sols.lock().push(doc);
+        return Ok(vec![opened]);
+    }
     if !ffdec::bundle::is_bundle(&path) || Swf::parse(&data).is_ok() {
         let swf = Swf::parse(&data).map_err(|e| err(&e))?;
         return Ok(vec![add(docs, path, None, swf)]);
@@ -188,7 +213,7 @@ async fn open_dialog(app: tauri::AppHandle, docs: State<'_, Docs>) -> Res<Vec<Op
     let picked = app
         .dialog()
         .file()
-        .add_filter("Flash files", &["swf", "gfx", "spl", "swc", "zip"])
+        .add_filter("Flash files", &["swf", "gfx", "spl", "swc", "zip", "sol"])
         .add_filter("All files", &["*"])
         .blocking_pick_files()
         .unwrap_or_default();
@@ -207,6 +232,57 @@ fn open_path(docs: State<'_, Docs>, path: String) -> Res<Vec<Opened>> {
 #[tauri::command]
 fn close_doc(docs: State<'_, Docs>, id: u32) {
     docs.open.lock().retain(|d| d.id != id);
+    docs.sols.lock().retain(|d| d.id != id);
+}
+
+#[derive(Serialize)]
+struct SolInfo {
+    fields: Vec<Field>,
+    text: String,
+}
+
+fn with_sol<T>(docs: &Docs, id: u32, f: impl FnOnce(&mut SolDoc) -> Result<T, EditError>) -> Result<T, EditError> {
+    let mut sols = docs.sols.lock();
+    let d = sols.iter_mut().find(|d| d.id == id).ok_or_else(|| "document is not open".to_string())?;
+    f(d)
+}
+
+/// A shared object's header fields and its variables as AMF text.
+#[tauri::command]
+fn sol_info(docs: State<'_, Docs>, id: u32) -> Result<SolInfo, EditError> {
+    with_sol(&docs, id, |d| {
+        let f = |name: &str, value: String| Field { name: name.into(), value };
+        let fields = vec![
+            f("File", d.path.display().to_string()),
+            f("Name", d.sol.name.clone()),
+            f("AMF version", d.sol.amf_version.to_string()),
+            f("Variables", d.sol.vars.len().to_string()),
+        ];
+        Ok(SolInfo { fields, text: d.sol.to_text() })
+    })
+}
+
+/// Replaces a shared object's variables with edited AMF text.
+#[tauri::command]
+fn apply_sol(docs: State<'_, Docs>, id: u32, text: String) -> Result<(), EditError> {
+    with_sol(&docs, id, |d| {
+        let mut sol = d.sol.clone();
+        sol.set_text(&text).map_err(|e| EditError { line: e.line, message: e.message })?;
+        sol.write().map_err(|e| e.to_string())?;
+        d.sol = sol;
+        d.modified = true;
+        Ok(())
+    })
+}
+
+/// Saves a shared object, to `path` when given.
+fn save_sol(d: &mut SolDoc, path: Option<PathBuf>) -> Res<()> {
+    let bytes = d.sol.write().map_err(|e| e.to_string())?;
+    let path = path.unwrap_or_else(|| d.path.clone());
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    d.path = path;
+    d.modified = false;
+    Ok(())
 }
 
 #[tauri::command]
@@ -281,6 +357,10 @@ async fn export_tag(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path:
 
 #[tauri::command]
 fn save(docs: State<'_, Docs>, id: u32) -> Res<String> {
+    if let Some(d) = docs.sols.lock().iter_mut().find(|d| d.id == id) {
+        save_sol(d, None)?;
+        return Ok(d.name());
+    }
     with_doc_mut(&docs, id, |d| {
         d.save()?;
         Ok(d.name())
@@ -290,12 +370,20 @@ fn save(docs: State<'_, Docs>, id: u32) -> Res<String> {
 /// Saves under a new name, which the document then takes.
 #[tauri::command]
 async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compression: String, encrypt: bool) -> Res<Option<Opened>> {
+    let sol_name = docs.sols.lock().iter().find(|d| d.id == id).map(SolDoc::name);
+    if let Some(name) = sol_name {
+        let Some(out) = save_dialog(&app, &name, ("Shared object", &["sol"])) else { return Ok(None) };
+        let mut sols = docs.sols.lock();
+        let d = sols.iter_mut().find(|d| d.id == id).ok_or("document is not open")?;
+        save_sol(d, Some(out))?;
+        return Ok(Some(Opened { id, name: d.name(), path: d.path.display().to_string(), warnings: Vec::new(), kind: "sol" }));
+    }
     let compression = Compression::parse(&compression).ok_or("unknown compression")?;
     let name = with_doc(&docs, id, |d| Ok(d.name().rsplit('/').next().unwrap_or_default().trim_matches(['[', ']']).to_string()))?;
     let Some(out) = save_dialog(&app, &name, ("SWF", &["swf"])) else { return Ok(None) };
     with_doc_mut(&docs, id, |d| {
         d.save_to(out, &SaveOptions { compression, encrypt })?;
-        Ok(Some(Opened { id, name: d.name(), path: d.path.display().to_string(), warnings: Vec::new() }))
+        Ok(Some(Opened { id, name: d.name(), path: d.path.display().to_string(), warnings: Vec::new(), kind: "swf" }))
     })
 }
 
@@ -584,7 +672,9 @@ fn discard_dialog(app: &tauri::AppHandle, names: &str) -> tauri_plugin_dialog::M
 fn guard_close(window: &tauri::Window, event: &tauri::WindowEvent) {
     let tauri::WindowEvent::CloseRequested { api, .. } = event else { return };
     let app = window.app_handle();
-    let unsaved: Vec<String> = app.state::<Docs>().open.lock().iter().filter(|d| d.modified).map(Doc::name).collect();
+    let docs = app.state::<Docs>();
+    let mut unsaved: Vec<String> = docs.open.lock().iter().filter(|d| d.modified).map(Doc::name).collect();
+    unsaved.extend(docs.sols.lock().iter().filter(|d| d.modified).map(SolDoc::name));
     if unsaved.is_empty() {
         return;
     }
@@ -593,6 +683,7 @@ fn guard_close(window: &tauri::Window, event: &tauri::WindowEvent) {
     discard_dialog(app, &unsaved.join(", ")).show(move |discard| {
         if discard {
             window.app_handle().state::<Docs>().open.lock().clear();
+            window.app_handle().state::<Docs>().sols.lock().clear();
             let _ = window.destroy();
         }
     });
@@ -637,6 +728,8 @@ fn main() {
             export_asset,
             export_all,
             search,
+            sol_info,
+            apply_sol,
             startup_files
         ])
         .run(tauri::generate_context!())

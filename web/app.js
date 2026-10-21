@@ -74,7 +74,7 @@ function selectedDoc() {
 // ---- documents ----
 
 async function loadTree(doc) {
-    doc.tree = await call('get_tree', { id: doc.id, raw: state.raw });
+    doc.tree = doc.kind === 'sol' ? [] : await call('get_tree', { id: doc.id, raw: state.raw });
 }
 
 async function addDocs(opened) {
@@ -207,8 +207,9 @@ function updateButtons() {
     $('btn-replace').disabled = !state.importable;
     $('btn-raw').disabled = !tagSelected;
     $('btn-remove').disabled = !(state.selected && state.selected.node.kind === 'tag');
-    $('btn-export-all').disabled = !has;
-    $('btn-find').disabled = !has;
+    const sol = !!(doc && doc.kind === 'sol');
+    $('btn-export-all').disabled = !has || sol;
+    $('btn-find').disabled = !state.docs.some((d) => d.kind !== 'sol');
     if (!has) $('find').hidden = true;
 }
 
@@ -291,6 +292,7 @@ async function showSelection() {
     $('content').hidden = !sel;
     if (!sel) return;
     const doc = selectedDoc();
+    if (doc.kind === 'sol') return showSol(sel, doc);
     const n = sel.node;
     $('sel-title').textContent = n.kind === 'header' ? doc.name : n.label;
     const isTag = !!n.path && n.kind !== 'folder' && n.kind !== 'script';
@@ -406,6 +408,37 @@ function renderPreview(info, data) {
     } else if (info.kind === 'code') {
         renderCode(el, info);
     }
+}
+
+// A shared object: its header in Details, its variables as editable AMF text in Preview.
+async function showSol(sel, doc) {
+    $('sel-title').textContent = doc.name;
+    document.querySelector('.tab[data-tab="hex"]').hidden = true;
+    stopPlayback();
+    clearPreview();
+    state.exportable = false;
+    state.importable = false;
+    state.editor = null;
+    updateButtons();
+    const info = await call('sol_info', { id: doc.id }).catch(() => null);
+    if (state.selected !== sel || !info) return;
+    $('fields').innerHTML = fieldRows(info.fields);
+    $('details-bar').hidden = true;
+    document.querySelector('.tab[data-tab="preview"]').hidden = false;
+    const el = $('preview');
+    $('preview-note').textContent = 'Variables as AMF text';
+    el.innerHTML = '<div class="code-bar"><button class="btn" data-act="edit" title="Edit the variables">Edit</button></div>'
+        + `<pre class="code-view">${esc(info.text)}</pre>`;
+    el.querySelector('[data-act="edit"]').addEventListener('click', () => editInPlace(el, {
+        title: 'Editing variables',
+        label: 'AMF text',
+        verb: 'Check',
+        text: info.text,
+        store: (value) => invoke('apply_sol', { id: doc.id, text: value }),
+        stored: 'Updated the variables',
+        back: () => showSelection(),
+    }));
+    setTab(state.tabPref === 'details' ? 'details' : 'preview', false);
 }
 
 // DefineFont2/3 take new glyphs from a font file: the characters typed here, and new shapes
@@ -738,8 +771,17 @@ async function saveSelected() {
 
 $('btn-save').addEventListener('click', saveSelected);
 
-$('btn-save-as').addEventListener('click', (e) => {
+$('btn-save-as').addEventListener('click', async (e) => {
     e.stopPropagation();
+    const doc = selectedDoc();
+    if (doc && doc.kind === 'sol') {
+        const out = await call('save_as', { id: doc.id, compression: 'none', encrypt: false });
+        if (!out) return;
+        Object.assign(doc, { name: out.name, path: out.path, modified: false });
+        render();
+        status(`Saved ${out.path}`);
+        return;
+    }
     $('export-menu').hidden = true;
     $('save-menu').hidden = !$('save-menu').hidden;
 });
@@ -928,7 +970,8 @@ $('find').addEventListener('submit', async (e) => {
     const text = $('find-text').value;
     if (!text) return;
     const mode = $('find-in').value;
-    const docs = $('find-all').checked ? state.docs : [selectedDoc() || state.docs[0]].filter(Boolean);
+    const swfs = state.docs.filter((d) => d.kind !== 'sol');
+    const docs = $('find-all').checked ? swfs : [selectedDoc() || swfs[0]].filter((d) => d && d.kind !== 'sol');
     const out = [];
     status(`Searching for "${text}"…`);
     for (const doc of docs) {
