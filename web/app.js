@@ -997,7 +997,7 @@ for (const b of document.querySelectorAll('[data-deob]')) {
         const doc = selectedDoc();
         if (!doc) return;
         status('Deobfuscating…');
-        const n = await call('deobfuscate', { id: doc.id, traps: b.dataset.deob === 'traps' });
+        const n = await call('deobfuscate', { id: doc.id, level: b.dataset.deob });
         doc.modified = true;
         await loadTree(doc);
         render();

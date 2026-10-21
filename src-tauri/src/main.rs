@@ -706,11 +706,17 @@ fn set_auto_deobfuscate(on: bool) {
 }
 
 #[tauri::command]
-fn deobfuscate(docs: State<'_, Docs>, id: u32, traps: bool) -> Res<usize> {
+fn deobfuscate(docs: State<'_, Docs>, id: u32, level: String) -> Res<usize> {
+    use ffdec::edit::Deobfuscation as D;
+    let level = match level.as_str() {
+        "traps" => D::Traps,
+        "groupparts" => D::GroupParts,
+        _ => D::DeadCode,
+    };
     let mut n = 0;
     with_doc_mut(&docs, id, |d| {
         d.edit(|swf| {
-            n = ffdec::edit::deobfuscate(swf, traps)?;
+            n = ffdec::edit::deobfuscate(swf, level)?;
             Ok(())
         })
     })?;
