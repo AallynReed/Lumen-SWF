@@ -12,7 +12,7 @@ pub mod pool;
 pub mod resolve;
 pub mod traits;
 
-pub use pack::replace_script;
+pub use pack::{replace_script, replace_script_renamed};
 
 /// A compile error on a 1-based line.
 #[derive(Debug, Clone)]

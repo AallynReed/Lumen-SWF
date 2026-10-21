@@ -214,6 +214,11 @@ pub struct Idents {
 }
 
 impl Idents {
+    /// Every identifier printed under another name: (name in the ABC, printed name).
+    pub fn renamed(&self) -> Vec<(String, String)> {
+        self.map.borrow().clone()
+    }
+
     fn map_get(&self, s: &str) -> Option<String> {
         self.map.borrow().iter().find(|(k, _)| k == s).map(|(_, v)| v.clone())
     }

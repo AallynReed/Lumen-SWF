@@ -84,13 +84,15 @@ pub struct Parser<'a> {
     pub lx: Lexer,
     uniq: i64,
     pub cx: &'a mut Cx,
+    /// Printed identifiers to restore: FFDec's `@identifier` replacements.
+    pub replacements: HashMap<String, String>,
 }
 
 type Meta = Metadata;
 
 impl<'a> Parser<'a> {
     pub fn new(cx: &'a mut Cx, src: &str) -> Parser<'a> {
-        Parser { lx: Lexer::new(src), uniq: 0, cx }
+        Parser { lx: Lexer::new(src), uniq: 0, cx, replacements: HashMap::new() }
     }
 
     fn uniq_id(&mut self) -> i64 {
@@ -107,7 +109,15 @@ impl<'a> Parser<'a> {
     }
 
     fn lex(&mut self) -> R<Sym> {
-        self.lx.lex()
+        let mut s = self.lx.lex()?;
+        if s.t == T::Identifier {
+            if let V::Str(v) = &s.v {
+                if let Some(r) = self.replacements.get(v) {
+                    s.v = V::Str(r.clone());
+                }
+            }
+        }
+        Ok(s)
     }
 
     fn pushback(&mut self, s: Sym) {

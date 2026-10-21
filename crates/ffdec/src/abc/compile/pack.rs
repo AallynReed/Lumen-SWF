@@ -504,6 +504,73 @@ fn rewrite_code(b: &mut crate::abc::MethodBody, dialect: Dialect, f: &dyn Fn(Ope
     b.code = bytes;
 }
 
+/// Drops the instructions a script initializer uses to create class `class`:
+/// the global object or `findpropstrict`, the ancestor scopes, `newclass`, the `popscope`s and
+/// the store.
+fn strip_class_init(b: &mut crate::abc::MethodBody, class: usize, dialect: Dialect) -> Option<()> {
+    let code = decode(&b.code, dialect).ok()?;
+    let k = code.iter().position(|i| i.code == op::NEW_CLASS && i.operands[0] as usize == class)?;
+    let mut e = k + 1;
+    while code.get(e)?.code == op::POP_SCOPE {
+        e += 1;
+    }
+    if !matches!(code[e].code, op::INIT_PROPERTY | op::SET_PROPERTY | op::SET_SLOT) {
+        return None;
+    }
+    let mut j = k.checked_sub(1)?;
+    while matches!(code[j].code, op::GET_LEX | op::PUSH_SCOPE | op::DUP | op::PUSH_NULL) {
+        j = j.checked_sub(1)?;
+    }
+    if !matches!(code[j].code, op::FIND_PROPERTY_STRICT | op::FIND_PROPERTY | op::GET_SCOPE_OBJECT | op::GET_GLOBAL_SCOPE) {
+        return None;
+    }
+    let kept: Vec<usize> = (0..code.len()).filter(|&p| p < j || p > e).collect();
+    let mut new_off = vec![0usize; code.len() + 1];
+    let mut a = 0;
+    for p in 0..code.len() {
+        new_off[p] = a;
+        if p < j || p > e {
+            a += code[p].len;
+        }
+    }
+    new_off[code.len()] = a;
+    let total = code.last().map_or(0, |i| i.offset + i.len);
+    let map = |old: i64| -> Option<i64> {
+        if old as usize == total {
+            return Some(a as i64);
+        }
+        code.binary_search_by_key(&(old as usize), |i| i.offset).ok().map(|p| new_off[p] as i64)
+    };
+    let mut bytes = Vec::new();
+    for &p in &kept {
+        let old = &code[p];
+        let mut i = old.clone();
+        for k in 0..i.kinds.len() {
+            match i.kinds[k] {
+                Operand::Offset => {
+                    let t = map(old.offset as i64 + old.len as i64 + old.operands[k])?;
+                    i.operands[k] = t - (new_off[p] + old.len) as i64;
+                }
+                Operand::CaseBaseoffset => i.operands[k] = map(old.offset as i64 + old.operands[k])? - new_off[p] as i64,
+                Operand::OptCaseOffsets => {
+                    for q in k + 1..i.operands.len() {
+                        i.operands[q] = map(old.offset as i64 + old.operands[q])? - new_off[p] as i64;
+                    }
+                }
+                _ => {}
+            }
+        }
+        bytes.extend(crate::abc::asm::encode(&i));
+    }
+    for ex in &mut b.exceptions {
+        for v in [&mut ex.start, &mut ex.end, &mut ex.target] {
+            *v = map(*v as i64)? as usize;
+        }
+    }
+    b.code = bytes;
+    Some(())
+}
+
 /// The traits of a script pack, as `getPacks` groups them, and whether it is the script's
 /// only public definition.
 pub fn pack_of(abc: &Abc, script: usize, trait_index: Option<usize>) -> (Vec<usize>, bool) {
@@ -528,10 +595,20 @@ pub fn pack_of(abc: &Abc, script: usize, trait_index: Option<usize>) -> (Vec<usi
 /// `FFDecAs3ScriptReplacer.replaceScript`: compiles `text` in place of a script pack of
 /// `abcs[selected]` and returns the new ABC.
 pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index: Option<usize>, text: &str, document_class: Option<&str>) -> R<Abc> {
+    replace_script_renamed(abcs, selected, script, trait_index, text, document_class, &[])
+}
+
+/// `replace_script` for text printed with `renames` (printed name, name in the ABC).
+pub fn replace_script_renamed(abcs: &[Abc], selected: usize, script: usize, trait_index: Option<usize>, text: &str, document_class: Option<&str>, renames: &[(String, String)]) -> R<Abc> {
     let abc = &abcs[selected];
     let (traits, simple) = pack_of(abc, script, trait_index);
-    if !simple {
-        return Err(super::CompileError { line: 0, message: "This script defines several public definitions; FFDec cannot recompile it safely".into() });
+    let fail = |m: &str| super::CompileError { line: 0, message: m.into() };
+    let classes: Vec<usize> = traits.iter().filter_map(|&t| match abc.scripts[script].traits[t].data {
+        TraitData::Class { class, .. } => Some(class),
+        _ => None,
+    }).collect();
+    if !simple && (trait_index.is_none() || !matches!(abc.scripts[script].traits[trait_index.unwrap()].data, TraitData::Class { .. })) {
+        return Err(fail("Only a class can be compiled on its own in a script that defines several things"));
     }
     let others: Vec<Abc> = abcs.iter().enumerate().filter(|(i, _)| *i != selected).map(|(_, a)| a.clone()).collect();
     let mut cx = Cx::new(abc.clone(), others);
@@ -568,6 +645,14 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         eprintln!("index built");
     }
     cx.delete_pack(script, &traits, simple);
+    if !simple {
+        let init = abc.scripts[script].init;
+        let bi = abc.body_of.get(init).copied().flatten().ok_or_else(|| fail("The script has no initializer"))?;
+        let dialect = Dialect::of(abc.major, abc.minor);
+        for &c in &classes {
+            strip_class_init(&mut cx.abc.bodies[bi], c, dialect).ok_or_else(|| fail("The script initializer does not set up this class in a way that can be replaced"))?;
+        }
+    }
     cx.refresh();
     if trace {
         eprintln!("refreshed");
@@ -575,6 +660,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
     let new_index = cx.abc.scripts.len();
     let parsed = {
         let mut p = Parser::new(&mut cx, text);
+        p.replacements = renames.iter().cloned().collect();
         p.parse_script(&format!("{script_name}.as"), script)?
     };
     if trace {
@@ -586,11 +672,18 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         eprintln!("generated");
     }
     cx.finalize();
-    let s = cx.abc.scripts.remove(new_index);
-    cx.abc.scripts[script] = s;
-    cx.deleted.scripts.remove(&script);
-    cx.deleted.traits.retain(|(o, _)| *o != Owner::Script(script));
+    if simple {
+        let s = cx.abc.scripts.remove(new_index);
+        cx.abc.scripts[script] = s;
+        cx.deleted.scripts.remove(&script);
+        cx.deleted.traits.retain(|(o, _)| *o != Owner::Script(script));
+    }
     cx.pack();
+    if !simple {
+        // Before the old script, so the entry script stays last.
+        let s = cx.abc.scripts.pop().unwrap();
+        cx.abc.scripts.insert(script, s);
+    }
     let generated: Vec<usize> = cx.body_map.iter().enumerate().filter(|(i, _)| *i >= old_bodies).filter_map(|(_, b)| *b).collect();
     for b in generated {
         if let Err((at, what)) = crate::abc::stats::fit_body(&mut cx.abc, b) {

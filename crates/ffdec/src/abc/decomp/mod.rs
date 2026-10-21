@@ -75,6 +75,19 @@ pub fn entry_source_with(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf
     r.unwrap_or_else(|| "/*\r\n * Decompilation error\r\n */\r\n".into())
 }
 
+/// The names an entry's decompiled text uses for identifiers that are not valid ActionScript,
+/// as (printed name, name in the ABC).
+pub fn entry_renames(index: &Arc<index::AbcIndex>, abc: &Abc, e: &Entry, swf: &SwfContext) -> Vec<(String, String)> {
+    with_big_stack(|| {
+        let mut ctx = ctx::Ctx::new(abc, ctx::Config::default()).with_index(index.clone());
+        ctx.swf_version = swf.version;
+        ctx.doc = swf.doc.clone();
+        let pack = script::pack_of(&ctx, e.script, e.trait_index);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| script::pack_source(&ctx, &pack)));
+        ctx.ids.renamed().into_iter().map(|(raw, printed)| (printed, raw)).collect()
+    })
+}
+
 /// Runs `f` on a thread with a large stack: the structuring code recurses once per nested block.
 pub fn with_big_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     std::thread::scope(|s| std::thread::Builder::new().stack_size(1 << 30).spawn_scoped(s, f).expect("decompiler thread").join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
