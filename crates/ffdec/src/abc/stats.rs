@@ -31,7 +31,7 @@ fn runtime_args(abc: &Abc, index: i64) -> i64 {
 }
 
 /// Pops and pushes on the operand stack, and the scope stack change; None where FFDec has none.
-fn deltas(i: &Instruction, abc: &Abc) -> Option<(i64, i64, i64)> {
+pub(crate) fn deltas(i: &Instruction, abc: &Abc) -> Option<(i64, i64, i64)> {
     let o = &i.operands;
     let rt = || runtime_args(abc, o[0]);
     Some(match i.code {

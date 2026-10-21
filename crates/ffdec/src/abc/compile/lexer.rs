@@ -303,6 +303,17 @@ impl Lexer {
         self.finished = false;
     }
 
+    /// `begin`: switches state and drops any pending text.
+    pub fn begin(&mut self, state: State) {
+        self.xml_text.clear();
+        self.state = state;
+    }
+
+    pub fn yytext(&self) -> String {
+        let (start, len) = self.last_token;
+        self.s[start.min(self.s.len())..(start + len).min(self.s.len())].iter().collect()
+    }
+
     fn slice(&self, a: usize, b: usize) -> String {
         self.s[a..b].iter().collect()
     }
