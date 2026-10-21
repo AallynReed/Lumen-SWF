@@ -38,7 +38,7 @@ Everything is ported from FFDec and checked against FFDec 26.4 on the 332 SWFs o
 - AS3 and AS1/2 decompilers. They reproduce JPEXS's own test expectations (366 of 369 AS3 methods, all AS3 classes and all 84 AS1/2 cases).
 - AS3 and AS1/2 compilers that match FFDec byte for byte on all 192 AS1/2 and 1,207 single-definition AS3 corpus scripts.
 - P-code editing per AS1/2 script or AS3 method, with errors reported by line.
-- FFDec's automatic deobfuscation for AS1/2 and AS3, and its permanent remove traps / remove dead code for AS3.
+- FFDec's automatic deobfuscation for AS1/2 and AS3, and permanent AS3 rewrites: remove traps, remove dead code, and FFDec's GroupParts, which moves blocks reached by a single jump to where they are jumped to.
 
 ### Editing
 
@@ -79,6 +79,8 @@ ffdec-cli pcode movie.swf com.example.Main
 ffdec-cli pcode movie.swf frame_1/DoAction
 ffdec-cli as3 movie.swf com.example.Main
 ffdec-cli as2 movie.swf frame_1/DoAction
+ffdec-cli as3 movie.swf com.example.Main --deobfuscate
+ffdec-cli deobfuscate in.swf out.swf [--dead-code | --group-parts]
 ffdec-cli decompress in.swf out.swf
 ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
 ffdec-cli pcode movie.swf com.example.Main --method "instance initializer"
