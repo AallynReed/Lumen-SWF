@@ -498,7 +498,7 @@ fn vector(m: &Movie, s: &Src, at: u64, id: u16, ty: i32) -> Result<Tag> {
 
 // ---- other assets ----
 
-fn bitmap(file: &IggyFile, s: &Src, at: u64, id: u16) -> Result<Tag> {
+fn bitmap(file: Option<&IggyFile>, s: &Src, at: u64, id: u16) -> Result<Tag> {
     let wide = s.wide;
     let header = if wide { 32 } else { 16 };
     let width = s.u16(at + header)?;
@@ -523,11 +523,11 @@ fn bitmap(file: &IggyFile, s: &Src, at: u64, id: u16) -> Result<Tag> {
             w.u32(s.i32(at + o)? as u32);
         }
         let (mut ty, mut offset, mut fmt, mut rw, mut rh) = (0u8, u32::MAX, 65535u16, 0u16, 0u16);
-        match &file.file_name {
+        match file.and_then(|f| f.file_name.as_ref()) {
             Some(n) => {
                 let stem = n.rfind('.').map_or(n.as_str(), |i| &n[..i]);
                 swf_string(&mut w, &format!("{stem}.raw.iggytex"));
-                for t in &file.textures {
+                for t in &file.unwrap().textures {
                     for (r, rid) in &t.records {
                         if *rid == id as u32 {
                             ty = 8;
@@ -1224,6 +1224,22 @@ pub fn timeline_tags(m: &Movie, t: &Timeline, frames: u64) -> Result<Vec<Tag>> {
     Ok(out)
 }
 
+/// One dictionary asset (shape, morph, bitmap, static text, button, sound or binary data)
+/// as its SWF tag.
+pub fn asset_tag(file: Option<&IggyFile>, m: &Movie, e: &super::swf::DictEntry) -> Result<Tag> {
+    let s = Src { data: m.original_data(), wide: m.is64 };
+    let id = e.id as u16;
+    match e.ty {
+        1 | 2 => vector(m, &s, e.address, id, e.ty),
+        4 => bitmap(file, &s, e.address, id),
+        5 => static_text(m, &s, e.address, id),
+        20 => binary(&s, e.address, id),
+        7 => button(&s, e.address, id),
+        21 => sound(&s, e.address, id),
+        t => err(format!("Unsupported Iggy asset type {t}")),
+    }
+}
+
 fn write_tags(w: &mut Writer, tags: &[Tag]) {
     for t in tags {
         t.write(w);
@@ -1281,15 +1297,7 @@ pub fn swf_bytes(file: &IggyFile) -> Result<Vec<u8>> {
             if p != pass {
                 continue;
             }
-            let id = e.id as u16;
-            tags.push(match e.ty {
-                1 | 2 => vector(m, &s, e.address, id, e.ty)?,
-                4 => bitmap(file, &s, e.address, id)?,
-                5 => static_text(m, &s, e.address, id)?,
-                20 => binary(&s, e.address, id)?,
-                7 => button(&s, e.address, id)?,
-                _ => sound(&s, e.address, id)?,
-            });
+            tags.push(asset_tag(Some(file), m, e)?);
             exported.insert(e.id);
         }
     }

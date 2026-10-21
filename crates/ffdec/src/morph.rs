@@ -10,32 +10,33 @@ use crate::types::{Matrix, Rect, Rgba};
 pub const MAX_RATIO: f64 = 65535.0;
 
 #[derive(Debug, Clone)]
-struct MorphGradient {
-    spread: u8,
-    interpolation: u8,
-    records: Vec<(u8, Rgba, u8, Rgba)>,
-    focal: (f64, f64),
+pub struct MorphGradient {
+    pub spread: u8,
+    pub interpolation: u8,
+    pub records: Vec<(u8, Rgba, u8, Rgba)>,
+    pub focal: (f64, f64),
 }
 
 #[derive(Debug, Clone)]
-enum MorphFill {
+pub enum MorphFill {
     Solid(Rgba, Rgba),
     Gradient { kind: u8, start: Matrix, end: Matrix, gradient: MorphGradient },
     Bitmap { id: u16, start: Matrix, end: Matrix, repeat: bool, smooth: bool },
 }
 
 #[derive(Debug, Clone)]
-struct MorphLine {
-    widths: (u16, u16),
-    colors: (Rgba, Rgba),
-    start_cap: u8,
-    end_cap: u8,
-    join: u8,
-    miter_limit: f64,
-    no_close: bool,
-    no_h_scale: bool,
-    no_v_scale: bool,
-    fill: Option<MorphFill>,
+pub struct MorphLine {
+    pub widths: (u16, u16),
+    pub colors: (Rgba, Rgba),
+    pub start_cap: u8,
+    pub end_cap: u8,
+    pub join: u8,
+    pub miter_limit: f64,
+    pub no_close: bool,
+    pub no_h_scale: bool,
+    pub no_v_scale: bool,
+    pub pixel_hinting: bool,
+    pub fill: Option<MorphFill>,
 }
 
 pub struct MorphShape {
@@ -43,10 +44,10 @@ pub struct MorphShape {
     pub start_bounds: Rect,
     pub end_bounds: Rect,
     pub version: u8,
-    fills: Vec<MorphFill>,
-    lines: Vec<MorphLine>,
-    start: Vec<Record>,
-    end: Vec<Record>,
+    pub fills: Vec<MorphFill>,
+    pub lines: Vec<MorphLine>,
+    pub start: Vec<Record>,
+    pub end: Vec<Record>,
 }
 
 pub fn is_morph(code: u16) -> bool {
@@ -94,6 +95,7 @@ fn read_line(r: &mut Reader, version: u8) -> Result<MorphLine> {
             no_close: false,
             no_h_scale: false,
             no_v_scale: false,
+            pixel_hinting: false,
             fill: None,
         });
     }
@@ -102,7 +104,7 @@ fn read_line(r: &mut Reader, version: u8) -> Result<MorphLine> {
     let has_fill = r.bit()?;
     let no_h_scale = r.bit()?;
     let no_v_scale = r.bit()?;
-    r.bit()?;
+    let pixel_hinting = r.bit()?;
     r.ub(5)?;
     let no_close = r.bit()?;
     let end_cap = r.ub(2)? as u8;
@@ -114,7 +116,7 @@ fn read_line(r: &mut Reader, version: u8) -> Result<MorphLine> {
     } else {
         ((Rgba::read_rgba(r)?, Rgba::read_rgba(r)?), None)
     };
-    Ok(MorphLine { widths, colors, start_cap, end_cap, join, miter_limit, no_close, no_h_scale, no_v_scale, fill })
+    Ok(MorphLine { widths, colors, start_cap, end_cap, join, miter_limit, no_close, no_h_scale, no_v_scale, pixel_hinting, fill })
 }
 
 fn fill_at(f: &MorphFill, t: f64) -> Fill {
