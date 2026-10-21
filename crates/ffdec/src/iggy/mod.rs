@@ -4,3 +4,4 @@ pub mod file;
 pub mod model;
 pub mod stream;
 pub mod swf;
+pub mod to_swf;

@@ -57,6 +57,30 @@ impl Swf {
         })
     }
 
+    /// A new uncompressed movie; `frame_rate` is stored as UFIXED8 like FFDec's `writeUFIXED8`.
+    pub fn new(version: u8, frame_rect: Rect, frame_rate: f32, frame_count: u16, tags: Vec<Tag>) -> Swf {
+        let header = Header { signature: "FWS".into(), compression: Compression::None, gfx: false, encrypted: false, version, file_size: 0, lzma_props: None };
+        let mut w = Writer::new();
+        frame_rect.write(&mut w);
+        let rate = (frame_rate * 256.0) as i32 as u16;
+        w.u16(rate);
+        w.u16(frame_count);
+        let frame_rate = rate as f32 / 256.0;
+        let has_end = tags.last().is_some_and(|t| t.code == code::END);
+        Swf {
+            header,
+            frame_rect,
+            frame_rate,
+            frame_count,
+            movie_header_raw: w.data,
+            original_rect: frame_rect,
+            timeline: Timeline { tags, trailer: Vec::new(), has_end },
+            file_trailer: Vec::new(),
+            warnings: Vec::new(),
+            original_body_len: usize::MAX,
+        }
+    }
+
     pub fn is_as3(&self) -> bool {
         self.file_attributes().map(|f| f & 0x08 != 0).unwrap_or_else(|| {
             self.timeline.tags.iter().any(|t| t.code == code::DO_ABC || t.code == code::DO_ABC2)
