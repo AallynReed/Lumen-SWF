@@ -637,43 +637,7 @@ impl<'c, 'a> Deob<'c, 'a> {
     // ---- Jumps ----
 
     fn jumps(&mut self) {
-        let starts: Vec<usize> = self.code().exceptions.iter().filter_map(|e| self.code().adr2pos_nearest(e.start as i64)).collect();
-        loop {
-            let mut found = false;
-            let refs = self.code().visit_refs();
-            for i in 0..self.code().len() {
-                let ins = self.code().ins[i].clone();
-                if ins.code != op::JUMP {
-                    continue;
-                }
-                let target = ins.target_address();
-                let mismatch = |src: i64, code: &Code| code.exceptions.iter().any(|e| (src >= e.start as i64 && src < e.end as i64) != (target >= e.start as i64 && target < e.end as i64));
-                if mismatch(ins.addr, self.code()) || starts.contains(&i) {
-                    continue;
-                }
-                for &r in refs.get(i).map(Vec::as_slice).unwrap_or(&[]) {
-                    if r < 0 {
-                        continue;
-                    }
-                    let r = r as usize;
-                    let src = self.code().ins[r].clone();
-                    if src.code == op::JUMP || (src.is_if_type() && r + 1 != i) {
-                        if mismatch(src.addr, self.code()) {
-                            continue;
-                        }
-                        let new = target - (src.addr + src.len);
-                        if self.code().ins[r].ops[0] != new {
-                            self.code_mut().ins[r].ops[0] = new;
-                            found = true;
-                        }
-                    }
-                }
-            }
-            self.code_mut().remove_dead_code();
-            if !found {
-                break;
-            }
-        }
+        jumps(self.code_mut());
     }
 
     fn remove_traps(&mut self) -> R<()> {
@@ -685,6 +649,104 @@ impl<'c, 'a> Deob<'c, 'a> {
         self.remove_null_pushes();
         Ok(())
     }
+}
+
+/// `AVM2DeobfuscatorJumps`: jumps to a jump go straight to its target.
+fn jumps(code: &mut Code) {
+    let starts: Vec<usize> = code.exceptions.iter().filter_map(|e| code.adr2pos_nearest(e.start as i64)).collect();
+    loop {
+        let mut found = false;
+        let refs = code.visit_refs();
+        for i in 0..code.len() {
+            let ins = code.ins[i].clone();
+            if ins.code != op::JUMP {
+                continue;
+            }
+            let target = ins.target_address();
+            let mismatch = |src: i64, code: &Code| code.exceptions.iter().any(|e| (src >= e.start as i64 && src < e.end as i64) != (target >= e.start as i64 && target < e.end as i64));
+            if mismatch(ins.addr, code) || starts.contains(&i) {
+                continue;
+            }
+            for &r in refs.get(i).map(Vec::as_slice).unwrap_or(&[]) {
+                if r < 0 {
+                    continue;
+                }
+                let r = r as usize;
+                let src = code.ins[r].clone();
+                if src.code == op::JUMP || (src.is_if_type() && r + 1 != i) {
+                    if mismatch(src.addr, code) {
+                        continue;
+                    }
+                    let new = target - (src.addr + src.len);
+                    if code.ins[r].ops[0] != new {
+                        code.ins[r].ops[0] = new;
+                        found = true;
+                    }
+                }
+            }
+        }
+        code.remove_dead_code();
+        if !found {
+            break;
+        }
+    }
+}
+
+fn real_refs(refs: &[Vec<i32>], ip: usize) -> Option<usize> {
+    Some(refs.get(ip)?.iter().filter(|&&r| r >= 0).count())
+}
+
+/// `AVM2DeobfuscatorGroupParts`: a block reached only by one jump is moved to where it jumps.
+fn group_parts(code: &mut Code) -> Option<()> {
+    code.remove_dead_code();
+    let mut refs = code.visit_refs();
+    let mut i: i64 = 0;
+    while (i as usize) < code.len() {
+        let iu = i as usize;
+        let ins = code.ins[iu].clone();
+        if ins.code == op::JUMP {
+            let target_addr = ins.target_address();
+            let target_ip = code.adr2pos(target_addr)?;
+            if real_refs(&refs, target_ip)? == 1 {
+                let mut start_ip = 0;
+                for j in (0..=iu).rev() {
+                    let s = &code.ins[j];
+                    if j < iu && (s.is_if_type() || s.code == op::LOOKUPSWITCH) {
+                        start_ip = j + 1;
+                        break;
+                    }
+                    let src = code.pos2adr(j);
+                    let mismatch = code.exceptions.iter().any(|e| (src >= e.start as i64 && src < e.end as i64) != (target_addr >= e.start as i64 && target_addr < e.end as i64));
+                    if mismatch {
+                        start_ip = j + 1;
+                        break;
+                    } else if real_refs(&refs, j)? > 1 {
+                        start_ip = j;
+                        break;
+                    }
+                }
+                if start_ip < iu {
+                    let mut moved = Vec::new();
+                    for _ in start_ip..iu {
+                        moved.push(code.ins[start_ip].clone());
+                        code.remove_instruction(start_ip);
+                    }
+                    let mut new_target = target_ip;
+                    if target_ip > iu {
+                        new_target -= moved.len();
+                    }
+                    for (m, x) in moved.into_iter().enumerate() {
+                        code.insert_instruction(new_target + m, x, false);
+                    }
+                    i = -1;
+                    refs = code.visit_refs();
+                }
+            }
+        }
+        i += 1;
+    }
+    jumps(code);
+    Some(())
 }
 
 /// `MethodBody.getLocalReservedCount`.
@@ -779,6 +841,26 @@ pub fn remove_traps(abc: &mut Abc, method: usize, is_static: bool, script_index:
     let Some((code, extras)) = r else { return false };
     store(abc, bi, &code, extras);
     true
+}
+
+/// FFDec's optional `AVM2DeobfuscatorGroupParts` on a stored body. False when it fails; the
+/// body is then left as it was.
+pub fn group_parts_in_place(abc: &mut Abc, method: usize) -> bool {
+    let Some(bi) = abc.body_of.get(method).copied().flatten() else { return false };
+    let mut code = Code::new(abc, &abc.bodies[bi]);
+    let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| group_parts(&mut code).is_some())).unwrap_or(false);
+    if ok {
+        store(abc, bi, &code, Extras::default());
+    }
+    ok
+}
+
+/// `AVM2DeobfuscatorJumps` alone on a stored body.
+pub fn jumps_in_place(abc: &mut Abc, method: usize) {
+    let Some(bi) = abc.body_of.get(method).copied().flatten() else { return };
+    let mut code = Code::new(abc, &abc.bodies[bi]);
+    jumps(&mut code);
+    store(abc, bi, &code, Extras::default());
 }
 
 /// `MethodBody.removeDeadCode`.
