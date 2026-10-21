@@ -30,3 +30,4 @@ pub use container::Compression;
 pub use error::{Error, Result};
 pub use swf::{SaveOptions, Swf};
 pub use tags::Tag;
+pub mod xfl;

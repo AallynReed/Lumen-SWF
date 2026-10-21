@@ -176,6 +176,11 @@ fn error_comment(w: &mut Writer, kind: &str) {
 /// `Action.actionsToSource`: decompiled ActionScript of an action record, wrapped in its
 /// `on(...)`/`onClipEvent(...)` header when it has one.
 pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option<&str>, path: &str, uninit: &uninit::Uninitialized) -> String {
+    actions_to_source_with(list, inside_do_init, header, path, uninit, &|_| {})
+}
+
+/// `actions_to_source` with a `treeOperation` run on the decompiled top-level statements.
+pub fn actions_to_source_with(list: &ActionList, inside_do_init: bool, header: Option<&str>, path: &str, uninit: &uninit::Uninitialized, op: &(dyn Fn(&List) + Sync)) -> String {
     crate::abc::decomp::with_big_stack(|| {
         let uninit = Rc::new(uninit.clone());
         let tree = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::abc::decomp::method::with_deadline(|| actions_to_tree(list, inside_do_init, path, &uninit))));
@@ -204,6 +209,7 @@ pub fn actions_to_source(list: &ActionList, inside_do_init: bool, header: Option
         }
         match tree {
             Ok(Ok(tree)) => {
+                op(&tree);
                 let items: Vec<It> = tree.borrow().clone();
                 let printed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     crate::abc::decomp::print::graph_to_string(&items, &mut Writer::nul(), &ld);
@@ -262,10 +268,15 @@ pub fn swf_uninitialized(swf: &crate::Swf) -> uninit::Uninitialized {
 
 /// Decompiled source of one script, with the class fields `uninit` found for the SWF.
 pub fn source_text(swf: &crate::Swf, s: &super::scripts::Source, uninit: &uninit::Uninitialized) -> String {
+    source_text_with(swf, s, uninit, &|_| {})
+}
+
+/// `source_text` with a tree operation run before printing.
+pub fn source_text_with(swf: &crate::Swf, s: &super::scripts::Source, uninit: &uninit::Uninitialized, op: &(dyn Fn(&List) + Sync)) -> String {
     let names = crate::names::Names::new(swf);
     let empty = uninit::Uninitialized::default();
     let u = if is_class_source(swf, &names, s) { uninit } else { &empty };
-    actions_to_source(&s.actions(swf), s.kind == super::scripts::Kind::DoInitAction, s.header.as_deref(), "", u)
+    actions_to_source_with(&s.actions(swf), s.kind == super::scripts::Kind::DoInitAction, s.header.as_deref(), "", u, op)
 }
 
 fn dotted(it: &It) -> Option<String> {

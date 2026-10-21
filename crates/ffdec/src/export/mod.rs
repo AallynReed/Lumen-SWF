@@ -202,6 +202,69 @@ impl<'a> Exporter<'a> {
         self.as3().abcs.iter().find(|(p, _)| p == path).map(|(_, a)| a).ok_or_else(|| Error::Other("not an ABC tag".into()))
     }
 
+    /// Whether an ABC of the SWF defines the class (raw dotted name).
+    pub fn has_as3_class(&self, class: &str) -> bool {
+        self.as3().abcs.iter().any(|(_, abc)| crate::abc::decomp::find_class(abc, class).is_some())
+    }
+
+    /// Whether the class (raw dotted name) extends `base`, following superclasses in the SWF.
+    pub fn as3_extends(&self, class: &str, base: &str) -> bool {
+        let mut name = class.to_string();
+        for _ in 0..64 {
+            let mut next = None;
+            for (_, abc) in &self.as3().abcs {
+                if let Some((_, c)) = crate::abc::decomp::find_class(abc, &name) {
+                    let ctx = crate::abc::decomp::ctx::Ctx::new(abc, Default::default());
+                    next = Some(ctx.names().name_with_ns(abc.instances[c].super_name, false).raw());
+                    break;
+                }
+            }
+            match next {
+                Some(n) if n == base => return true,
+                Some(n) if !n.is_empty() => name = n,
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// AS3 frame scripts the class registers with `addFrameScript`, by zero-based frame.
+    pub fn as3_frame_scripts(&self, class: &str) -> std::collections::BTreeMap<i32, String> {
+        let as3 = self.as3();
+        for (_, abc) in &as3.abcs {
+            if let Some((s, c)) = crate::abc::decomp::find_class(abc, class) {
+                return crate::abc::decomp::frame_scripts(&as3.index, abc, s, c, &as3.swf);
+            }
+        }
+        Default::default()
+    }
+
+    /// The document-level and per-instance accessibility attributes the class assigns.
+    pub fn as3_accessibility(&self, class: &str) -> (Vec<(String, String)>, Vec<crate::abc::decomp::AccItem>) {
+        let as3 = self.as3();
+        for (_, abc) in &as3.abcs {
+            if let Some((s, c)) = crate::abc::decomp::find_class(abc, class) {
+                return crate::abc::decomp::accessibility(&as3.index, abc, s, c, &as3.swf);
+            }
+        }
+        Default::default()
+    }
+
+    /// Every AS3 script as `package/Name.as`, decompiled.
+    pub fn as3_sources(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (path, abc) in &self.as3().abcs {
+            for e in crate::abc::scripts::entries(abc) {
+                let mut name: Vec<String> = if e.package.is_empty() { Vec::new() } else { e.package.split('.').map(make_file_name).collect() };
+                name.push(make_file_name(&format!("{}.as", e.name)));
+                if let Ok(text) = self.script_source(path, &e) {
+                    out.push((name.join("/"), text));
+                }
+            }
+        }
+        out
+    }
+
     /// Decompiled ActionScript of a script entry of the ABC at `path`.
     pub fn script_source(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
         let abc = self.abc_at(path)?;
@@ -534,6 +597,12 @@ impl<'a> Exporter<'a> {
     pub fn as2_source(&self, s: &crate::action::scripts::Source) -> String {
         let fields = self.as2_fields.get_or_init(|| crate::action::decomp::swf_uninitialized(self.swf));
         crate::action::decomp::source_text(self.swf, s, fields)
+    }
+
+    /// `as2_source` with a tree operation run on the decompiled statements before printing.
+    pub fn as2_source_with(&self, s: &crate::action::scripts::Source, op: &(dyn Fn(&crate::abc::decomp::item::List) + Sync)) -> String {
+        let fields = self.as2_fields.get_or_init(|| crate::action::decomp::swf_uninitialized(self.swf));
+        crate::action::decomp::source_text_with(self.swf, s, fields, op)
     }
 
     /// Writes `export_all` into `dir/<kind>/…`. Returns written paths and per-asset errors.

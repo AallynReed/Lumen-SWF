@@ -213,6 +213,13 @@ impl MorphShape {
         }
     }
 
+    /// The start edges with the start styles, as `getStartEdges` with `getStartFillStyles`.
+    pub fn start_shape(&self) -> Shape {
+        let mut s = self.shape_at(0);
+        s.records = self.start.clone();
+        s
+    }
+
     /// The shape at `ratio` (0 = start, 65535 = end). Straight edges paired with curves
     /// are converted to curves first.
     pub fn shape_at(&self, ratio: u16) -> Shape {

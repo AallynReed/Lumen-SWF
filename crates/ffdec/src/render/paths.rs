@@ -54,6 +54,17 @@ type EdgeMap = HashMap<usize, Vec<Edge>>;
 /// Builds paths for `shape`; `end`, when given, must have the same record structure
 /// (as `MorphShape::shape_at(0)` and `shape_at(65535)` do).
 pub fn build(shape: &Shape, end: Option<&Shape>) -> Paths {
+    let mut p = build_all(shape, end);
+    p.layers.retain(|l| !l.fills.is_empty() || !l.lines.is_empty());
+    p
+}
+
+/// Every group's fill and line paths, empty groups included, as `ShapeExporterBase` keeps them.
+pub fn build_layers(shape: &Shape) -> Vec<Layer> {
+    build_all(shape, None).layers
+}
+
+fn build_all(shape: &Shape, end: Option<&Shape>) -> Paths {
     let mut fills = shape.styles.fills.clone();
     let mut lines = shape.styles.lines.clone();
     let mut layers = Vec::new();
@@ -117,7 +128,6 @@ pub fn build(shape: &Shape, end: Option<&Shape>) -> Paths {
     }
     process(&mut sub, ln, f0, f1, &mut fill_map, &mut line_map);
     layers.push(finish(&mut fill_map, &mut line_map));
-    layers.retain(|l| !l.fills.is_empty() || !l.lines.is_empty());
     Paths { fills, lines, layers }
 }
 

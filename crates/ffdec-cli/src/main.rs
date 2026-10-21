@@ -109,6 +109,19 @@ enum Cmd {
         #[arg(long)]
         no_deps: bool,
     },
+    /// Convert a SWF to an XFL folder (or a zipped FLA with --compressed), named after OUTPUT.fla
+    Xfl {
+        input: PathBuf,
+        output: PathBuf,
+        /// cs5, cs5.5, cs6 or cc (AS1/2 SWFs need cs6 or older)
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        compressed: bool,
+        /// Skip the .as files next to the document
+        #[arg(long)]
+        no_scripts: bool,
+    },
     /// Print a shared object (.sol) as FFDec's AMF text, or with --set store edited text in OUT
     Sol {
         file: PathBuf,
@@ -384,6 +397,20 @@ fn main() -> Result<()> {
         }
         Cmd::Swc { input, output, no_deps } => {
             std::fs::write(&output, ffdec::export::swc::swc(&open(&input)?, no_deps)?)?;
+        }
+        Cmd::Xfl { input, output, version, compressed, no_scripts } => {
+            let swf = open(&input)?;
+            let version = match version {
+                Some(v) => ffdec::xfl::FlaVersion::parse(&v).ok_or_else(|| anyhow!("unknown FLA version {v}"))?,
+                None if swf.is_as3() => ffdec::xfl::FlaVersion::Cc,
+                None => ffdec::xfl::FlaVersion::Cs6,
+            };
+            let mtime = std::fs::metadata(&input).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64);
+            let opts = ffdec::xfl::Options { compressed, version, export_script: !no_scripts, timestamp: mtime, ..Default::default() };
+            let base = output.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "movie".into());
+            let dir = output.parent().map(Path::to_path_buf).unwrap_or_default();
+            let out = ffdec::xfl::convert(&swf, &base, &opts)?;
+            ffdec::xfl::convert::write(&out, &dir, &base, compressed)?;
         }
         Cmd::Sol { file, set, out } => {
             let mut sol = ffdec::amf::Sol::parse(&std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?)?;
