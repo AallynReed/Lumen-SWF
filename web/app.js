@@ -921,6 +921,17 @@ $('btn-export-go').addEventListener('click', async () => {
     else status(`Exported ${r.written} files to ${r.dir}`);
 });
 
+for (const b of document.querySelectorAll('[data-doc-export]')) {
+    b.addEventListener('click', async () => {
+        $('export-menu').hidden = true;
+        const doc = selectedDoc() || state.docs[0];
+        if (!doc) return;
+        status('Exporting…');
+        const out = await call('export_document', { id: doc.id, format: b.dataset.docExport });
+        status(out ? `Exported ${out}` : 'Ready');
+    });
+}
+
 // ---- search ----
 
 function toggleFind(show = $('find').hidden) {

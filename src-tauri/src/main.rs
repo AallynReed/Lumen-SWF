@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::mem::ManuallyDrop;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ffdec::export::{Exporter, Kind, Options};
@@ -648,6 +648,36 @@ async fn export_all(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, kinds
     })
 }
 
+/// Saves the file as an FLA (`fla`), an XFL folder (`xfl`) or an SWC library (`swc`).
+#[tauri::command]
+async fn export_document(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, format: String) -> Res<Option<String>> {
+    let (stem, as3, mtime) = with_doc(&docs, id, |d| {
+        let stem = d.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "movie".into());
+        let mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64);
+        Ok((stem, d.swf().is_as3(), mtime))
+    })?;
+    let (label, ext) = match format.as_str() {
+        "swc" => ("SWC library", "swc"),
+        _ => ("Flash document", "fla"),
+    };
+    let Some(out) = save_dialog(&app, &format!("{stem}.{ext}"), (label, &[ext])) else { return Ok(None) };
+    with_doc(&docs, id, |d| {
+        if format == "swc" {
+            let data = ffdec::export::swc::swc(d.swf(), false).map_err(|e| e.to_string())?;
+            std::fs::write(&out, data).map_err(|e| e.to_string())?;
+            return Ok(Some(out.display().to_string()));
+        }
+        let compressed = format == "fla";
+        let version = if as3 { ffdec::xfl::FlaVersion::Cc } else { ffdec::xfl::FlaVersion::Cs6 };
+        let opts = ffdec::xfl::Options { compressed, version, timestamp: mtime, ..Default::default() };
+        let base = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(stem);
+        let dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
+        let xfl = ffdec::xfl::convert(d.swf(), &base, &opts).map_err(|e| e.to_string())?;
+        ffdec::xfl::convert::write(&xfl, &dir, &base, compressed).map_err(|e| e.to_string())?;
+        Ok(Some(if compressed { out.display().to_string() } else { dir.join(&base).display().to_string() }))
+    })
+}
+
 /// Scripts or texts of one file matching a pattern.
 #[tauri::command]
 async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool, regex: bool, pcode: bool, texts: bool) -> Res<Vec<ffdec::search::Hit>> {
@@ -727,6 +757,7 @@ fn main() {
             preview_data,
             export_asset,
             export_all,
+            export_document,
             search,
             sol_info,
             apply_sol,
