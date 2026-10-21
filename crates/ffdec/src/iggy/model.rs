@@ -1074,12 +1074,11 @@ impl Font {
                 }
             }
         }
-        if let Some((chars, padd)) = &self.code_points {
+        if let Some((chars, _)) = &self.code_points {
             older_offset(s, p_index);
             for &c in chars {
                 s.w16(c as u32);
             }
-            s.w32(*padd);
             s.idx().array16(chars.len() as u64);
             s.idx().pad8();
             s.pad8();
