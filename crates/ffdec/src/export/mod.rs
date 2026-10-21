@@ -250,6 +250,211 @@ impl<'a> Exporter<'a> {
         Default::default()
     }
 
+    /// The printable form of a raw dotted class name.
+    fn printable_class(class: &str) -> String {
+        crate::abc::decomp::names::Dotted::parse_no_suffix(class).printable(&Default::default())
+    }
+
+    /// `getCharacterExportFileName`: id, export name, and the class when there is one.
+    fn character_export_file(&self, id: u16) -> String {
+        let mut s = id.to_string();
+        if let Some(e) = self.names.export.get(&id) {
+            s.push('_');
+            s.push_str(e);
+        }
+        if let Some([c]) = self.names.classes.get(&id).map(Vec::as_slice) {
+            s.push('_');
+            s.push_str(&Self::printable_class(c));
+        }
+        s
+    }
+
+    fn character_by_class(&self, class: &str) -> Option<(u16, &'a Tag)> {
+        let mut ids: Vec<u16> = self.names.classes.iter().filter(|(_, v)| v.iter().any(|c| c == class)).map(|(&id, _)| id).collect();
+        ids.sort_unstable();
+        let id = *ids.first()?;
+        let mut found = None;
+        self.swf.walk(|_, t| {
+            if found.is_none() && crate::xfl::model::character_id(t) == Some(id) {
+                found = Some(t);
+            }
+        });
+        found.map(|t| (id, t))
+    }
+
+    /// The asset file an `[Embed]` of the character names, with its extension.
+    fn embed_file(&self, id: u16, tag: &Tag) -> String {
+        let ext = match tag.code {
+            DEFINE_BINARY_DATA => ".bin".to_string(),
+            c if image::is_image(c) => image::Bitmap::read(tag, self.jpeg_tables).map(|b| format!(".{}", b.native_format().ext())).unwrap_or_default(),
+            DEFINE_SOUND if tag.body.get(2).is_some_and(|f| f >> 4 == sound::format::MP3) => ".mp3".into(),
+            DEFINE_FONT | DEFINE_FONT2 | DEFINE_FONT3 => ".ttf".into(),
+            DEFINE_FONT4 => ".cff".into(),
+            _ => String::new(),
+        };
+        make_file_name(&format!("{}{ext}", self.character_export_file(id)))
+    }
+
+    /// `InstanceInfo.getClassHeaderStr`'s `[Embed(...)]` lines, by raw class name. In FLA
+    /// mode only binary data, non-BitmapData images, DefineFont4 and shared characters embed.
+    pub fn as3_embeds(&self, fla: bool) -> std::collections::HashMap<String, Vec<String>> {
+        let mut out = std::collections::HashMap::new();
+        let classes: Vec<String> = self.names.classes.values().flatten().cloned().collect();
+        for class in classes {
+            let Some((id, tag)) = self.character_by_class(&class) else { continue };
+            if fla {
+                let shared = self.names.classes.get(&id).is_some_and(|v| v.len() > 1);
+                let allowed = match tag.code {
+                    DEFINE_BINARY_DATA | DEFINE_FONT4 => true,
+                    c if image::is_image(c) => !self.as3_extends(&class, "flash.display.BitmapData"),
+                    _ => false,
+                };
+                if !allowed && !shared {
+                    continue;
+                }
+            }
+            let file = self.embed_file(id, tag);
+            let src = format!("/_assets/{file}");
+            let symbol = format!("[Embed(source=\"/_assets/assets.swf\", symbol=\"symbol{id}\")]");
+            let esc = crate::abc::names::escape_as;
+            let lines: Vec<String> = match tag.code {
+                DEFINE_BINARY_DATA => vec![format!("[Embed(source=\"{src}\", mimeType=\"application/octet-stream\")]")],
+                c if image::is_image(c) => vec![format!("[Embed(source=\"{src}\")]")],
+                DEFINE_SPRITE => vec![symbol],
+                DEFINE_SOUND => {
+                    if tag.body.get(2).is_some_and(|f| f >> 4 == sound::format::MP3) {
+                        vec![format!("[Embed(source=\"{src}\")]")]
+                    } else {
+                        vec![symbol]
+                    }
+                }
+                DEFINE_FONT | DEFINE_FONT2 | DEFINE_FONT3 => {
+                    let Some(f) = crate::xfl::text::FontData::read(self.swf, tag) else { continue };
+                    let mut v = vec![
+                        format!("[Embed(source=\"{src}\","),
+                        format!("fontName=\"{}\",", esc(f.name_in_tag.as_deref().unwrap_or(""))),
+                        format!("fontFamily=\"{}\",", esc(&f.name_tag.clone().or(f.name_in_tag.clone()).unwrap_or_default())),
+                        "mimeType=\"application/x-font\",".into(),
+                        format!("fontWeight=\"{}\",", if f.bold { "bold" } else { "normal" }),
+                        format!("fontStyle=\"{}\",", if f.italic { "italic" } else { "normal" }),
+                    ];
+                    let chars: Vec<u16> = f.chars().encode_utf16().collect();
+                    if !chars.is_empty() {
+                        let mut ranges: Vec<String> = Vec::new();
+                        let (mut first, mut last) = (chars[0], chars[0]);
+                        let mut push = |a: u16, b: u16, r: &mut Vec<String>| r.push(if a == b { format!("U+{a:04X}") } else { format!("U+{a:04X}-{b:04X}") });
+                        for &c in &chars[1..] {
+                            if last.wrapping_add(1) != c {
+                                push(first, last, &mut ranges);
+                                first = c;
+                            }
+                            last = c;
+                        }
+                        push(first, last, &mut ranges);
+                        v.push(format!("unicodeRange=\"{}\",", ranges.join(",")));
+                    }
+                    let mut zones = false;
+                    self.swf.walk(|_, t| zones |= t.code == DEFINE_FONT_ALIGN_ZONES && t.character_id() == Some(id));
+                    v.push(format!("advancedAntiAliasing=\"{zones}\","));
+                    v.push("embedAsCFF=\"false\"".into());
+                    v.push(")]".into());
+                    v
+                }
+                DEFINE_FONT4 => {
+                    let flags = tag.body.get(2).copied().unwrap_or(0);
+                    vec![
+                        format!("[Embed(source=\"{src}\","),
+                        format!("fontName=\"{}\",", esc(&font::font4_name(tag))),
+                        "mimeType=\"application/x-font\",".into(),
+                        format!("fontWeight=\"{}\",", if flags & 1 != 0 { "bold" } else { "normal" }),
+                        format!("fontStyle=\"{}\",", if flags & 2 != 0 { "italic" } else { "normal" }),
+                        "embedAsCFF=\"true\"".into(),
+                        ")]".into(),
+                    ]
+                }
+                _ => continue,
+            };
+            out.insert(class, lines);
+        }
+        out
+    }
+
+    /// FFDec's script export: one file per script pack, named after its public definition,
+    /// with `[Embed]` headers; `fla` is the mode the FLA export runs it in. Returns the
+    /// sources and, in FLA mode, the `_assets` files they embed.
+    pub fn as3_pack_sources(&self, fla: bool) -> (Vec<(String, String)>, Vec<(String, Vec<u8>)>) {
+        let as3 = self.as3();
+        let embeds = self.as3_embeds(fla);
+        let mut out: Vec<(String, String)> = Vec::new();
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut assets: Vec<(String, Vec<u8>)> = Vec::new();
+        for (_, abc) in &as3.abcs {
+            let files = crate::abc::decomp::with_big_stack(|| {
+                let mut ctx = crate::abc::decomp::ctx::Ctx::new(abc, Default::default()).with_index(as3.index.clone());
+                ctx.swf_version = as3.swf.version;
+                ctx.doc = as3.swf.doc.clone();
+                ctx.embeds = embeds.clone();
+                ctx.fla = fla;
+                let names = ctx.names();
+                let mut files = Vec::new();
+                for script in 0..abc.scripts.len() {
+                    for pack in crate::abc::decomp::script::packs(&ctx, script) {
+                        let mut name = format!("script_{script}");
+                        let mut package = Vec::new();
+                        let mut class = None;
+                        for &t in &pack.traits {
+                            let tn = abc.scripts[script].traits[t].name;
+                            let k = names.simple_ns_kind(tn);
+                            if k == crate::abc::ns_kind::PACKAGE || k == crate::abc::ns_kind::PACKAGE_INTERNAL {
+                                name = names.name(tn, &[], false, true);
+                                let pkg = names.simple_ns_name(tn).unwrap_or_default();
+                                package = pkg.printable(&ctx.ids).split('.').filter(|p| !p.is_empty()).map(make_file_name).collect::<Vec<_>>();
+                                class = Some(names.name_with_ns(tn, false).raw());
+                            }
+                        }
+                        let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::abc::decomp::script::pack_source(&ctx, &pack))).unwrap_or_else(|_| "/*\r\n * Decompilation error\r\n */\r\n".into());
+                        package.push(format!("{}.as", make_file_name(&name)));
+                        files.push((package.join("/"), text, class));
+                    }
+                }
+                files
+            });
+            for (path, text, class) in files {
+                let mut p = path.clone();
+                let mut i = 2;
+                while used.contains(&p.to_lowercase()) {
+                    let stem = path.strip_suffix(".as").unwrap_or(&path);
+                    p = format!("{stem}_{i}.as");
+                    i += 1;
+                }
+                used.insert(p.to_lowercase());
+                out.push((p, text));
+                if !fla {
+                    continue;
+                }
+                let Some(class) = class else { continue };
+                let Some((id, tag)) = self.character_by_class(&class) else { continue };
+                if image::is_image(tag.code) && self.as3_extends(&class, "flash.display.BitmapData") {
+                    continue;
+                }
+                let file = format!("_assets/{}", self.embed_file(id, tag));
+                if assets.iter().any(|a| a.0 == file) {
+                    continue;
+                }
+                let data = match tag.code {
+                    DEFINE_BINARY_DATA => Some(tag.body.get(6..).unwrap_or(&[]).to_vec()),
+                    c if image::is_image(c) => image::Bitmap::read(tag, self.jpeg_tables).ok().and_then(|b| b.encode(false).ok()).map(|e| e.1),
+                    DEFINE_FONT4 => font::font4_data(tag).ok().map(<[u8]>::to_vec),
+                    _ => None,
+                };
+                if let Some(d) = data {
+                    assets.push((file, d));
+                }
+            }
+        }
+        (out, assets)
+    }
+
     /// Every AS3 script as `package/Name.as`, decompiled.
     pub fn as3_sources(&self) -> Vec<(String, String)> {
         let mut out = Vec::new();

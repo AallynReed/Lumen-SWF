@@ -41,6 +41,10 @@ pub struct Ctx<'a> {
     pub swf_version: u8,
     pub index: Option<std::sync::Arc<super::index::AbcIndex>>,
     pub doc: Option<DocClass>,
+    /// `[Embed(...)]` lines of classes bound to SWF characters, by raw class name.
+    pub embeds: HashMap<String, Vec<String>>,
+    /// FFDec's FLA export mode: frame scripts and generated accessibility code are left out.
+    pub fla: bool,
 }
 
 /// The SWF's document class and stage settings, printed as `[SWF(...)]` on that class.
@@ -55,7 +59,7 @@ pub struct DocClass {
 
 impl<'a> Ctx<'a> {
     pub fn new(abc: &'a Abc, cfg: Config) -> Ctx<'a> {
-        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: crate::abc::usages::colliding_multinames(abc), cfg, swf_version: 10, index: None, doc: None }
+        Ctx { abc, ids: Idents::default(), custom_ns: HashMap::new(), display_ns: crate::abc::usages::colliding_multinames(abc), cfg, swf_version: 10, index: None, doc: None, embeds: HashMap::new(), fla: false }
     }
 
     /// Attaches type information about the ABC's classes and the player library.

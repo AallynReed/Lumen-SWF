@@ -188,8 +188,12 @@ impl<'a> Converter<'a> {
         self.script_index().of_tag(tag as *const _ as usize).to_vec()
     }
 
+    fn as2(&self, s: &Source) -> String {
+        self.ex.as2_source(s)
+    }
+
     fn as12(&self, tag: &crate::tags::Tag, kind: Kind) -> String {
-        self.sources_of(tag).iter().filter(|s| s.kind == kind).map(|s| self.ex.as2_source(s)).collect()
+        self.sources_of(tag).iter().filter(|s| s.kind == kind).map(|s| self.as2(s)).collect()
     }
 
     pub fn button_script(&self, id: u16) -> String {
@@ -202,12 +206,12 @@ impl<'a> Converter<'a> {
         if s.is_empty() {
             return None;
         }
-        Some(s.iter().map(|s| self.ex.as2_source(s)).collect())
+        Some(s.iter().map(|s| self.as2(s)).collect())
     }
 
     pub fn clip_action_scripts(&self, key: usize) -> String {
         let ix = self.script_index();
-        ix.of_tag(key).iter().filter(|s| s.kind == Kind::ClipAction).map(|s| self.ex.as2_source(s)).collect()
+        ix.of_tag(key).iter().filter(|s| s.kind == Kind::ClipAction).map(|s| self.as2(s)).collect()
     }
 
     /// The `#initclip` code of a sprite and the class its `Object.registerClass` names.
@@ -324,9 +328,11 @@ impl<'a> Converter<'a> {
     pub fn export_scripts(&self) -> Vec<(String, Vec<u8>)> {
         let mut out = Vec::new();
         if self.as3 {
-            for (name, text) in self.ex.as3_sources() {
+            let (sources, assets) = self.ex.as3_pack_sources(true);
+            for (name, text) in sources {
                 out.push((name, text.into_bytes()));
             }
+            out.extend(assets);
             return out;
         }
         let names = crate::names::Names::new(self.swf);

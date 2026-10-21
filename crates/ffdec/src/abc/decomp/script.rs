@@ -80,7 +80,7 @@ pub fn packs(ctx: &Ctx, script: usize) -> Vec<Pack> {
 /// Each pack's class path with its script's dependencies, as `SwfToSwcExporter` lists them.
 pub fn swc_packs(ctx: &Ctx, with_deps: bool) -> Vec<(Dotted, Vec<(Dotted, u8)>)> {
     let names = ctx.names();
-    let sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true };
+    let sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true, fla_ignored: HashMap::new() };
     let mut out = Vec::new();
     for script in 0..ctx.abc.scripts.len() {
         let mut deps = Vec::new();
@@ -133,11 +133,36 @@ struct Sp<'c, 'a> {
     convs: HashMap<usize, Result<Converted, String>>,
     class_init_empty: HashMap<usize, bool>,
     script_init_empty: bool,
+    /// Instance traits left out in FLA mode, by class.
+    fla_ignored: HashMap<usize, Vec<String>>,
+}
+
+fn call_prop(it: &It) -> Option<(String, crate::abc::decomp::item::List)> {
+    let b = it.borrow();
+    let K::CallProperty { prop, args, .. } = &b.k else { return None };
+    let p = prop.borrow();
+    let K::FullMultiname { resolved: Some(r), .. } = &p.k else { return None };
+    Some((r.clone(), args.clone()))
+}
+
+fn resolved_of(it: &It) -> Option<String> {
+    match &it.borrow().k {
+        K::FullMultiname { resolved, .. } => resolved.clone(),
+        _ => None,
+    }
+}
+
+/// The getter `obj.name` with a resolved name, as (object, name).
+fn prop_get(it: &It) -> Option<(It, Option<String>)> {
+    match &it.borrow().k {
+        K::GetProperty { obj, prop, .. } => Some((obj.clone(), resolved_of(prop))),
+        _ => None,
+    }
 }
 
 /// AS3 source of a script pack (`ScriptPack.toSource`).
 pub fn pack_source(ctx: &Ctx, pack: &Pack) -> String {
-    let mut sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true };
+    let mut sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true, fla_ignored: HashMap::new() };
     sp.convert_pack(pack);
     let mut w = Writer::new();
     sp.append_pack(pack, &mut w);
@@ -285,6 +310,9 @@ impl<'c, 'a> Sp<'c, 'a> {
             req.init_traits = Some(&inst.traits);
             req.initializer = TRAIT_INSTANCE_INITIALIZER;
             self.convert_body(&req, &mut Writer::nul());
+            if self.ctx.fla {
+                self.strip_fla_constructor(ci, inst.iinit);
+            }
         }
         for t in &class.traits {
             self.convert_trait(t, true, script, ci as i32, &new_scope);
@@ -292,6 +320,82 @@ impl<'c, 'a> Sp<'c, 'a> {
         for t in &inst.traits {
             self.convert_trait(t, false, script, ci as i32, &new_scope);
         }
+    }
+
+    /// `ignoreFrameScripts` and `ignoreAccessibility`: drops `addFrameScript`, the generated
+    /// accessibility calls and assignments from the converted constructor, and records the
+    /// traits they name.
+    fn strip_fla_constructor(&mut self, ci: usize, iinit: usize) {
+        let Some(Ok(conv)) = self.convs.get(&iinit) else { return };
+        let names = self.ctx.names();
+        let abc = self.abc();
+        let mut ignored: Vec<String> = Vec::new();
+        conv.items.borrow_mut().retain(|it| {
+            if let Some((name, args)) = call_prop(it) {
+                if name == "addFrameScript" {
+                    let args = args.borrow();
+                    let mut i = 0;
+                    while i + 1 < args.len() {
+                        if matches!(args[i].borrow().k, K::IntegerValueA { .. }) {
+                            match &args[i + 1].borrow().k {
+                                K::GetLex { mn, .. } => ignored.push(names.name(*mn, &[], false, true)),
+                                K::GetProperty { obj, prop, .. } if matches!(obj.borrow().k, K::This { .. }) => {
+                                    if let K::FullMultiname { mn, .. } = &prop.borrow().k {
+                                        ignored.push(names.name(*mn, &[], false, true));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        i += 2;
+                    }
+                    return false;
+                }
+                if (name.starts_with("__setAcc_") || name.starts_with("__setTab_")) && args.borrow().is_empty() {
+                    return false;
+                }
+                if name == "addEventListener" {
+                    let args = args.borrow();
+                    if args.len() == 5 {
+                        let first = prop_get(&args[0]).and_then(|p| p.1);
+                        let second = prop_get(&args[1]).and_then(|p| p.1);
+                        if first.as_deref() == Some("FRAME_CONSTRUCTED") && matches!(second.as_deref(), Some("__setAcc_handler" | "__setTab_handler")) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            let b = it.borrow();
+            if let K::SetProperty { obj, .. } = &b.k {
+                if let Some(v) = &b.value {
+                    if let K::ConstructProp { prop, .. } = &v.borrow().k {
+                        if resolved_of(prop).as_deref() == Some("AccessibilityProperties") {
+                            return false;
+                        }
+                    }
+                }
+                if let Some((o, Some(p))) = prop_get(obj) {
+                    if p == "accessibilityProperties" {
+                        if let Some((o2, Some(r))) = prop_get(&o) {
+                            if r == "root" && matches!(o2.borrow().k, K::This { .. }) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            true
+        });
+        for t in &abc.instances[ci].traits {
+            let n = names.name(t.name, &[], true, false);
+            if n.starts_with("__setAcc_") || n.starts_with("__setTab_") {
+                ignored.push(names.name(t.name, &[], false, false));
+            }
+        }
+        for v in ["__setAccDict", "__setTabDict", "__lastFrameAcc", "__lastFrameTab"] {
+            ignored.push(v.to_string());
+        }
+        self.fla_ignored.insert(ci, ignored);
     }
 
     // Printing pass.
@@ -468,6 +572,11 @@ impl<'c, 'a> Sp<'c, 'a> {
             }
         }
         metadata(self.ctx, t, w);
+        if let Some(lines) = self.ctx.embeds.get(&self.names().name_with_ns(inst.name, false).raw()) {
+            for l in lines {
+                w.append_no_hilight(l).new_line();
+            }
+        }
         self.class_header(ci, w, fqn);
         w.start_block();
         let mut first = true;
@@ -486,7 +595,8 @@ impl<'c, 'a> Sp<'c, 'a> {
             req.initializer = TRAIT_CLASS_INITIALIZER;
             self.print_body(&req, c, w);
         }
-        self.traits_to_string(&inst.traits, &mut first, &[Kind::Slot], false, script, c, w, fqn, &[], iface);
+        let ignored = self.fla_ignored.get(&ci).cloned().unwrap_or_default();
+        self.traits_to_string(&inst.traits, &mut first, &[Kind::Slot], false, script, c, w, fqn, &ignored, iface);
         if !iface {
             if !first {
                 w.new_line();
@@ -508,7 +618,7 @@ impl<'c, 'a> Sp<'c, 'a> {
             w.end_block().new_line();
         }
         self.traits_to_string(&class.traits, &mut first, &[Kind::Class, Kind::Function, Kind::Method], true, script, c, w, fqn, &[], iface);
-        self.traits_to_string(&inst.traits, &mut first, &[Kind::Class, Kind::Function, Kind::Method], false, script, c, w, fqn, &[], iface);
+        self.traits_to_string(&inst.traits, &mut first, &[Kind::Class, Kind::Function, Kind::Method], false, script, c, w, fqn, &ignored, iface);
         if first {
             w.new_line();
         }
