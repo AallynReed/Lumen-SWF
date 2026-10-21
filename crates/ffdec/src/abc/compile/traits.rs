@@ -150,8 +150,12 @@ impl Cx {
     /// `generateMetadata`.
     pub fn generate_metadata(&mut self, metadata: &Metadata_) -> Vec<usize> {
         let mut out = Vec::new();
-        for (name, values) in metadata {
+        for (i, (name, values)) in metadata.iter().enumerate() {
             if name == "API" && self.is_api_versioned() {
+                continue;
+            }
+            // The decompiler prints the stage settings as [SWF] on the document class; keep one.
+            if name == "SWF" && metadata[i + 1..].iter().any(|(n, _)| n == "SWF") {
                 continue;
             }
             let keys: Vec<String> = values.iter().map(|(k, _)| k.clone()).collect();
@@ -175,6 +179,11 @@ impl Cx {
 
     /// `getValueKind`.
     pub fn value_kind(&mut self, ty: Option<&Node>, val: Option<&Node>, generated_ns: bool) -> Option<(usize, u8)> {
+        self.value_kind_of(ty, val, generated_ns, false)
+    }
+
+    /// `getValueKind`; a parameter's default may also be the global `NaN`, which FFDec rejects.
+    pub fn value_kind_of(&mut self, ty: Option<&Node>, val: Option<&Node>, generated_ns: bool, param: bool) -> Option<(usize, u8)> {
         let val = val?;
         let is_ns = ty.is_some_and(|t| matches!(&*t.borrow(), Item::Name(n) if n.var == "namespace") || is_type_named(t, &["Namespace"]));
         let it = val.borrow().clone();
@@ -193,7 +202,7 @@ impl Cx {
             Item::Decimal(v) => (pool::decimal_id(&mut self.abc, v), 0x02),
             Item::Float(v) => (pool::float_id(&mut self.abc, v), 0x02),
             Item::Nan => (pool::double_id(&mut self.abc, f64::NAN), 0x06),
-            Item::Unresolved(u) if u.name.len() == 1 && u.name.last() == "NaN" && u.resolved.is_none() => (pool::double_id(&mut self.abc, f64::NAN), 0x06),
+            Item::Unresolved(u) if param && u.name.len() == 1 && u.name.last() == "NaN" && u.resolved.is_none() => (pool::double_id(&mut self.abc, f64::NAN), 0x06),
             Item::Null => (0x0c, 0x0c),
             Item::Undefined => (0, 0),
             _ => return None,
@@ -269,7 +278,7 @@ impl Cx {
         let mut optional = Vec::new();
         for (i, v) in param_values.iter().enumerate() {
             let t = &param_types[param_types.len() - param_values.len() + i];
-            match self.value_kind(Some(t), Some(v), false) {
+            match self.value_kind_of(Some(t), Some(v), false, true) {
                 Some((index, kind)) => optional.push(ValueKind { index, kind }),
                 None => return err(line, "Default value must be compiletime constant"),
             }
@@ -525,7 +534,7 @@ impl Cx {
         let mut optional = Vec::new();
         for (i, v) in param_values.iter().enumerate() {
             let t = param_types[param_types.len() - param_values.len() + i].clone();
-            match self.value_kind(Some(&t), Some(v), false) {
+            match self.value_kind_of(Some(&t), Some(v), false, true) {
                 Some((index, kind)) => optional.push(ValueKind { index, kind }),
                 None => return err(line, "Default value must be compiletime constant"),
             }

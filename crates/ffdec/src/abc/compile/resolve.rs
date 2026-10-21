@@ -336,6 +336,11 @@ impl Cx {
             let ret = ty_parts(VECTOR_FQN);
             return Ok(set(ret.clone(), ret));
         }
+        if u.must_be_type && name.len() == 1 && n0 == "global" {
+            // The decompiler's type for `this` outside classes.
+            let ret = unbounded();
+            return Ok(set(ret.clone(), ret));
+        }
         if u.must_be_type {
             return err(u.line, format!("{} is not an existing type", name.raw()));
         }
