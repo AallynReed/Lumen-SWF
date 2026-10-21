@@ -130,7 +130,6 @@ cargo test -p ffdec --release
 
 ## Not ported
 
-- Bevel and gradient bevel/glow filters in the renderer.
 - FFDec's embedded Flash Player, debugger, Swf2Exe and uploader.
 
 ## License
