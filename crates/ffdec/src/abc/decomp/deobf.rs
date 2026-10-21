@@ -909,6 +909,16 @@ pub fn remove_traps_all(abc: &mut Abc) -> usize {
     n
 }
 
+/// `AVM2DeobfuscatorGroupParts` on every body; how many it rewrote.
+pub fn group_parts_all(abc: &mut Abc) -> usize {
+    let mut n = 0;
+    for bi in 0..abc.bodies.len() {
+        let m = abc.bodies[bi].method;
+        n += group_parts_in_place(abc, m) as usize;
+    }
+    n
+}
+
 /// `ABC.removeDeadCode`.
 pub fn remove_dead_code_all(abc: &mut Abc) {
     for bi in 0..abc.bodies.len() {

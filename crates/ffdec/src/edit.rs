@@ -175,9 +175,18 @@ pub fn set_header(swf: &mut Swf, h: &HeaderEdit) -> Result<(), String> {
     Ok(())
 }
 
-/// `SWF.deobfuscate`: rewrites every AS3 method with traps (or only dead code) removed. Returns
-/// how many methods were changed; a method whose deobfuscation fails is left alone.
-pub fn deobfuscate(swf: &mut Swf, traps: bool) -> Result<usize, String> {
+/// What `deobfuscate` rewrites AS3 code with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Deobfuscation {
+    DeadCode,
+    Traps,
+    /// FFDec's `AVM2DeobfuscatorGroupParts`, which its own menu does not offer.
+    GroupParts,
+}
+
+/// `SWF.deobfuscate`: rewrites every AS3 method. Returns how many methods were changed; a
+/// method whose deobfuscation fails is left alone.
+pub fn deobfuscate(swf: &mut Swf, level: Deobfuscation) -> Result<usize, String> {
     let mut paths = Vec::new();
     swf.walk(|p, t| {
         if crate::abc::tag_abc(t).is_some() {
@@ -188,11 +197,13 @@ pub fn deobfuscate(swf: &mut Swf, traps: bool) -> Result<usize, String> {
     for p in paths {
         let Some((data, _)) = swf.tag(&p).and_then(crate::abc::tag_abc) else { continue };
         let mut abc = Abc::parse(data).map_err(|e| e.to_string())?;
-        if traps {
-            n += crate::abc::decomp::deobf::remove_traps_all(&mut abc);
-        } else {
-            crate::abc::decomp::deobf::remove_dead_code_all(&mut abc);
-            n += abc.bodies.len();
+        match level {
+            Deobfuscation::Traps => n += crate::abc::decomp::deobf::remove_traps_all(&mut abc),
+            Deobfuscation::GroupParts => n += crate::abc::decomp::deobf::group_parts_all(&mut abc),
+            Deobfuscation::DeadCode => {
+                crate::abc::decomp::deobf::remove_dead_code_all(&mut abc);
+                n += abc.bodies.len();
+            }
         }
         swf.set_abc(&p, &abc).map_err(|e| e.to_string())?;
     }

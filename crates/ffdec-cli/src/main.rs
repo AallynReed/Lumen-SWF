@@ -227,7 +227,7 @@ fn main() -> Result<()> {
     match cli.cmd {
         Cmd::Deobfuscate { input, output, dead_code } => {
             let mut swf = open(&input)?;
-            let n = ffdec::edit::deobfuscate(&mut swf, !dead_code).map_err(|e| anyhow!(e))?;
+            let n = ffdec::edit::deobfuscate(&mut swf, if dead_code { ffdec::edit::Deobfuscation::DeadCode } else { ffdec::edit::Deobfuscation::Traps }).map_err(|e| anyhow!(e))?;
             save(&swf, &output)?;
             println!("{n} methods deobfuscated");
         }
