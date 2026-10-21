@@ -37,6 +37,7 @@ Everything is ported from FFDec and checked against FFDec 26.4 on the 332 SWFs o
 - AS3 and AS1/2 decompilers. They reproduce JPEXS's own test expectations (366 of 369 AS3 methods, all AS3 classes and all 84 AS1/2 cases).
 - AS3 and AS1/2 compilers that match FFDec byte for byte on all 192 AS1/2 and 1,207 single-definition AS3 corpus scripts.
 - P-code editing per AS1/2 script or AS3 method, with errors reported by line.
+- FFDec's automatic deobfuscation for AS1/2 and AS3, and its permanent remove traps / remove dead code for AS3.
 
 ### Editing
 
@@ -130,7 +131,6 @@ cargo test -p ffdec --release
 ## Not ported
 
 - Bevel and gradient bevel/glow filters in the renderer.
-- AS3 deobfuscation.
 - FFDec's embedded Flash Player, debugger, Swf2Exe and uploader.
 
 ## License
