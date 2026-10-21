@@ -168,7 +168,7 @@ fn read_v2(id: u16, r: &mut Reader, v3: bool) -> Result<Font> {
     let flags = r.u8()?;
     let has_layout = flags & 0x80 != 0;
     let wide_offsets = flags & 0x08 != 0;
-    let wide_codes = flags & 0x04 != 0 || v3;
+    let wide_codes = flags & 0x04 != 0;
     r.u8()?;
     let len = r.u8()? as usize;
     let name = name_from(r.bytes(len)?);
