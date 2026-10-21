@@ -339,8 +339,8 @@ fn main() -> Result<()> {
                     let c = compile(&text(), swf.header.version, target, &swf_classes(&swf), Some(&swf))?;
                     src.set_compiled(&mut swf, &c)?;
                 }
-            } else if abcs(&swf).iter().any(|(_, a)| ffdec::abc::scripts::entries(a).iter().any(|e| e.full_name() == target)) {
-                return Err(anyhow!("an AS3 script is replaced one method at a time; pass --method"));
+            } else if let Some((path, id)) = abcs(&swf).iter().find_map(|(p, a)| ffdec::abc::scripts::entries(a).into_iter().find(|e| e.full_name() == target).map(|e| (p.clone(), e.id()))) {
+                ffdec::edit::set_script_source(&mut swf, &path, &id, &text()).map_err(|e| anyhow!("line {}: {}", e.line, e.message))?;
             } else {
                 return Err(anyhow!("no character or script '{target}'"));
             }

@@ -61,7 +61,7 @@ pub fn set_script_pcode(swf: &mut Swf, path: &[usize], script: &str, method: Opt
 pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Result<(), ParseError> {
     use crate::action::compile::{compile, swf_classes, Target};
     use crate::action::scripts::Kind;
-    let Some(src) = as2_source(swf, path, script) else { return Err(fail("compiling ActionScript 3 is not supported yet; edit its p-code")) };
+    let Some(src) = as2_source(swf, path, script) else { return set_as3_source(swf, path, script, text) };
     let src = src?;
     let target = match src.kind {
         Kind::ButtonCond => Target::ButtonCond,
@@ -70,6 +70,25 @@ pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str
     };
     let c = compile(text, swf.header.version, target, &swf_classes(swf), Some(swf)).map_err(|e| ParseError { line: e.line, message: e.message })?;
     src.set_compiled(swf, &c).map_err(|e| fail(e.to_string()))
+}
+
+/// Compiles an AS3 script pack, with every ABC of the SWF in scope.
+fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Result<(), ParseError> {
+    let (s, t) = parse_id(script).ok_or_else(|| fail("bad script id"))?;
+    let mut abcs = Vec::new();
+    let mut paths: Vec<Vec<usize>> = Vec::new();
+    swf.walk(|p, tag| {
+        if let Some((d, _)) = crate::abc::tag_abc(tag) {
+            if let Ok(a) = Abc::parse(d) {
+                abcs.push(a);
+                paths.push(p.to_vec());
+            }
+        }
+    });
+    let sel = paths.iter().position(|p| p == path).ok_or_else(|| fail("not an ABC tag"))?;
+    let doc = crate::names::Names::new(swf).classes.get(&0).and_then(|v| v.first().cloned());
+    let abc = crate::abc::compile::replace_script(&abcs, sel, s, t, text, doc.as_deref()).map_err(|e| ParseError { line: e.line, message: e.message })?;
+    swf.set_abc(path, &abc).map_err(|e| fail(e.to_string()))
 }
 
 /// The editable text of a text tag: FFDec's formatted text for DefineText/2, the initial text

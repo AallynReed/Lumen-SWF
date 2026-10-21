@@ -440,8 +440,8 @@ function textEditButton(el) {
     el.querySelector('[data-act="edit-text"]').addEventListener('click', () => openTextEditor(el));
 }
 
-// Decompiled ActionScript, with a switch to p-code, which can be edited: AS1/2 scripts whole,
-// AS3 scripts one method at a time.
+// Decompiled ActionScript, which compiles back when edited, with a switch to p-code, which can
+// be edited too: AS1/2 scripts whole, AS3 scripts one method at a time.
 async function renderCode(el, info) {
     const sel = state.selected;
     const n = sel.node;
@@ -449,7 +449,7 @@ async function renderCode(el, info) {
     const methods = pcode && n.kind === 'script' ? await call('script_methods', { id: sel.docId, path: n.path, script: n.script }).catch(() => []) : [];
     if (state.selected !== sel) return;
     if (!methods.includes(state.method)) state.method = null;
-    const asEditable = !pcode && n.kind === 'script' && n.script.startsWith('as2:');
+    const asEditable = !pcode && n.kind === 'script';
     const editable = asEditable || (pcode && n.kind === 'script' && (!methods.length || state.method !== null));
     let text = (pcode ? info.alt_text : info.text) || '';
     if (editable && methods.length) text = await call('script_pcode', { id: sel.docId, path: n.path, script: n.script, method: state.method });
