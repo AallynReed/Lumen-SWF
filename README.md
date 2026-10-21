@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 7 of 7 in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets, texts, shapes, fonts, ActionScript and p-code. Phase 7 adds SWC/ZIP bundles, search, SWC export and AMF/shared objects so far. See [Roadmap](#roadmap).
+> **Status: all seven phases done.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, edits assets, texts, shapes, fonts, ActionScript and p-code, and handles SWC/ZIP bundles, XFL/FLA export, Iggy files and AMF/shared objects. See [Roadmap](#roadmap).
 
 ## What works
 
@@ -39,6 +39,8 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
   - an edited AS3 method's stack, scope and register limits grow to fit its code. FFDec keeps the old limits, so its p-code edits can fail Flash Player's verifier.
 - Bundles, as in FFDec: every SWF in a ZIP, every library in an SWC's catalog, and SWFs embedded in any other file (such as a projector `.exe`). Edited ZIP and SWC entries save back into the archive.
 - SWC export, a port of FFDec's: the SWF as `library.swf` with a catalog of each script's definitions and dependencies, matching FFDec 26.4's catalogs on all 57 corpus AS3 SWFs. Unlike FFDec, the stub document class really replaces the original one in `library.swf`.
+- XFL and FLA export, a port of FFDec's: library items, symbols, timelines with classic, shape and motion tweens, sounds, video, texts and fonts, with each script as an `.as` file. The DOMDocument and library match FFDec 26.4's on 320 of the 332 corpus SWFs; the rest differ where FFDec rounds morph colours wrongly or counts MP3 samples with a different decoder.
+- Iggy files (the Iggy UI runtime's movie format), ported from FFDec: they open as SWF, edit like any SWF and save back into the `.iggy`, and SWFs convert to Iggy in its 64-bit, 32-bit and 32-bit legacy layouts, leaving out what Iggy cannot store with FFDec's list of what was skipped. External bitmaps are drawn from the `.raw.iggytex` file beside the movie, in all of its texture formats including DXT and BC7. On the 732 Iggy files FFDec 26.4 makes from the corpus, conversion to SWF and both unchanged and edited saves match FFDec byte for byte, and SWF to Iggy matches on 726 with identical warnings; the other six hold bitmaps FFDec re-encodes, where zlib and JPEG decoders differ.
 - Search through decompiled ActionScript, p-code or texts, plain or by regular expression, in one file or all open files (Ctrl+Shift+F); results open in the tree.
 - AMF0 and AMF3, ported from FFDec: PlaceObject4 metadata is shown as FFDec's AMF text, and shared objects (`.sol`) open, edit as that text and save. FFDec's text matches on every corpus file it can read, and files re-save byte for byte. Unlike FFDec, integral AMF3 doubles stay doubles when edited, duplicate keys are kept, and dates show in UTC.
 - Colliding AS3 names (two `public var a` in different namespaces) get FFDec's `#namespace` suffix.
@@ -79,6 +81,9 @@ ffdec-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 ffdec-cli replace in.swf out.swf 12/3 body.bin --raw
 ffdec-cli bundle game.exe outdir
 ffdec-cli swc movie.swf movie.swc
+ffdec-cli xfl movie.swf movie.fla --compressed [--version cs6]
+ffdec-cli swf2iggy movie.swf movie.iggy [--variant 32]
+ffdec-cli iggy2swf movie.iggy movie.swf
 ffdec-cli sol data.sol
 ffdec-cli sol data.sol --set data.txt --out edited.sol
 ffdec-cli amf value.bin
@@ -121,7 +126,7 @@ cargo test -p ffdec --release
 4. **ActionScript 3:** ABC bytecode, p-code and decompiler done; deobfuscation next.
 5. **ActionScript 1/2:** actions, p-code and decompiler. Done.
 6. **Editing:** asset, text, shape and font import, header editing, p-code editing and the AS1/2 and AS3 compilers. Done.
-7. **Extras:** SWC/ZIP bundles, search, SWC export and AMF done; XFL/FLA export and Iggy next.
+7. **Extras:** SWC/ZIP bundles, search, SWC export, AMF, XFL/FLA export and Iggy. Done.
 
 ## License
 
