@@ -180,7 +180,7 @@ fn convert_inner(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSe
     let bi = abc.body_of.get(req.method).copied().flatten().ok_or("method has no body")?;
     let body = &abc.bodies[bi];
     let code = prepare_code(ctx, body);
-    let names = local_reg_names(ctx, req.method, &code, body.max_regs);
+    let names = local_reg_names(ctx, req.method, &Code::new(abc, body), body.max_regs);
     let items = to_graph_target_items(ctx, req, cd, &code, &names);
     let mut seen = seen.clone();
     seen.insert(req.method);
@@ -320,10 +320,12 @@ pub fn to_graph_target_items(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, c
             Err(_) => empty_list(),
         },
     };
-    if let Some(init) = req.init_traits {
-        if init_traits(ctx, req, cd, &list, init) {
-            return list;
-        }
+    let done = match req.init_traits {
+        Some(init) => init_traits(ctx, req, cd, &list, init),
+        None => list_tail(ctx, req, cd, &list, None),
+    };
+    if done {
+        return list;
     }
     let mut d: Vec<Option<It>> = vec![None; reg_count];
     let mut r = 1usize;
@@ -498,6 +500,12 @@ fn init_traits(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, list: &List, in
         }
         i += 1;
     }
+    let _ = names;
+    list_tail(ctx, req, cd, list, Some(init))
+}
+
+/// The end of `toGraphTargetItems`, run for every method: drops the closing `return;`.
+fn list_tail(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, list: &List, init: Option<&[Trait]>) -> bool {
     let len = list.borrow().len();
     let mut last_pos = len as i64 - 1;
     if last_pos < 0 {
@@ -526,14 +534,15 @@ fn init_traits(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, list: &List, in
         }
     }
     if req.initializer == TRAIT_CLASS_INITIALIZER || req.initializer == TRAIT_SCRIPT_INITIALIZER {
-        initializer_slots(ctx, req, cd, list, init);
+        if let Some(init) = init {
+            initializer_slots(ctx, req, cd, list, init);
+        }
         let kept: Vec<It> = list.borrow().iter().filter(|t| !matches!(t.borrow().k, K::ReturnVoid | K::InitProperty { .. })).cloned().collect();
         *list.borrow_mut() = kept;
         if list.borrow().is_empty() {
             return true;
         }
     }
-    let _ = names;
     false
 }
 
