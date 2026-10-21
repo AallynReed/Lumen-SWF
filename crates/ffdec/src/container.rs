@@ -126,6 +126,24 @@ pub fn decode(data: &[u8]) -> Result<Decoded> {
     })
 }
 
+/// How many bytes of `data` the SWF starting it occupies, for an unencrypted header.
+pub fn encoded_len(data: &[u8]) -> Option<usize> {
+    if data.len() < 8 {
+        return None;
+    }
+    let size = u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
+    let len = match data[0] {
+        b'C' => {
+            let mut d = flate2::read::ZlibDecoder::new(&data[8..]);
+            std::io::copy(&mut d.by_ref().take(size as u64), &mut std::io::sink()).ok()?;
+            8 + d.total_in() as usize
+        }
+        b'Z' => 17 + u32::from_le_bytes(data.get(8..12)?.try_into().unwrap()) as usize,
+        _ => size,
+    };
+    (len >= 8 && len <= data.len()).then_some(len)
+}
+
 fn lzma_decode(data: &[u8], props: [u8; 5], size: usize, warnings: &mut Vec<String>) -> Result<Vec<u8>> {
     let dict = u32::from_le_bytes(props[1..5].try_into().unwrap());
     let mut reader = lzma_rust2::LzmaReader::new_with_props(data, size as u64, props[0], dict, None)

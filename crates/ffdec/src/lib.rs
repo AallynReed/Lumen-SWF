@@ -1,6 +1,7 @@
 //! Rust port of the JPEXS Free Flash Decompiler core library.
 
 pub mod abc;
+pub mod bundle;
 pub mod action;
 pub mod container;
 pub mod edit;

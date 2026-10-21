@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
@@ -99,6 +99,8 @@ enum Cmd {
         #[arg(long)]
         chars: Option<String>,
     },
+    /// List the SWFs in a ZIP, SWC or any other file, or extract them into OUTDIR
+    Bundle { file: PathBuf, outdir: Option<PathBuf> },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -345,6 +347,22 @@ fn main() -> Result<()> {
                 return Err(anyhow!("no character or script '{target}'"));
             }
             save(&swf, &output)?;
+        }
+        Cmd::Bundle { file, outdir } => {
+            let data = std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+            let b = ffdec::bundle::open(&file, &data)?;
+            for (key, bytes) in &b.entries {
+                println!("{key}  {} bytes", bytes.len());
+                if let Some(dir) = &outdir {
+                    let rel: PathBuf = Path::new(key.trim_matches(['[', ']'])).components().filter(|c| matches!(c, std::path::Component::Normal(_))).collect();
+                    let out = dir.join(rel);
+                    let out = if out.extension().is_none() { out.with_extension("swf") } else { out };
+                    if let Some(p) = out.parent() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                    std::fs::write(&out, bytes).with_context(|| format!("writing {}", out.display()))?;
+                }
+            }
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;

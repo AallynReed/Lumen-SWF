@@ -99,7 +99,7 @@ async function openPaths(paths) {
     const opened = [];
     for (const p of paths) {
         try {
-            opened.push(await call('open_path', { path: p }));
+            opened.push(...await call('open_path', { path: p }));
         } catch (_) { /* reported in status */ }
     }
     addDocs(opened);

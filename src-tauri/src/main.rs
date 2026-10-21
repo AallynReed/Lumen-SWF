@@ -17,6 +17,8 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 struct Doc {
     id: u32,
     path: PathBuf,
+    /// The entry of a ZIP, SWC or other file the SWF came from, and whether it can be saved back.
+    bundle: Option<(String, bool)>,
     modified: bool,
     swf_ptr: &'static Swf,
     exporter: ManuallyDrop<Exporter<'static>>,
@@ -25,7 +27,7 @@ struct Doc {
 impl Doc {
     fn new(id: u32, path: PathBuf, swf: Swf) -> Doc {
         let swf_ptr: &'static Swf = Box::leak(Box::new(swf));
-        Doc { id, path, modified: false, swf_ptr, exporter: ManuallyDrop::new(Exporter::new(swf_ptr)) }
+        Doc { id, path, bundle: None, modified: false, swf_ptr, exporter: ManuallyDrop::new(Exporter::new(swf_ptr)) }
     }
 
     /// Applies `f` to a copy of the file, which replaces it only when `f` succeeds.
@@ -33,19 +35,41 @@ impl Doc {
         let mut swf = self.swf().clone();
         f(&mut swf)?;
         let mut doc = Doc::new(self.id, self.path.clone(), swf);
+        doc.bundle = self.bundle.take();
         doc.modified = true;
         *self = doc;
         Ok(())
     }
 
     fn name(&self) -> String {
-        self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+        let file = self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        match &self.bundle {
+            Some((key, _)) => format!("{file}/{key}"),
+            None => file,
+        }
     }
 
     fn save_to(&mut self, path: PathBuf, opts: &SaveOptions) -> Res<()> {
         let bytes = self.swf().save(opts).map_err(|e| e.to_string())?;
         std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         self.path = path;
+        self.bundle = None;
+        self.modified = false;
+        Ok(())
+    }
+
+    /// Writes the SWF back where it came from, inside its archive for a bundle entry.
+    fn save(&mut self) -> Res<()> {
+        let opts = SaveOptions { compression: self.swf().header.compression, encrypt: self.swf().header.encrypted };
+        let Some((key, writable)) = self.bundle.clone() else { return self.save_to(self.path.clone(), &opts) };
+        if !writable {
+            return Err("this SWF was found inside another file; use Save as".into());
+        }
+        let bytes = self.swf().save(&opts).map_err(|e| e.to_string())?;
+        let err = |e: &dyn std::fmt::Display| format!("{}: {e}", self.path.display());
+        let archive = std::fs::read(&self.path).map_err(|e| err(&e))?;
+        let out = ffdec::bundle::replace(&archive, &key, &bytes).map_err(|e| err(&e))?;
+        std::fs::write(&self.path, out).map_err(|e| err(&e))?;
         self.modified = false;
         Ok(())
     }
@@ -127,18 +151,36 @@ fn find_tag<'a>(swf: &'a Swf, path: &str) -> Res<&'a ffdec::Tag> {
     swf.tag(&p).ok_or_else(|| "no such tag".to_string())
 }
 
-fn load(docs: &Docs, path: PathBuf) -> Res<Opened> {
-    let data = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let swf = Swf::parse(&data).map_err(|e| format!("{}: {e}", path.display()))?;
+fn add(docs: &Docs, path: PathBuf, bundle: Option<(String, bool)>, swf: Swf) -> Opened {
     let id = docs.next_id.fetch_add(1, Ordering::Relaxed) + 1;
-    let opened = Opened {
-        id,
-        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
-        path: path.display().to_string(),
-        warnings: swf.warnings.clone(),
-    };
-    docs.open.lock().push(Doc::new(id, path, swf));
-    Ok(opened)
+    let mut doc = Doc::new(id, path, swf);
+    doc.bundle = bundle;
+    let opened = Opened { id, name: doc.name(), path: doc.path.display().to_string(), warnings: doc.swf().warnings.clone() };
+    docs.open.lock().push(doc);
+    opened
+}
+
+/// Opens a SWF, or every SWF in a ZIP, SWC or other file.
+fn load(docs: &Docs, path: PathBuf) -> Res<Vec<Opened>> {
+    let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
+    let data = std::fs::read(&path).map_err(|e| err(&e))?;
+    if !ffdec::bundle::is_bundle(&path) || Swf::parse(&data).is_ok() {
+        let swf = Swf::parse(&data).map_err(|e| err(&e))?;
+        return Ok(vec![add(docs, path, None, swf)]);
+    }
+    let b = ffdec::bundle::open(&path, &data).map_err(|e| err(&e))?;
+    let writable = !b.read_only();
+    let mut out = Vec::new();
+    for (key, bytes) in b.entries {
+        match Swf::parse(&bytes) {
+            Ok(swf) => out.push(add(docs, path.clone(), Some((key, writable)), swf)),
+            Err(e) => return Err(format!("{}/{key}: {e}", path.display())),
+        }
+    }
+    if out.is_empty() {
+        return Err(err(&"no SWF files found"));
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -146,19 +188,19 @@ async fn open_dialog(app: tauri::AppHandle, docs: State<'_, Docs>) -> Res<Vec<Op
     let picked = app
         .dialog()
         .file()
-        .add_filter("Flash files", &["swf", "gfx", "spl"])
+        .add_filter("Flash files", &["swf", "gfx", "spl", "swc", "zip"])
         .add_filter("All files", &["*"])
         .blocking_pick_files()
         .unwrap_or_default();
     let mut out = Vec::new();
     for p in picked {
-        out.push(load(&docs, p.into_path().map_err(|e| e.to_string())?)?);
+        out.extend(load(&docs, p.into_path().map_err(|e| e.to_string())?)?);
     }
     Ok(out)
 }
 
 #[tauri::command]
-fn open_path(docs: State<'_, Docs>, path: String) -> Res<Opened> {
+fn open_path(docs: State<'_, Docs>, path: String) -> Res<Vec<Opened>> {
     load(&docs, PathBuf::from(path))
 }
 
@@ -190,6 +232,9 @@ fn header_info(docs: State<'_, Docs>, id: u32) -> Res<Vec<Field>> {
             f("Tags", s.timeline.tags.len().to_string()),
             f("ActionScript", if s.is_as3() { "3".into() } else { "1/2".into() }),
         ];
+        if let Some((key, _)) = &d.bundle {
+            out.insert(1, f("Entry", key.clone()));
+        }
         if h.gfx {
             out.push(f("Format", "Scaleform GFx".into()));
         }
@@ -237,9 +282,8 @@ async fn export_tag(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, path:
 #[tauri::command]
 fn save(docs: State<'_, Docs>, id: u32) -> Res<String> {
     with_doc_mut(&docs, id, |d| {
-        let opts = SaveOptions { compression: d.swf().header.compression, encrypt: d.swf().header.encrypted };
-        d.save_to(d.path.clone(), &opts)?;
-        Ok(d.path.display().to_string())
+        d.save()?;
+        Ok(d.name())
     })
 }
 
@@ -247,7 +291,7 @@ fn save(docs: State<'_, Docs>, id: u32) -> Res<String> {
 #[tauri::command]
 async fn save_as(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, compression: String, encrypt: bool) -> Res<Option<Opened>> {
     let compression = Compression::parse(&compression).ok_or("unknown compression")?;
-    let name = with_doc(&docs, id, |d| Ok(d.name()))?;
+    let name = with_doc(&docs, id, |d| Ok(d.name().rsplit('/').next().unwrap_or_default().trim_matches(['[', ']']).to_string()))?;
     let Some(out) = save_dialog(&app, &name, ("SWF", &["swf"])) else { return Ok(None) };
     with_doc_mut(&docs, id, |d| {
         d.save_to(out, &SaveOptions { compression, encrypt })?;
