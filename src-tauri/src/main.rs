@@ -68,7 +68,7 @@ impl Doc {
         let bytes = self.swf().save(&opts).map_err(|e| e.to_string())?;
         let err = |e: &dyn std::fmt::Display| format!("{}: {e}", self.path.display());
         let archive = std::fs::read(&self.path).map_err(|e| err(&e))?;
-        let out = ffdec::bundle::replace(&archive, &key, &bytes).map_err(|e| err(&e))?;
+        let out = ffdec::bundle::put(&self.path, &archive, &key, &bytes).map_err(|e| err(&e))?;
         std::fs::write(&self.path, out).map_err(|e| err(&e))?;
         self.modified = false;
         Ok(())
@@ -213,7 +213,7 @@ async fn open_dialog(app: tauri::AppHandle, docs: State<'_, Docs>) -> Res<Vec<Op
     let picked = app
         .dialog()
         .file()
-        .add_filter("Flash files", &["swf", "gfx", "spl", "swc", "zip", "sol"])
+        .add_filter("Flash files", &["swf", "gfx", "spl", "swc", "zip", "iggy", "sol"])
         .add_filter("All files", &["*"])
         .blocking_pick_files()
         .unwrap_or_default();

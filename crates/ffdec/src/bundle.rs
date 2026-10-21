@@ -14,6 +14,8 @@ pub enum Kind {
     Swc,
     /// SWFs found inside another file, keyed by their offset as `[offset]`.
     Binary,
+    /// An Iggy movie, converted to SWF and back.
+    Iggy,
 }
 
 pub struct Bundle {
@@ -40,6 +42,15 @@ pub fn open(path: &Path, data: &[u8]) -> Result<Bundle> {
     match ext.as_deref() {
         Some("swc") => Ok(Bundle { kind: Kind::Swc, entries: swc_entries(data)? }),
         Some("zip") => Ok(Bundle { kind: Kind::Zip, entries: zip_entries(data, openable)? }),
+        Some("iggy") => {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+            let file = crate::iggy::file::IggyFile::read(data, name.as_deref())?;
+            let companion = path.with_file_name(&file.swf.texture_resource_name);
+            if let Ok(t) = std::fs::read(&companion) {
+                crate::iggy::texture::register_companion(&file.swf.texture_resource_name, t);
+            }
+            Ok(Bundle { kind: Kind::Iggy, entries: vec![(file.swf.name.clone(), crate::iggy::to_swf::swf_bytes(&file)?)] })
+        }
         _ => Ok(Bundle { kind: Kind::Binary, entries: search(data) }),
     }
 }
@@ -81,6 +92,18 @@ fn swc_entries(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
         }
     }
     zip_entries(data, |n| paths.iter().any(|p| p == n))
+}
+
+/// `putOpenable`: the file at `path` (bytes `data`) with entry `key` replaced by `swf`; an
+/// Iggy file takes the SWF's changes like `IggySwfBundle`.
+pub fn put(path: &Path, data: &[u8], key: &str, swf: &[u8]) -> Result<Vec<u8>> {
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iggy")) {
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+        let mut file = crate::iggy::file::IggyFile::read(data, name.as_deref())?;
+        crate::iggy::from_swf::update(&mut file, &Swf::parse(swf)?)?;
+        return file.save();
+    }
+    replace(data, key, swf)
 }
 
 /// `ZippedBundle.putOpenable`: the archive with entry `key` replaced by `swf`.
