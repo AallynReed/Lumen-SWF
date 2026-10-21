@@ -3,6 +3,7 @@
 pub mod asm;
 pub mod compile;
 pub mod decomp;
+pub mod deobf;
 pub mod edit;
 pub mod pcode;
 pub mod scripts;
@@ -704,6 +705,9 @@ pub fn read_action_list(data: &[u8], start: usize, end: usize, version: u8) -> A
         let mut jump = jump;
         jump.set_offset((target - shift) as i32);
         list.actions.insert(0, jump);
+    }
+    if crate::abc::decomp::ctx::AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed) {
+        deobf::deobfuscate(&mut list);
     }
     list
 }

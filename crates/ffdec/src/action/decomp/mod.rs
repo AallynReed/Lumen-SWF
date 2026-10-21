@@ -210,6 +210,13 @@ pub fn actions_to_source_with(list: &ActionList, inside_do_init: bool, header: O
         match tree {
             Ok(Ok(tree)) => {
                 op(&tree);
+                if ctx.cfg.deobfuscate {
+                    // `ActionDeobfuscator.actionTreeCreated`.
+                    let lead = tree.borrow().first().cloned();
+                    if lead.is_some_and(|f| matches!(f.borrow().k, K::Push { .. }) && f.borrow().value.as_ref().is_some_and(|v| matches!(v.borrow().k, K::False))) {
+                        tree.borrow_mut().remove(0);
+                    }
+                }
                 let items: Vec<It> = tree.borrow().clone();
                 let printed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     crate::abc::decomp::print::graph_to_string(&items, &mut Writer::nul(), &ld);

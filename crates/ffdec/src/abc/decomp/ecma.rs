@@ -60,7 +60,7 @@ fn obj_to_string(o: &Obj) -> String {
 }
 
 /// `Double.valueOf(String)`: Java's floating literal syntax, with surrounding whitespace.
-fn java_parse_double(s: &str) -> Option<f64> {
+pub fn java_parse_double(s: &str) -> Option<f64> {
     let t = s.trim_matches(|c: char| c <= ' ');
     let body = t.strip_suffix(['d', 'D', 'f', 'F']).unwrap_or(t);
     if matches!(body.trim_start_matches(['+', '-']), "Infinity" | "NaN") {
@@ -134,6 +134,17 @@ pub fn to_string(v: &V) -> String {
     }
 }
 
+/// Java's `Object.toString` of a value.
+pub fn java_to_string(v: &V) -> String {
+    match v {
+        V::Double(d) => crate::xfl::num::java_double(*d),
+        V::Float(f) => crate::xfl::num::java_float(*f),
+        V::Int(i) => i.to_string(),
+        V::Long(l) => l.to_string(),
+        _ => to_string(v),
+    }
+}
+
 pub fn to_boolean(v: &V) -> bool {
     match v {
         V::None | V::Null | V::Undefined => false,
@@ -164,6 +175,28 @@ fn num_eq(x: f64, y: f64) -> bool {
 }
 
 pub fn equals(x: &V, y: &V) -> bool {
+    equals_in(false, x, y)
+}
+
+/// `toNumberAs2`: null and the empty string are NaN in AS1/2.
+pub fn to_number_as2(v: &V) -> f64 {
+    match v {
+        V::Null => f64::NAN,
+        V::Str(s) if s.is_empty() => f64::NAN,
+        _ => to_number(v),
+    }
+}
+
+fn to_num(as2: bool, v: &V) -> f64 {
+    if as2 {
+        to_number_as2(v)
+    } else {
+        to_number(v)
+    }
+}
+
+/// `EcmaScript.equals(as2, x, y)`.
+pub fn equals_in(as2: bool, x: &V, y: &V) -> bool {
     let (tx, tyy) = (ty(x), ty(y));
     if tx == tyy {
         return match (x, y) {
@@ -177,19 +210,30 @@ pub fn equals(x: &V, y: &V) -> bool {
     }
     match (tx, tyy) {
         (Ty::Null, Ty::Undefined) | (Ty::Undefined, Ty::Null) => true,
-        (Ty::Num, Ty::Str) => equals(x, &V::Double(to_number(y))),
-        (Ty::Str, Ty::Num) => equals(&V::Double(to_number(x)), y),
-        (Ty::Boolean, _) => equals(&V::Double(to_number(x)), y),
-        (_, Ty::Boolean) => equals(x, &V::Double(to_number(y))),
+        (Ty::Num, Ty::Str) => equals_in(as2, x, &V::Double(to_num(as2, y))),
+        (Ty::Str, Ty::Num) => equals_in(as2, &V::Double(to_num(as2, x)), y),
+        (Ty::Boolean, _) => equals_in(as2, &V::Double(to_num(as2, x)), y),
+        (_, Ty::Boolean) => equals_in(as2, x, &V::Double(to_num(as2, y))),
         _ => false,
     }
 }
 
 /// `EcmaScript.compare`: -1, 0 or 1, or None for undefined.
 pub fn compare(x: &V, y: &V) -> Option<i32> {
+    compare_in(x, y, false)
+}
+
+/// `EcmaScript.compare(x, y, as2)`.
+pub fn compare_in(x: &V, y: &V, as2: bool) -> Option<i32> {
     if let (V::Str(sx), V::Str(sy)) = (x, y) {
         if sx == sy {
             return Some(0);
+        }
+        if as2 && sx.is_empty() {
+            return Some(1);
+        }
+        if as2 && sy.is_empty() {
+            return Some(-1);
         }
         if sx.starts_with(sy.as_str()) {
             return Some(1);
@@ -206,7 +250,7 @@ pub fn compare(x: &V, y: &V) -> Option<i32> {
         }
         return Some(0);
     }
-    let (nx, ny) = (to_number(x), to_number(y));
+    let (nx, ny) = (to_num(as2, x), to_num(as2, y));
     if nx.is_nan() || ny.is_nan() {
         return None;
     }
