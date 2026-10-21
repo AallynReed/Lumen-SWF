@@ -7,7 +7,8 @@ use super::file::{IggyFile, Variant};
 use super::model::*;
 use super::stream::{err, field, Fields, Stream};
 use super::swf::{Obj, Swf as Movie};
-use super::to_swf::{self, jround, Cx, IGGY_EXTERNAL_IMAGE};
+use super::texture::External;
+use super::to_swf::{self, jround, Cx};
 use crate::error::{Error, Result};
 use crate::font_edit::Font2;
 use crate::io::Reader;
@@ -1541,37 +1542,6 @@ fn lossless_payload(img: &image::RgbaImage) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// `IggyExternalImage` fields.
-struct External {
-    width: u32,
-    height: u32,
-    pixel: u32,
-    kind: u32,
-    format: u32,
-    length: u32,
-    scale: [f32; 4],
-    file_name: Vec<u8>,
-    resource: (u8, u32, u16, u16, u16),
-    replacement: Vec<u8>,
-}
-
-fn external(t: &Tag) -> Result<External> {
-    let mut r = Reader::new(&t.body);
-    if r.u8()? != 1 {
-        return err("Unsupported IggyExternalImage version");
-    }
-    r.u16()?;
-    let (width, height) = (r.u16()? as u32, r.u16()? as u32);
-    let (pixel, kind, format) = (r.u8()? as u32, r.u8()? as u32, r.u8()? as u32);
-    let length = r.u32()?;
-    let scale = [r.f32()?, r.f32()?, r.f32()?, r.f32()?];
-    let file_name = cstring(&mut r)?;
-    let resource = (r.u8()?, r.u32()?, r.u16()?, r.u16()?, r.u16()?);
-    let n = r.u32()? as usize;
-    let replacement = r.bytes(n)?.to_vec();
-    Ok(External { width, height, pixel, kind, format, length, scale, file_name, resource, replacement })
-}
-
 fn bitmap(n: usize, m: &Model, wide: bool, t: &Tag) -> R<ObjectData> {
     let id = char_id(t).unwrap() as i32;
     let mut b = Buf::new(wide);
@@ -1580,7 +1550,7 @@ fn bitmap(n: usize, m: &Model, wide: bool, t: &Tag) -> R<ObjectData> {
     let h = if wide { 32 } else { 16 };
     let (mut sx, mut sy, mut ox, mut oy) = (1f32, 1f32, 0f32, 0f32);
     let (width, height, pixel, kind, format, payload);
-    let ext = if t.code == IGGY_EXTERNAL_IMAGE { Some(external(t)?) } else { None };
+    let ext = if t.code == IGGY_EXTERNAL_IMAGE { Some(External::read(&t.body)?) } else { None };
     let external = ext.as_ref().is_some_and(|e| e.replacement.is_empty());
     if let (true, Some(e)) = (external, &ext) {
         width = e.width;
@@ -2928,7 +2898,7 @@ fn update_assets(m: &Model, movie: &mut Movie) -> R<()> {
         if changed && entry.is_some_and(|e| e.ty == 4) && rty != 4 {
             movie.replace_texture_record(id as u32, None);
         }
-        let ext = if t.code == IGGY_EXTERNAL_IMAGE { Some(external(t)?) } else { None };
+        let ext = if t.code == IGGY_EXTERNAL_IMAGE { Some(External::read(&t.body)?) } else { None };
         if let Some(e) = ext.filter(|e| e.replacement.is_empty()) {
             if m.string(&e.file_name) != movie.texture_resource_name {
                 return fail("Iggy stores external texture IDs, not filenames; the companion filename cannot be changed in the movie");

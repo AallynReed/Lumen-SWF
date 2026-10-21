@@ -37,7 +37,7 @@ impl Format {
 }
 
 pub fn is_image(code: u16) -> bool {
-    matches!(code, DEFINE_BITS | DEFINE_BITS_JPEG2 | DEFINE_BITS_JPEG3 | DEFINE_BITS_JPEG4 | DEFINE_BITS_LOSSLESS | DEFINE_BITS_LOSSLESS2)
+    matches!(code, DEFINE_BITS | DEFINE_BITS_JPEG2 | DEFINE_BITS_JPEG3 | DEFINE_BITS_JPEG4 | DEFINE_BITS_LOSSLESS | DEFINE_BITS_LOSSLESS2 | IGGY_EXTERNAL_IMAGE)
 }
 
 fn has_error_header(d: &[u8]) -> bool {
@@ -137,6 +137,14 @@ pub struct Bitmap {
 
 impl Bitmap {
     pub fn read(tag: &Tag, jpeg_tables: Option<&[u8]>) -> Result<Bitmap> {
+        if tag.code == IGGY_EXTERNAL_IMAGE {
+            let e = crate::iggy::texture::External::read(&tag.body)?;
+            let id = tag.character_id().unwrap_or(0);
+            if !e.replacement.is_empty() {
+                return Ok(Bitmap { id, original: Some(encoded(&e.replacement)), alpha: None, lossless: None });
+            }
+            return Ok(Bitmap { id, original: None, alpha: None, lossless: Some(e.image()) });
+        }
         let mut r = Reader::new(&tag.body);
         let id = r.u16()?;
         match tag.code {

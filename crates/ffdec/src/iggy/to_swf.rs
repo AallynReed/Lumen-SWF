@@ -13,9 +13,6 @@ use crate::shape::{self, index_bits, write_records, Record};
 use crate::tags::{code::*, Tag};
 use crate::types::Rect;
 
-/// FFDec's Iggy profile tag for bitmaps kept in the companion texture file.
-pub const IGGY_EXTERNAL_IMAGE: u16 = 513;
-
 /// Iggy blend codes by SWF blend mode.
 pub const BLEND: [u32; 15] = [1, 1, 2, 3, 4, 5, 6, 9, 7, 8, 10, 11, 12, 13, 14];
 
@@ -1249,7 +1246,6 @@ fn write_tags(w: &mut Writer, tags: &[Tag]) {
 /// `IggyToSwfConvertor.getSwf` as an uncompressed SWF file.
 pub fn swf_bytes(file: &IggyFile) -> Result<Vec<u8>> {
     let m = &file.swf;
-    let s = Src { data: m.original_data(), wide: m.is64 };
     let mut tags = Vec::new();
     let as3 = m.has_as3() || !m.abc_blocks.is_empty();
     tags.push(tag(FILE_ATTRIBUTES, vec![if as3 { 0x08 } else { 0 }, 0, 0, 0], false));

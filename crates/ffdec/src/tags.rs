@@ -76,6 +76,7 @@ pub mod code {
     pub const DEFINE_FONT4: u16 = 91;
     pub const ENABLE_TELEMETRY: u16 = 93;
     pub const PLACE_OBJECT4: u16 = 94;
+    pub const IGGY_EXTERNAL_IMAGE: u16 = 513;
     pub const GFX_EXPORTER_INFO: u16 = 1000;
     pub const GFX_DEFINE_EXTERNAL_IMAGE: u16 = 1001;
     pub const GFX_FONT_TEXTURE_INFO: u16 = 1002;
@@ -179,6 +180,7 @@ pub fn tag_name(code: u16) -> Option<&'static str> {
         1006 => "DefineExternalSound",
         1007 => "DefineExternalStreamSound",
         1008 => "DefineSubImage",
+        513 => "IggyExternalImage",
         1009 => "DefineExternalImage2",
         _ => return None,
     })
@@ -218,6 +220,7 @@ pub fn defines_character(code: u16) -> bool {
             | DEFINE_MORPH_SHAPE
             | DEFINE_MORPH_SHAPE2
             | DEFINE_BINARY_DATA
+            | IGGY_EXTERNAL_IMAGE
             | GFX_DEFINE_EXTERNAL_IMAGE
             | GFX_DEFINE_EXTERNAL_IMAGE2
             | GFX_DEFINE_SUB_IMAGE
@@ -289,6 +292,9 @@ impl Tag {
     }
 
     pub fn character_id(&self) -> Option<u16> {
+        if self.code == code::IGGY_EXTERNAL_IMAGE {
+            return self.body.get(1..3).map(|b| u16::from_le_bytes([b[0], b[1]]));
+        }
         if (defines_character(self.code) || references_character(self.code)) && self.body.len() >= 2 {
             Some(u16::from_le_bytes([self.body[0], self.body[1]]))
         } else {
