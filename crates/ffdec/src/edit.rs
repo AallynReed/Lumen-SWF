@@ -174,3 +174,27 @@ pub fn set_header(swf: &mut Swf, h: &HeaderEdit) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// `SWF.deobfuscate`: rewrites every AS3 method with traps (or only dead code) removed. Returns
+/// how many methods were changed; a method whose deobfuscation fails is left alone.
+pub fn deobfuscate(swf: &mut Swf, traps: bool) -> Result<usize, String> {
+    let mut paths = Vec::new();
+    swf.walk(|p, t| {
+        if crate::abc::tag_abc(t).is_some() {
+            paths.push(p.to_vec());
+        }
+    });
+    let mut n = 0;
+    for p in paths {
+        let Some((data, _)) = swf.tag(&p).and_then(crate::abc::tag_abc) else { continue };
+        let mut abc = Abc::parse(data).map_err(|e| e.to_string())?;
+        if traps {
+            n += crate::abc::decomp::deobf::remove_traps_all(&mut abc);
+        } else {
+            crate::abc::decomp::deobf::remove_dead_code_all(&mut abc);
+            n += abc.bodies.len();
+        }
+        swf.set_abc(&p, &abc).map_err(|e| e.to_string())?;
+    }
+    Ok(n)
+}

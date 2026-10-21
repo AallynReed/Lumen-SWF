@@ -9,6 +9,9 @@ use ffdec::{Compression, SaveOptions, Swf};
 #[derive(Parser)]
 #[command(name = "ffdec-cli", version, about = "Rust-FFDec command line")]
 struct Cli {
+    /// Remove obfuscation traps from scripts before decompiling, like FFDec's automatic deobfuscation
+    #[arg(long, global = true)]
+    deobfuscate: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -142,6 +145,14 @@ enum Cmd {
     },
     /// Print one AMF3 value (such as ByteArray.writeObject output) as FFDec's AMF text
     Amf { file: PathBuf },
+    /// Rewrite every AS3 method with obfuscation traps removed, like FFDec's -deobfuscate
+    Deobfuscate {
+        input: PathBuf,
+        output: PathBuf,
+        /// Only remove unreachable code
+        #[arg(long)]
+        dead_code: bool,
+    },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -211,7 +222,15 @@ fn save(swf: &Swf, out: &PathBuf) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().cmd {
+    let cli = Cli::parse();
+    ffdec::set_auto_deobfuscate(cli.deobfuscate);
+    match cli.cmd {
+        Cmd::Deobfuscate { input, output, dead_code } => {
+            let mut swf = open(&input)?;
+            let n = ffdec::edit::deobfuscate(&mut swf, !dead_code).map_err(|e| anyhow!(e))?;
+            save(&swf, &output)?;
+            println!("{n} methods deobfuscated");
+        }
         Cmd::Info { file } => {
             let swf = open(&file)?;
             let h = &swf.header;
