@@ -68,22 +68,21 @@ Grab the MSI from [Releases](https://github.com/AallynReed/Rust-FFDec/releases).
 ```
 ffdec-cli info movie.swf
 ffdec-cli tags movie.swf [--raw]
+ffdec-cli tag movie.swf 12
 ffdec-cli tag movie.swf 12/3
 ffdec-cli extract-tag movie.swf 12 body.bin
 ffdec-cli export movie.swf outdir [--kinds shapes,sprites] [--png] [--wav] [--shapes-png] [--frames-svg] [--texts-svg] [--pcode] [--zoom 2]
+ffdec-cli export movie.swf outdir --kinds scripts --pcode
+ffdec-cli export movie.swf outdir --kinds frames --frames-svg --zoom 2
 ffdec-cli render movie.swf 12 shape.svg
 ffdec-cli render movie.swf frame:5 frame.png --zoom 2
 ffdec-cli frame movie.swf 5
 ffdec-cli scripts movie.swf
 ffdec-cli pcode movie.swf com.example.Main
-ffdec-cli pcode movie.swf frame_1/DoAction
-ffdec-cli as3 movie.swf com.example.Main
-ffdec-cli as2 movie.swf frame_1/DoAction
-ffdec-cli as3 movie.swf com.example.Main --deobfuscate
-ffdec-cli deobfuscate in.swf out.swf [--dead-code | --group-parts]
-ffdec-cli decompress in.swf out.swf
-ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
 ffdec-cli pcode movie.swf com.example.Main --method "instance initializer"
+ffdec-cli pcode movie.swf frame_1/DoAction
+ffdec-cli as3 movie.swf com.example.Main [--deobfuscate]
+ffdec-cli as2 movie.swf frame_1/DoAction
 ffdec-cli replace in.swf out.swf 4 image.png
 ffdec-cli replace in.swf out.swf 7 shape.svg
 ffdec-cli replace in.swf out.swf 2 font.ttf --chars "àéü€"
@@ -92,14 +91,18 @@ ffdec-cli replace in.swf out.swf frame_1/DoAction script.pcode
 ffdec-cli replace in.swf out.swf com.example.Main Main.as
 ffdec-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 ffdec-cli replace in.swf out.swf 12/3 body.bin --raw
-ffdec-cli bundle game.exe outdir
-ffdec-cli swc movie.swf movie.swc
-ffdec-cli xfl movie.swf movie.fla --compressed [--version cs6]
+ffdec-cli bundle game.exe [outdir]
+ffdec-cli swc movie.swf movie.swc [--no-deps]
+ffdec-cli xfl movie.swf movie.fla [--compressed] [--version cs6]
 ffdec-cli swf2iggy movie.swf movie.iggy [--variant 32]
 ffdec-cli iggy2swf movie.iggy movie.swf
 ffdec-cli sol data.sol
 ffdec-cli sol data.sol --set data.txt --out edited.sol
 ffdec-cli amf value.bin
+ffdec-cli deobfuscate in.swf out.swf [--dead-code | --group-parts]
+ffdec-cli decompress in.swf out.swf
+ffdec-cli compress in.swf out.swf --format lzma [--encrypt]
+ffdec-cli compress in.swf out.swf --format zlib --encrypt
 ```
 
 A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path. An AS1/2 script is assembled from `.pcode` and compiled from anything else; an AS3 class is compiled whole, or one method's p-code is assembled with `--method`.
