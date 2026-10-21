@@ -11,6 +11,7 @@ pub mod export;
 pub mod filters;
 pub mod font_edit;
 pub mod harman;
+pub mod iggy;
 pub mod importers;
 pub mod info;
 pub mod io;
