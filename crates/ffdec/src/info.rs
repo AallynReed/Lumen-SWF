@@ -45,6 +45,12 @@ pub fn describe(tag: &Tag) -> Vec<Field> {
     if let Err(e) = fields(tag, &mut r, &mut out) {
         out.f("Parse error", e);
     }
+    if let Some(data) = crate::action::scripts::place_object_amf(tag, 10) {
+        match crate::amf::read_amf3(data) {
+            Ok((amf, v)) => out.f("AMF data", crate::amf::to_text(&amf, &v)),
+            Err(e) => out.f("AMF data", format!("unreadable: {e}")),
+        }
+    }
     out.0
 }
 

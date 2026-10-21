@@ -109,6 +109,16 @@ enum Cmd {
         #[arg(long)]
         no_deps: bool,
     },
+    /// Print a shared object (.sol) as FFDec's AMF text, or with --set store edited text in OUT
+    Sol {
+        file: PathBuf,
+        #[arg(long, requires = "out")]
+        set: Option<PathBuf>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Print one AMF3 value (such as ByteArray.writeObject output) as FFDec's AMF text
+    Amf { file: PathBuf },
     /// Write an uncompressed copy (also removes Harman encryption)
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
@@ -374,6 +384,20 @@ fn main() -> Result<()> {
         }
         Cmd::Swc { input, output, no_deps } => {
             std::fs::write(&output, ffdec::export::swc::swc(&open(&input)?, no_deps)?)?;
+        }
+        Cmd::Sol { file, set, out } => {
+            let mut sol = ffdec::amf::Sol::parse(&std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?)?;
+            match (set, out) {
+                (Some(text), Some(out)) => {
+                    sol.set_text(&std::fs::read_to_string(&text)?).map_err(|e| anyhow!("{e}"))?;
+                    std::fs::write(&out, sol.write()?)?;
+                }
+                _ => println!("{}", sol.to_text()),
+            }
+        }
+        Cmd::Amf { file } => {
+            let (amf, v) = ffdec::amf::read_amf3(&std::fs::read(&file)?)?;
+            println!("{}", ffdec::amf::to_text(&amf, &v));
         }
         Cmd::Decompress { input, output } => {
             std::fs::write(&output, open(&input)?.uncompressed_bytes()?)?;

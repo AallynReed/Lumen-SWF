@@ -297,21 +297,42 @@ fn clip_flags(r: &mut Reader, version: u8) -> crate::error::Result<u32> {
     Ok(f)
 }
 
-/// The clip action records of a PlaceObject2/3 body as (flags, key, start, end), with the
+/// The clip action records of a PlaceObject2/3/4 body as (flags, key, start, end), with the
 /// placed character, depth and the offset of AllEventFlags.
 fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usize, usize)>, usize)> {
+    if let Some((character, depth, recs, all_at, _)) = place_layout(tag, version) {
+        return Some((character, depth, recs, all_at));
+    }
     let mut r = Reader::new(&tag.body);
+    let po3 = tag.code == PLACE_OBJECT3 || tag.code == PLACE_OBJECT4;
     let f1 = r.u8().ok()?;
-    let f2 = if tag.code == PLACE_OBJECT3 { r.u8().ok()? } else { 0 };
+    let f2 = if po3 { r.u8().ok()? } else { 0 };
+    let depth = r.u16().ok()?;
+    let character = if !(po3 && f2 & 0x08 != 0) && f1 & 0x02 != 0 { r.u16().ok()? as i32 } else { -1 };
+    (f1 & 0x80 == 0).then_some((character, depth, vec![], 0))
+}
+
+/// Where a PlaceObject4's AMF3 metadata starts: after its clip actions, if any.
+pub fn place_object_amf(tag: &Tag, version: u8) -> Option<&[u8]> {
+    if tag.code != PLACE_OBJECT4 {
+        return None;
+    }
+    let (.., end) = place_layout(tag, version)?;
+    tag.body.get(end?..).filter(|d| !d.is_empty())
+}
+
+#[allow(clippy::type_complexity)]
+fn place_layout(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usize, usize)>, usize, Option<usize>)> {
+    let mut r = Reader::new(&tag.body);
+    let po3 = tag.code == PLACE_OBJECT3 || tag.code == PLACE_OBJECT4;
+    let f1 = r.u8().ok()?;
+    let f2 = if po3 { r.u8().ok()? } else { 0 };
     let depth = r.u16().ok()?;
     let mut character = -1;
-    if tag.code == PLACE_OBJECT3 && f2 & 0x08 != 0 {
+    if po3 && f2 & 0x08 != 0 {
         r.string().ok()?;
     } else if f1 & 0x02 != 0 {
         character = r.u16().ok()? as i32;
-    }
-    if f1 & 0x80 == 0 {
-        return Some((character, depth, vec![], 0));
     }
     if f1 & 0x04 != 0 {
         skip_matrix(&mut r).ok()?;
@@ -328,7 +349,7 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
     if f1 & 0x40 != 0 {
         r.u16().ok()?;
     }
-    if tag.code == PLACE_OBJECT3 {
+    if po3 {
         if f2 & 0x01 != 0 {
             crate::filters::read_filter_list(&mut r).ok()?;
         }
@@ -345,13 +366,18 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
             r.u32().ok()?;
         }
     }
+    if f1 & 0x80 == 0 {
+        return Some((character, depth, vec![], 0, Some(r.pos())));
+    }
     r.u16().ok()?;
     let all_at = r.pos();
     clip_flags(&mut r, version).ok()?;
     let mut out = Vec::new();
+    let mut end = None;
     loop {
         let Ok(flags) = clip_flags(&mut r, version) else { break };
         if flags & CLIP_FLAG_MASK == 0 {
+            end = Some(r.pos());
             break;
         }
         let Ok(mut size) = r.u32() else { break };
@@ -371,7 +397,7 @@ fn clip_actions(tag: &Tag, version: u8) -> Option<(i32, u16, Vec<(u32, u32, usiz
             break;
         }
     }
-    Some((character, depth, out, all_at))
+    Some((character, depth, out, all_at, end))
 }
 
 fn skip_button_records(r: &mut Reader, v2: bool) -> crate::error::Result<()> {
