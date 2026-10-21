@@ -472,7 +472,20 @@ pub fn filters_def(doc: &mut Doc, filters: &[Filter]) -> Option<String> {
                 );
                 input = r;
             }
-            Filter::Bevel(_) | Filter::GradientGlow(_) | Filter::GradientBevel(_) => {}
+            Filter::Bevel(b) | Filter::GradientBevel(b) => {
+                let mut next = || {
+                    n += 1;
+                    format!("r{n}")
+                };
+                input = gradient_bevel(&mut body, &input, b, &mut next);
+            }
+            Filter::GradientGlow(b) => {
+                let mut next = || {
+                    n += 1;
+                    format!("r{n}")
+                };
+                input = gradient_glow(&mut body, &input, b, &mut next);
+            }
         }
     }
     if body.is_empty() {
@@ -482,6 +495,165 @@ pub fn filters_def(doc: &mut Doc, filters: &[Filter]) -> Option<String> {
         "filter",
         &format!("<filter id=\"{{id}}\" x=\"-100%\" y=\"-100%\" width=\"300%\" height=\"300%\" color-interpolation-filters=\"sRGB\">{body}</filter>"),
     ))
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Kind {
+    Inner,
+    Outer,
+    Full,
+}
+
+fn bevel_kind(b: &crate::filters::Bevel) -> Kind {
+    if b.on_top && !b.inner {
+        Kind::Full
+    } else if !b.inner {
+        Kind::Outer
+    } else {
+        Kind::Inner
+    }
+}
+
+/// `SvgFiltering.compose`.
+fn compose(body: &mut String, src: &str, result: String, kind: Kind, knockout: bool, composite_source: bool, res: &mut dyn FnMut() -> String) -> String {
+    let (a, b, op) = match kind {
+        Kind::Full if !knockout && composite_source => (result.as_str(), src, "over"),
+        Kind::Inner => (result.as_str(), src, if knockout || !composite_source { "in" } else { "atop" }),
+        Kind::Outer if knockout => (result.as_str(), src, "out"),
+        Kind::Outer if composite_source => (src, result.as_str(), "over"),
+        Kind::Outer => ("", "", ""),
+        _ => return result,
+    };
+    composite(body, a, b, op, res)
+}
+
+fn flood_black(body: &mut String, res: &mut dyn FnMut() -> String) -> String {
+    let r = res();
+    let _ = write!(body, "<feFlood flood-color=\"black\" flood-opacity=\"1\" result=\"{r}\"/>");
+    r
+}
+
+fn composite(body: &mut String, a: &str, b: &str, op: &str, res: &mut dyn FnMut() -> String) -> String {
+    let r = res();
+    let _ = write!(body, "<feComposite in=\"{a}\" in2=\"{b}\" operator=\"{op}\" result=\"{r}\"/>");
+    r
+}
+
+fn solid_matrix(body: &mut String, input: &str, c: (f64, f64, f64, f64), res: &mut dyn FnMut() -> String) -> String {
+    let r = res();
+    let _ = write!(body, "<feColorMatrix type=\"matrix\" in=\"{input}\" values=\"0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0\" result=\"{r}\"/>", num(c.0), num(c.1), num(c.2), num(c.3));
+    r
+}
+
+/// `SvgFiltering.dropShadow` without blur, as the bevels use it.
+#[allow(clippy::too_many_arguments)]
+fn drop_shadow(body: &mut String, input: &str, distance: f64, angle: f64, color: (f64, f64, f64, f64), inner: bool, strength: f64, res: &mut dyn FnMut() -> String) -> String {
+    let off = res();
+    let _ = write!(body, "<feOffset dx=\"{}\" dy=\"{}\" in=\"{input}\" result=\"{off}\"/>", num(distance * angle.cos()), num(distance * angle.sin()));
+    let mut cur = if inner {
+        let flood = res();
+        let hex = format!("#{:02x}{:02x}{:02x}", (color.0 * 255.0) as u8, (color.1 * 255.0) as u8, (color.2 * 255.0) as u8);
+        let _ = write!(body, "<feFlood flood-color=\"{hex}\" flood-opacity=\"{}\" result=\"{flood}\"/>", num(color.3));
+        composite(body, &flood, &off, "out", res)
+    } else {
+        solid_matrix(body, &off, color, res)
+    };
+    if strength != 1.0 {
+        let r = res();
+        let _ = write!(body, "<feColorMatrix type=\"matrix\" in=\"{cur}\" values=\"1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 {} 0\" result=\"{r}\"/>", num(strength));
+        cur = r;
+    }
+    compose(body, input, cur, if inner { Kind::Inner } else { Kind::Outer }, true, true, res)
+}
+
+/// `GradientUtil.colorAt` in sRGB.
+fn color_at(colors: &[crate::types::Rgba], ratios: &[u8], k: f32) -> [u8; 4] {
+    let c = |x: &crate::types::Rgba| [x.r, x.g, x.b, x.a];
+    let n = ratios.len();
+    if n == 0 || colors.len() != n {
+        return [0; 4];
+    }
+    if k <= ratios[0] as f32 {
+        return c(&colors[0]);
+    }
+    if k >= ratios[n - 1] as f32 {
+        return c(&colors[n - 1]);
+    }
+    let mut i = 0;
+    while i < n - 1 && k > ratios[i + 1] as f32 {
+        i += 1;
+    }
+    let (p0, p1) = (ratios[i] as f32, ratios[i + 1] as f32);
+    if p1 == p0 {
+        return c(&colors[i + 1]);
+    }
+    let t = (k - p0) / (p1 - p0);
+    let (a, b) = (c(&colors[i]), c(&colors[i + 1]));
+    let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t + 0.5).floor().clamp(0.0, 255.0) as u8;
+    [lerp(a[0], b[0]), lerp(a[1], b[1]), lerp(a[2], b[2]), lerp(a[3], b[3])]
+}
+
+/// `prepareFeComponentTransfer`: maps the red channel through the gradient.
+fn gradient_transfer(body: &mut String, input: &str, b: &crate::filters::Bevel, res: &mut dyn FnMut() -> String) -> String {
+    let table: Vec<[u8; 4]> = (0..256).map(|i| color_at(&b.colors, &b.ratios, i as f32)).collect();
+    let vals = |ch: usize| table.iter().map(|c| num(c[ch] as f64 / 255.0)).collect::<Vec<_>>().join(" ");
+    let r = res();
+    let _ = write!(
+        body,
+        "<feComponentTransfer in=\"{input}\" result=\"{r}\"><feFuncR type=\"table\" tableValues=\"{}\"/><feFuncG type=\"table\" tableValues=\"{}\"/><feFuncB type=\"table\" tableValues=\"{}\"/><feFuncA type=\"table\" tableValues=\"{}\"/></feComponentTransfer>",
+        vals(0),
+        vals(1),
+        vals(2),
+        vals(3)
+    );
+    r
+}
+
+/// `SvgFiltering.gradientGlow`.
+fn gradient_glow(body: &mut String, input: &str, b: &crate::filters::Bevel, res: &mut dyn FnMut() -> String) -> String {
+    let black = flood_black(body, res);
+    let off = res();
+    let _ = write!(body, "<feOffset dx=\"{}\" dy=\"{}\" in=\"{input}\" result=\"{off}\"/>", num(b.distance * b.angle.cos()), num(b.distance * b.angle.sin()));
+    let red = solid_matrix(body, &off, (1.0, 0.0, 0.0, 1.0), res);
+    let mut cur = composite(body, &red, &black, "over", res);
+    cur = blur(body, &cur, b.blur_x, b.blur_y, b.passes, res);
+    let row = format!("{} 0 0 0 0", num(b.strength));
+    let r = res();
+    let _ = write!(body, "<feColorMatrix type=\"matrix\" in=\"{cur}\" values=\"{row} {row} {row} {row}\" result=\"{r}\"/>");
+    let cur = gradient_transfer(body, &r, b, res);
+    compose(body, input, cur, bevel_kind(b), b.knockout, b.composite_source, res)
+}
+
+/// `SvgFiltering.gradientBevel`, which also draws the plain bevel.
+fn gradient_bevel(body: &mut String, input: &str, b: &crate::filters::Bevel, res: &mut dyn FnMut() -> String) -> String {
+    let (red, blue) = ((1.0, 0.0, 0.0, 1.0), (0.0, 0.0, 1.0, 1.0));
+    let kind = bevel_kind(b);
+    let pi = std::f64::consts::PI;
+    let pair = |body: &mut String, inner: bool, res: &mut dyn FnMut() -> String| {
+        let (ha, sa) = if inner { (b.angle, b.angle + pi) } else { (b.angle + pi, b.angle) };
+        let hilight = drop_shadow(body, input, b.distance, ha, red, inner, b.strength, res);
+        let shadow = drop_shadow(body, input, b.distance, sa, blue, inner, b.strength, res);
+        let h = composite(body, &hilight, &shadow, "out", res);
+        let s = composite(body, &shadow, &hilight, "out", res);
+        (h, s)
+    };
+    let inner = (kind != Kind::Outer).then(|| pair(body, true, res));
+    let outer = (kind != Kind::Inner).then(|| pair(body, false, res));
+    let (hilight, shadow) = match (inner, outer) {
+        (Some((hi, si)), Some((ho, so))) => (composite(body, &hi, &ho, "over", res), composite(body, &si, &so, "over", res)),
+        (Some(p), None) | (None, Some(p)) => p,
+        (None, None) => unreachable!(),
+    };
+    let black = flood_black(body, res);
+    let cur = composite(body, &shadow, &black, "over", res);
+    let mut cur = composite(body, &hilight, &cur, "over", res);
+    cur = blur(body, &cur, b.blur_x, b.blur_y, b.passes, res);
+    let half = b.strength / 2.0;
+    let row = format!("{} 0 {} 0 0.5", num(half), num(-half));
+    let r = res();
+    let _ = write!(body, "<feColorMatrix type=\"matrix\" in=\"{cur}\" values=\"{row} {row} {row} {row}\" result=\"{r}\"/>");
+    let cur = gradient_transfer(body, &r, b, res);
+    compose(body, input, cur, kind, b.knockout, b.composite_source, res)
 }
 
 fn blur(body: &mut String, input: &str, bx: f64, by: f64, passes: u32, res: &mut dyn FnMut() -> String) -> String {
