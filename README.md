@@ -6,45 +6,54 @@ Opens, inspects, edits and re-saves SWF files: asset export, rendering, ActionSc
 
 ## Features
 
-- Opens `FWS`, `CWS` (zlib), `ZWS` (LZMA), `ABC` (non-standard LZMA) and Scaleform `GFX`/`CFX` files, including Harman AIR encrypted SWFs (`fWS`/`cWS`/`zWS`).
-- Unmodified files re-save byte for byte. This is checked against all 332 SWFs in the JPEXS test corpus.
-- Save, or save as uncompressed, zlib, LZMA or ABC, with or without Harman encryption. Edits stay in memory until saved, and the app asks before unsaved changes are lost.
-- FFDec-style resource tree (shapes, sprites, images, sounds, fonts, frames, scripts…) or the raw tag list, with filtering.
-- Decoded fields for every common tag, plus a hex view of each tag body.
-- Export any tag's raw body.
-- Asset preview and export, matching FFDec's formats, folder layout and file names:
-  - images: JPEG/PNG/GIF as stored, or PNG when there is a separate alpha channel or a lossless bitmap (or PNG for everything);
-  - sounds: MP3 as stored, PCM/ADPCM streams as WAV, other codecs in FLV (or WAV for everything, decoding ADPCM, Nellymoser and MP3);
-  - fonts as TrueType (DefineFont4 as OpenType), texts as plain text, binary data (embedded SWFs saved as `.swf`), video streams as FLV.
-- Export a single asset, or every asset of the chosen types into a folder.
-- Rendering to SVG and PNG, following FFDec's renderer:
-  - shapes with solid, gradient (including focal and linear-RGB) and bitmap fills, and strokes with caps, joins and FFDec's 1 px minimum width;
-  - morph shapes, as an animated SVG or start/end PNGs;
-  - static text from embedded fonts, and dynamic text with system fonts;
-  - sprites, buttons (all four states) and root frames, with nested sprite timing, clip masks, colour transforms, blend modes and the common filters (blur, drop shadow, glow, colour matrix, convolution).
-- Previews of every shape, sprite, button and text, with a frame player for sprites, buttons and the root timeline.
-- ActionScript 3: ABC bytecode parsed and listed by package and class, with FFDec-format p-code (FFDec's path-following disassembler, so obfuscated method bodies survive). The p-code matches FFDec's on 99.97% of the corpus's 10,580 method bodies.
-- ActionScript 3 decompiler, a port of FFDec's: whole classes with imports, metadata, slot initializers and inner functions, typed with the player's own library. It reproduces 366 of JPEXS's 369 method expectations and all 21 class expectations. The preview switches between ActionScript and p-code; scripts export as `.as` (or `.pcode` with `--pcode`).
-- ActionScript 1/2: frame, sprite, button, clip event and `__Packages` class scripts listed like FFDec, with FFDec-format p-code from its path-following reader.
-- ActionScript 1/2 decompiler, a port of FFDec's: AS2 classes and interfaces rebuilt from `__Packages` scripts, with their undeclared fields. It reproduces all 84 of JPEXS's AS1/2 expectations, and its ActionScript and p-code match FFDec 26.4's on every one of the corpus's 192 AS1/2 scripts. Scripts export to `scripts/` as `.as` (or `.pcode` with `--pcode`).
-- Editing, ported from FFDec's importers and assemblers:
-  - replace images (DefineBits becomes DefineBitsJPEG2, as in FFDec), sounds (MP3, or WAV stored uncompressed), binary data and edit text;
-  - edit static texts as FFDec's formatted text, or replace their plain records; matches FFDec 26.4 on all 153 corpus texts, and keeps letter spacing that FFDec's re-import loses;
-  - replace shapes with an image or an SVG (paths, basic shapes, arcs, CSS, gradients, bitmap patterns), matching FFDec 26.4 on its SVG export of every corpus shape;
-  - redraw a DefineFont2/3 from a TrueType or OpenType file and add characters to it, laying out the texts that use it again; DefineFont4 takes the file as its font data;
-  - edit the SWF version, frame rate, stage size and background colour, and remove tags;
-  - edit AS1/2 scripts as ActionScript, compiled by a port of FFDec's compiler that matches FFDec 26.4's bytes on all 192 corpus scripts;
-  - edit AS3 scripts as ActionScript, compiled by a port of FFDec's AS3 compiler that matches FFDec 26.4's bytes on all 1,207 single-definition corpus scripts it compiles. Unlike FFDec, a class in a script that defines several things compiles without making the new script the SWF's entry point or leaving the old initializer creating the removed class, Flex embed classes keep their names, and code that would fail Flash Player's verifier is refused;
-  - edit AS1/2 p-code per script and AS3 p-code per method, with errors reported by line. Every corpus script and all 12,229 AS3 methods re-assemble to themselves, and re-serialized ABCs match byte for byte;
-  - an edited AS3 method's stack, scope and register limits grow to fit its code. FFDec keeps the old limits, so its p-code edits can fail Flash Player's verifier.
-- Bundles, as in FFDec: every SWF in a ZIP, every library in an SWC's catalog, and SWFs embedded in any other file (such as a projector `.exe`). Edited ZIP and SWC entries save back into the archive.
-- SWC export, a port of FFDec's: the SWF as `library.swf` with a catalog of each script's definitions and dependencies, matching FFDec 26.4's catalogs on all 57 corpus AS3 SWFs. Unlike FFDec, the stub document class really replaces the original one in `library.swf`.
-- XFL and FLA export, a port of FFDec's: library items, symbols, timelines with classic, shape and motion tweens, sounds, video, texts and fonts, with each script as an `.as` file. The DOMDocument and library match FFDec 26.4's on 320 of the 332 corpus SWFs; the rest differ where FFDec rounds morph colours wrongly or counts MP3 samples with a different decoder.
-- Iggy files (the Iggy UI runtime's movie format), ported from FFDec: they open as SWF, edit like any SWF and save back into the `.iggy`, and SWFs convert to Iggy in its 64-bit, 32-bit and 32-bit legacy layouts, leaving out what Iggy cannot store with FFDec's list of what was skipped. External bitmaps are drawn from the `.raw.iggytex` file beside the movie, in all of its texture formats including DXT and BC7. On the 732 Iggy files FFDec 26.4 makes from the corpus, conversion to SWF and both unchanged and edited saves match FFDec byte for byte, and SWF to Iggy matches on 726 with identical warnings; the other six hold bitmaps FFDec re-encodes, where zlib and JPEG decoders differ.
-- Search through decompiled ActionScript, p-code or texts, plain or by regular expression, in one file or all open files (Ctrl+Shift+F); results open in the tree.
-- AMF0 and AMF3, ported from FFDec: PlaceObject4 metadata is shown as FFDec's AMF text, and shared objects (`.sol`) open, edit as that text and save. FFDec's text matches on every corpus file it can read, and files re-save byte for byte. Unlike FFDec, integral AMF3 doubles stay doubles when edited, duplicate keys are kept, and dates show in UTC.
-- Colliding AS3 names (two `public var a` in different namespaces) get FFDec's `#namespace` suffix.
-- Drag and drop, and the installer adds an "Open with" entry for `.swf`.
+Everything is ported from FFDec and checked against FFDec 26.4 on the 332 SWFs of the JPEXS test corpus.
+
+### Files
+
+- Opens uncompressed, zlib, LZMA and `ABC` SWFs, Scaleform `GFX`/`CFX`, and Harman AIR encrypted SWFs.
+- Saves with any of those compressions, with or without encryption. Unmodified files re-save byte for byte.
+- Bundles: every SWF in a ZIP, every library in an SWC, and SWFs embedded in other files such as projector `.exe`s. Edited ZIP and SWC entries save back into the archive.
+- Iggy files open as SWF and save back into the `.iggy`. External bitmaps are drawn from the `.raw.iggytex` file beside the movie.
+- Shared objects (`.sol`) open, edit as FFDec's AMF text and save.
+- Drag and drop, and an "Open with" entry for `.swf`.
+
+### Browsing
+
+- FFDec's resource tree or the raw tag list, with filtering.
+- Decoded fields for every common tag, and a hex view of each tag body.
+- Previews of shapes, sprites, buttons, texts, images and sounds, with a frame player.
+- Search through ActionScript, p-code or texts, plain or by regular expression, across all open files.
+
+### Export
+
+- Images, sounds, fonts, texts, binary data and video in FFDec's formats, folder layout and file names.
+- Shapes, morph shapes, sprites, buttons and frames to SVG or PNG, with FFDec's renderer: gradients, bitmap fills, strokes, masks, colour transforms, blend modes and the common filters.
+- Scripts as ActionScript or p-code.
+- The whole file as FLA or XFL (timelines, tweens, library and scripts), as SWC, or as Iggy (64-bit, 32-bit or 32-bit legacy).
+
+### ActionScript
+
+- AS3 and AS1/2 p-code from FFDec's path-following readers, so obfuscated code survives.
+- AS3 and AS1/2 decompilers. They reproduce JPEXS's own test expectations (366 of 369 AS3 methods, all AS3 classes and all 84 AS1/2 cases).
+- AS3 and AS1/2 compilers that match FFDec byte for byte on all 192 AS1/2 and 1,207 single-definition AS3 corpus scripts.
+- P-code editing per AS1/2 script or AS3 method, with errors reported by line.
+
+### Editing
+
+- Replace images, sounds, binary data, edit texts and static texts.
+- Replace shapes with an image or an SVG.
+- Redraw fonts from a TrueType or OpenType file and add characters.
+- Edit the SWF version, frame rate, stage size and background colour, and remove tags.
+- Edits stay in memory until saved, and the app asks before unsaved changes are lost.
+
+### Where it differs from FFDec
+
+- Edited AS3 methods get stack, scope and register limits that fit their code, and AS3 code that would fail Flash Player's verifier is refused.
+- Compiling one class of a multi-class AS3 script leaves the rest of the script working, and Flex embed classes keep their names.
+- Re-imported static texts keep their letter spacing.
+- SWC export really replaces the document class with its stub.
+- AMF3 integral doubles stay doubles, duplicate keys are kept, and dates show in UTC.
+- SWFs converted from Iggy are written as UTF-8 and without a duplicate End tag.
 
 ## Download
 
