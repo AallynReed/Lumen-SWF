@@ -1,9 +1,11 @@
 // Copies Ruffle's self-hosted player from node_modules into web/ruffle.
 import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const src = join('node_modules', '@ruffle-rs', 'ruffle');
-const dst = join('web', 'ruffle');
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const src = join(root, 'node_modules', '@ruffle-rs', 'ruffle');
+const dst = join(root, 'web', 'ruffle');
 rmSync(dst, { recursive: true, force: true });
 mkdirSync(dst, { recursive: true });
 for (const f of readdirSync(src)) {
