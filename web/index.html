@@ -113,6 +113,7 @@
                     <button class="tab" data-tab="preview" role="tab" hidden>Preview</button>
                     <button class="tab active" data-tab="details" role="tab">Details</button>
                     <button class="tab" data-tab="hex" role="tab">Hex</button>
+                    <button class="tab" data-tab="play" role="tab" hidden title="Play the file in Ruffle">Play</button>
                 </div>
             </div>
             <div id="tab-preview" class="tab-body preview-body" hidden>
@@ -123,6 +124,7 @@
                 <div id="details-bar" class="code-bar" hidden><button id="btn-edit-header" class="btn" title="Edit the version, frame rate, stage size and background">Edit</button></div>
                 <table class="fields"><tbody id="fields"></tbody></table>
             </div>
+            <div id="tab-play" class="tab-body play-body" hidden><div id="play" class="play"></div></div>
             <div id="tab-hex" class="tab-body hex-body" hidden>
                 <div id="hex" class="hex"><div id="hex-spacer"></div><div id="hex-rows" class="hex-rows"></div></div>
             </div>

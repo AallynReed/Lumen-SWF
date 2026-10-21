@@ -693,6 +693,13 @@ async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool,
     with_doc(&docs, id, |d| ffdec::search::search(d.exporter(), &q).map_err(|e| e.to_string()))
 }
 
+/// The file as it is in memory, uncompressed, for the Ruffle player.
+#[tauri::command]
+fn movie_data(docs: State<'_, Docs>, id: u32) -> Result<tauri::ipc::Response, String> {
+    let bytes = with_doc(&docs, id, |d| d.swf().save(&SaveOptions { compression: Compression::None, encrypt: false }).map_err(|e| e.to_string()))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 fn set_auto_deobfuscate(on: bool) {
     ffdec::set_auto_deobfuscate(on);
@@ -759,6 +766,7 @@ fn main() {
             open_dialog,
             open_path,
             set_auto_deobfuscate,
+            movie_data,
             deobfuscate,
             close_doc,
             get_tree,

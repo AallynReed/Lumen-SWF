@@ -298,7 +298,9 @@ async function showSelection() {
     $('sel-title').textContent = n.kind === 'header' ? doc.name : n.label;
     const isTag = !!n.path && n.kind !== 'folder' && n.kind !== 'script';
     document.querySelector('.tab[data-tab="hex"]').hidden = !isTag;
+    document.querySelector('.tab[data-tab="play"]').hidden = n.kind !== 'header';
     stopPlayback();
+    stopMovie();
     clearPreview();
     state.exportable = false;
     state.importable = false;
@@ -341,6 +343,7 @@ async function showSelection() {
     let tab = state.tabPref;
     if (tab === 'preview' && !hasPreview) tab = 'details';
     if (tab === 'hex' && !isTag) tab = 'details';
+    if (tab === 'play' && n.kind !== 'header') tab = 'details';
     setTab(tab, false);
 }
 
@@ -415,7 +418,9 @@ function renderPreview(info, data) {
 async function showSol(sel, doc) {
     $('sel-title').textContent = doc.name;
     document.querySelector('.tab[data-tab="hex"]').hidden = true;
+    document.querySelector('.tab[data-tab="play"]').hidden = true;
     stopPlayback();
+    stopMovie();
     clearPreview();
     state.exportable = false;
     state.importable = false;
@@ -685,7 +690,52 @@ function setTab(tab, remember = true) {
     $('tab-preview').hidden = tab !== 'preview';
     $('tab-details').hidden = tab !== 'details';
     $('tab-hex').hidden = tab !== 'hex';
+    $('tab-play').hidden = tab !== 'play';
     if (tab === 'hex') drawHex();
+    if (tab === 'play') playMovie();
+    else stopMovie();
+}
+
+// ---- Ruffle player ----
+
+let ruffleLoad = null;
+
+function loadRuffle() {
+    if (!ruffleLoad) {
+        window.RufflePlayer = window.RufflePlayer || {};
+        window.RufflePlayer.config = { publicPath: 'ruffle/', autoplay: 'on', unmuteOverlay: 'hidden', splashScreen: false, contextMenu: 'on', openUrlMode: 'deny' };
+        ruffleLoad = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'ruffle/ruffle.js';
+            s.onload = resolve;
+            s.onerror = () => {
+                ruffleLoad = null;
+                reject(new Error('Ruffle is not bundled with this build'));
+            };
+            document.head.appendChild(s);
+        });
+    }
+    return ruffleLoad;
+}
+
+function stopMovie() {
+    $('play').innerHTML = '';
+}
+
+async function playMovie() {
+    const doc = selectedDoc();
+    if (!doc || doc.kind === 'sol') return;
+    stopMovie();
+    try {
+        await loadRuffle();
+        const data = await invoke('movie_data', { id: doc.id });
+        if (state.tab !== 'play' || selectedDoc() !== doc) return;
+        const player = window.RufflePlayer.newest().createPlayer();
+        $('play').appendChild(player);
+        await player.ruffle().load({ data: new Uint8Array(data), swfFileName: doc.name });
+    } catch (e) {
+        $('play').innerHTML = `<p class="preview-empty">${esc(String(e.message || e))}</p>`;
+    }
 }
 
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));

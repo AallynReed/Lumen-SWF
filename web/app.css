@@ -211,6 +211,8 @@ mark { background: none; color: var(--accent); font-weight: 650; }
 .fields .btn { font-family: var(--sans); font-size: 13px; }
 
 .hex-body { padding: 0; }
+.play-body { padding: 0; }
+.play, .play ruffle-player { display: block; width: 100%; height: 100%; }
 .hex { position: relative; height: 100%; overflow: auto; font: 12px/20px var(--mono); }
 .hex-rows { position: absolute; top: 0; left: 0; right: 0; padding: 0 16px; }
 .hex-row { height: 20px; white-space: pre; }

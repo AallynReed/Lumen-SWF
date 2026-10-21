@@ -1,5 +1,6 @@
 /target/
 /jpexs-decompiler/
 node_modules/
+/web/ruffle/
 src-tauri/gen/
 *.msi

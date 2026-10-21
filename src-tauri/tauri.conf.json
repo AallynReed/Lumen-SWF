@@ -5,7 +5,9 @@
   "version": "0.7.0",
   "identifier": "net.aallyn.rustffdec",
   "build": {
-    "frontendDist": "../web"
+    "frontendDist": "../web",
+    "beforeDevCommand": "node tools/copy-ruffle.mjs",
+    "beforeBuildCommand": "node tools/copy-ruffle.mjs"
   },
   "app": {
     "withGlobalTauri": true,
