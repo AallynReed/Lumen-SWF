@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::code::{op, Code, Ins};
+use super::code::{Lit, op, Code, Ins};
 use super::ctx::{Ctx, LocalData};
 use super::graph::St;
 use super::index;
@@ -986,8 +986,15 @@ impl<'c, 'a> Tr<'c, 'a> {
         }
     }
 
+    /// `ins.translate(localData, stack, output)` for one instruction, as the deobfuscator runs it.
+    pub fn translate_one(&self, ld: &mut Ld, out: &List, st: &St, ip: usize) {
+        st.borrow_mut().set_connected_output(Some(out.clone()));
+        let mut x = X { tr: self, ld, out, st, ip };
+        x.translate();
+    }
+
     /// (pop count, push count, scope delta) of an instruction.
-    fn stack_effect(&self, ins: &Ins) -> (i32, i32, i32) {
+    pub fn stack_effect(&self, ins: &Ins) -> (i32, i32, i32) {
         let o = |i: usize| ins.op(i);
         match ins.name {
             "add_d" | "add_i" | "add" | "astypelate" | "bitand" | "bitor" | "bitxor" | "concat" | "divide" | "divide_p" | "equals" | "greaterequals" | "greaterthan" | "hasnext" | "in" | "instanceof"
@@ -1004,7 +1011,7 @@ impl<'c, 'a> Tr<'c, 'a> {
             "callpropvoid" | "callsupervoid" => (o(1) + 1 + self.mn_stack(o(0)), 0, 0),
             "construct" => (o(0) + 1, 1, 0),
             "constructsuper" => (o(0) + 1, 0, 0),
-            "dxnslate" | "iffalse" | "iftrue" | "lookupswitch" | "pop" | "returnvalue" | "setglobalslot" | "throw" | "setlocal" | "setlocal0" | "setlocal1" | "setlocal2" | "setlocal3" => (1, 0, 0),
+            "dxnslate" | "iffalse" | "iftrue" | "lookupswitch" | "pop" | "ffdec_deobfuscatepop" | "returnvalue" | "setglobalslot" | "throw" | "setlocal" | "setlocal0" | "setlocal1" | "setlocal2" | "setlocal3" => (1, 0, 0),
             "deleteproperty" | "getdescendants" | "getproperty" | "getsuper" => (1 + self.mn_stack(o(0)), 1, 0),
             "dup" => (1, 2, 0),
             "swap" => (2, 2, 0),
@@ -1154,6 +1161,19 @@ impl<'x, 'c, 'a> X<'x, 'c, 'a> {
                 let v = self.pop();
                 self.push(self.mk(K::AlchemySignExtend { size }, prec::PRIMARY, Some(v)));
             }
+            "pushint" | "pushbyte" | "pushshort" if matches!(self.ins().lit, Some(Lit::Int(_))) => {
+                let Some(Lit::Int(v)) = self.ins().lit else { unreachable!() };
+                self.push(integer_a(Some(self.ip), self.ls(), v));
+            }
+            "pushdouble" if matches!(self.ins().lit, Some(Lit::Double(_))) => {
+                let Some(Lit::Double(v)) = self.ins().lit else { unreachable!() };
+                self.push(self.mk(K::DoubleValue(v), prec::PRIMARY, None));
+            }
+            "pushstring" if matches!(self.ins().lit, Some(Lit::Str(_))) => {
+                let Some(Lit::Str(s)) = self.ins().lit.clone() else { unreachable!() };
+                self.push(string_item(Some(self.ip), self.ls(), s));
+            }
+            "ffdec_deobfuscatepop" => self.deobfuscate_pop(),
             "pushbyte" => self.push(integer_a(Some(self.ip), self.ls(), self.op(0) as i8 as i32)),
             "pushshort" => self.push(integer_a(Some(self.ip), self.ls(), self.op(0) as i16 as i32)),
             "pushint" => {
@@ -1504,6 +1524,58 @@ impl<'x, 'c, 'a> X<'x, 'c, 'a> {
             self.push(self.mk(K::DuplicateSource { temp, declaration: false }, prec::PRIMARY, Some(v.clone())));
         }
         self.push(self.mk(K::Duplicate { temp }, prec::PRIMARY, Some(v)));
+    }
+
+    /// `DeobfuscatePopIns.translate`: drops the value without a statement, releasing the
+    /// temporaries its duplicates hold.
+    fn deobfuscate_pop(&self) {
+        let item = self.pop();
+        let out = self.out.clone();
+        let st = self.st.clone();
+        let mut visit = |sub: &It| -> bool {
+            let Some(temp) = (match &sub.borrow().k {
+                K::Duplicate { temp } | K::DuplicateSource { temp, .. } => Some(*temp),
+                _ => None,
+            }) else {
+                return true;
+            };
+            let last = out.borrow().last().cloned();
+            let Some(last) = last else { return false };
+            let (lt, rc) = match &last.borrow().k {
+                K::SetTemporary { temp, ref_count, .. } => (*temp, *ref_count),
+                _ => return false,
+            };
+            if lt != temp {
+                return false;
+            }
+            let set_rc = |v: i32| {
+                if let K::SetTemporary { ref_count, .. } = &mut last.borrow_mut().k {
+                    *ref_count = v;
+                }
+            };
+            let mut rc = rc - 1;
+            set_rc(rc);
+            if rc <= 0 {
+                out.borrow_mut().pop();
+                st.borrow_mut().move_to_stack(&out);
+            } else if rc == 1 {
+                let n = st.borrow().len();
+                for i in 0..n {
+                    let s = st.borrow_mut().get(i);
+                    if temp_of(&s) == Some(temp) {
+                        let v = last.borrow().value.clone().expect("value");
+                        st.borrow_mut().set(i, v);
+                        rc -= 1;
+                        set_rc(rc);
+                        out.borrow_mut().pop();
+                        st.borrow_mut().move_to_stack(&out);
+                    }
+                }
+            }
+            false
+        };
+        visit(&item);
+        visit_recursively(&item, &mut visit);
     }
 
     fn swap(&self) {

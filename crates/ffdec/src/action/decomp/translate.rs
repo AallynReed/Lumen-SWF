@@ -182,7 +182,7 @@ impl ActTr {
         let ins = list
             .iter()
             .map(|a| {
-                let mut i = Ins { addr: a.address as i64, len: a.total_len() as i64, code: 0, name: "", kinds: &[], ops: vec![], ignored: a.ignored, line: 0, file: None, bodies: vec![], container_end: None, define_function: false };
+                let mut i = Ins { addr: a.address as i64, len: a.total_len() as i64, code: 0, name: "", kinds: &[], ops: vec![], ignored: a.ignored, line: 0, file: None, bodies: vec![], container_end: None, define_function: false, id: 0, lit: None };
                 match &a.op {
                     Op::Jump { .. } | Op::If { .. } => {
                         i.code = if matches!(a.op, Op::Jump { .. }) { op::JUMP } else { op::IFTRUE };

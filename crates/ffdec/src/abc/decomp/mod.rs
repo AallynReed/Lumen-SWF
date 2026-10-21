@@ -4,6 +4,8 @@ pub mod avm2graph;
 pub mod avm2post;
 pub mod code;
 pub mod ctx;
+pub mod deobf;
+pub mod ecma;
 pub mod eq;
 pub mod graph;
 pub mod index;

@@ -831,9 +831,9 @@ impl<'c, 'a> Sp<'c, 'a> {
         }
     }
 
-    fn prepared(&self, method: usize) -> Option<Code> {
+    fn prepared(&self, method: usize, script: usize, class: i32, is_static: bool) -> Option<Code> {
         let body = self.abc().body(method)?;
-        Some(method::prepare_code(self.ctx, body))
+        Some(method::prepare_code(self.ctx, body, self.ctx.cfg.deobfuscate, method, is_static, script as i32, class))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -850,7 +850,7 @@ impl<'c, 'a> Sp<'c, 'a> {
             }
         }
         let Some(body) = abc.body(method) else { return };
-        let Some(code) = self.prepared(method) else { return };
+        let Some(code) = self.prepared(method, script, class, is_static) else { return };
         for t in &body.traits {
             self.trait_deps(t, script, class, is_static, custom, deps, ignore, uses);
         }
@@ -1002,7 +1002,7 @@ impl<'c, 'a> Sp<'c, 'a> {
             let m = method as usize;
             self.method_deps(m, script, class, is_static, &custom, &ignore, &mut Vec::new(), &mut deps, &mut uses);
             let mut nf: Vec<Dep> = Vec::new();
-            if let Some(code) = self.prepared(m) {
+            if let Some(code) = self.prepared(m, script, class, is_static) {
                 let mut visited = Vec::new();
                 for x in &code.ins {
                     if x.code == op::NEWFUNCTION {

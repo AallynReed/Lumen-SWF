@@ -31,4 +31,9 @@ pub use container::Compression;
 pub use error::{Error, Result};
 pub use swf::{SaveOptions, Swf};
 pub use tags::Tag;
+
+/// Turns FFDec's automatic deobfuscation on or off for everything decompiled afterwards.
+pub fn set_auto_deobfuscate(on: bool) {
+    abc::decomp::ctx::AUTO_DEOBFUSCATE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
 pub mod xfl;

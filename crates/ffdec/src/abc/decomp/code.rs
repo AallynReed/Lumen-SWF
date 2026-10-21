@@ -1,7 +1,8 @@
 //! A method body's instruction list prepared for decompilation: FFDec's `AVM2Code` plus
 //! the `GraphSource` view the graph works on.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::abc::opcodes::{disassemble, Dialect, Instruction, Operand};
 use crate::abc::{Abc, Exception, MethodBody};
@@ -119,11 +120,43 @@ pub struct Ins {
     /// Address after a container's bodies.
     pub container_end: Option<i64>,
     pub define_function: bool,
+    /// Identity, standing in for Java's object identity of `AVM2Instruction`.
+    pub id: u32,
+    /// The value of a push the deobfuscator made, when the constant pool lacks it.
+    pub lit: Option<Lit>,
+}
+
+/// A constant of a push made by the deobfuscator.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Lit {
+    Int(i32),
+    Double(f64),
+    Str(String),
+}
+
+static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+
+pub fn next_id() -> u32 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 impl Ins {
     fn from(i: Instruction) -> Ins {
-        Ins { addr: i.offset as i64, len: i.len as i64, code: i.code, name: i.name, kinds: i.kinds, ops: i.operands, ignored: false, line: 0, file: None, bodies: vec![], container_end: None, define_function: false }
+        Ins { addr: i.offset as i64, len: i.len as i64, code: i.code, name: i.name, kinds: i.kinds, ops: i.operands, ignored: false, line: 0, file: None, bodies: vec![], container_end: None, define_function: false, id: next_id(), lit: None }
+    }
+
+    /// A new instruction; `name` overrides the opcode's name (FFDec's `ffdec_deobfuscatepop`).
+    pub fn make(code: u8, name: Option<&'static str>, ops: Vec<i64>, lit: Option<Lit>) -> Ins {
+        let d = crate::abc::opcodes::def(code).expect("opcode");
+        let i = Instruction { offset: 0, len: 0, code, name: d.name, kinds: d.operands, operands: ops };
+        let len = crate::abc::asm::encode(&i).len() as i64;
+        let mut ins = Ins::from(i);
+        ins.len = len;
+        ins.lit = lit;
+        if let Some(n) = name {
+            ins.name = n;
+        }
+        ins
     }
 
     pub fn op(&self, i: usize) -> i32 {
@@ -452,6 +485,189 @@ impl Code {
             self.ins[ip].code = op::JUMP;
             self.ins[ip].name = "jump";
         }
+    }
+
+    /// `updateOffsets`: `ins(addr)` maps instruction addresses and `op(insAddr, target, offset)`
+    /// branch offsets; exception offsets go through `op(-1, x, x)`.
+    pub fn update_offsets(&mut self, ins_f: &dyn Fn(i64) -> i64, op_f: &dyn Fn(i64, i64, i64) -> i64) {
+        for i in &mut self.ins {
+            if i.code == op::LOOKUPSWITCH {
+                let a = i.addr;
+                i.ops[0] = op_f(a, a + i.ops[0], i.ops[0]);
+                for k in 2..i.ops.len() {
+                    i.ops[k] = op_f(a, a + i.ops[k], i.ops[k]);
+                }
+            } else if i.is_if_type() {
+                let t = i.target_address();
+                i.ops[0] = op_f(i.addr, t, i.ops[0]);
+            }
+            i.addr = ins_f(i.addr);
+        }
+        for e in &mut self.exceptions {
+            e.start = op_f(-1, e.start as i64, e.start as i64) as usize;
+            e.end = op_f(-1, e.end as i64, e.end as i64) as usize;
+            e.target = op_f(-1, e.target as i64, e.target as i64) as usize;
+        }
+    }
+
+    /// `replaceInstruction`.
+    pub fn replace_instruction(&mut self, pos: usize, mut new: Ins) {
+        let at = self.ins[pos].addr;
+        new.addr = at;
+        let delta = new.len - self.ins[pos].len;
+        if delta != 0 {
+            self.update_offsets(&|a| if a > at { a + delta } else { a }, &|j, t, o| {
+                if t > at && j <= at {
+                    o + delta
+                } else if t <= at && j > at {
+                    o - delta
+                } else {
+                    o
+                }
+            });
+        }
+        self.ins[pos] = new;
+    }
+
+    /// `insertInstruction(pos, ins, mapOffsetsAfterIns)`.
+    pub fn insert_instruction(&mut self, pos: usize, mut new: Ins, map_after: bool) {
+        let pos = pos.min(self.ins.len());
+        let n = new.len;
+        let x = if self.ins.is_empty() {
+            0
+        } else if pos == self.ins.len() {
+            self.end_offset()
+        } else {
+            self.ins[pos].addr
+        };
+        self.update_offsets(&|a| if a >= x { a + n } else { a }, &|j, t, o| {
+            if (t > x || (map_after && t == x)) && j < x {
+                o + n
+            } else if (t < x || (map_after && t == x)) && j > x {
+                o - n
+            } else if j == x && t < x {
+                o - n
+            } else {
+                o
+            }
+        });
+        new.addr = x;
+        self.ins.insert(pos, new);
+    }
+
+    /// `getImportantOffsets`.
+    pub fn important_offsets(&self, try_ends: bool) -> HashSet<i64> {
+        let mut r = HashSet::new();
+        for e in &self.exceptions {
+            r.insert(self.adr2pos_nearest(e.start as i64).map_or(-1, |p| self.pos2adr(p)));
+            if try_ends {
+                r.insert(self.adr2pos_nearest(e.end as i64).map_or(-1, |p| self.pos2adr(p)));
+            }
+            r.insert(e.target as i64);
+        }
+        for i in &self.ins {
+            r.extend(i.offsets());
+        }
+        r
+    }
+
+    /// `removeIgnored`.
+    pub fn remove_ignored(&mut self) {
+        if !self.ins.iter().any(|i| i.ignored) {
+            return;
+        }
+        if !self.remove_ignored_batch() {
+            let mut i = 0;
+            while i < self.ins.len() {
+                if self.ins[i].ignored {
+                    self.remove_instruction(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    fn remove_ignored_batch(&mut self) -> bool {
+        let mut addrs = Vec::with_capacity(self.ins.len() + 1);
+        let mut removed_before = Vec::with_capacity(self.ins.len() + 1);
+        let mut a = self.ins[0].addr;
+        if a < 0 {
+            return false;
+        }
+        let mut removed = 0;
+        for i in &self.ins {
+            if i.addr != a || i.len <= 0 {
+                return false;
+            }
+            addrs.push(a);
+            removed_before.push(removed);
+            a += i.len;
+            if i.ignored {
+                removed += i.len;
+            }
+        }
+        addrs.push(a);
+        removed_before.push(removed);
+        for i in &self.ins {
+            if i.is_if_type() || i.code == op::LOOKUPSWITCH {
+                for t in i.offsets() {
+                    if addrs.binary_search(&t).is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+        for e in &self.exceptions {
+            for x in [e.start, e.end, e.target] {
+                if addrs.binary_search(&(x as i64)).is_err() {
+                    return false;
+                }
+            }
+        }
+        let shift = |x: i64| if x == -1 { 0 } else { removed_before[addrs.binary_search(&x).unwrap()] };
+        self.update_offsets(&|x| x - shift(x), &|j, t, o| o + shift(j) - shift(t));
+        self.ins.retain(|i| !i.ignored);
+        true
+    }
+
+    /// `removeDeadCode`: unreachable code, zero jumps, labels and debug lines; the lowest
+    /// position changed, or -1.
+    pub fn remove_dead_code(&mut self) -> i32 {
+        let refs = self.visit_refs();
+        let mut min = -1;
+        for i in (0..self.ins.len()).rev() {
+            if refs[i].is_empty() {
+                min = i as i32;
+                self.ins[i].ignored = true;
+            }
+        }
+        self.remove_ignored();
+        for i in (0..self.ins.len()).rev() {
+            let ins = &mut self.ins[i];
+            if (ins.code == op::JUMP && ins.ops[0] == 0) || ins.code == op::LABEL || ins.code == op::DEBUGLINE {
+                ins.ignored = true;
+                if min == -1 || min > i as i32 {
+                    min = i as i32;
+                }
+            }
+        }
+        self.remove_ignored();
+        min
+    }
+
+    /// `removeLabelsAndDebugLine`.
+    pub fn remove_labels_and_debug_line(&mut self) {
+        for i in &mut self.ins {
+            if i.code == op::LABEL || i.code == op::DEBUGLINE {
+                i.ignored = true;
+            }
+        }
+        self.remove_ignored();
+    }
+
+    pub fn index_of(&self, id: u32) -> Option<usize> {
+        self.ins.iter().position(|i| i.id == id)
     }
 
     /// `fixJumps`: instructions jumping outside the code are dropped.

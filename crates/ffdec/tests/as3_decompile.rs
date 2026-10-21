@@ -85,7 +85,8 @@ fn decompile(abcs: &[Abc], index: &std::sync::Arc<AbcIndex>, version: u8, method
             }
             let ci = scripts::class_of(abc, &e)?;
             let inst = &abc.instances[ci];
-            let mut ctx = Ctx::new(abc, Config::testing()).with_index(index.clone());
+            let cfg = Config { deobfuscate: method_name.to_lowercase().contains("obfus"), ..Config::testing() };
+            let mut ctx = Ctx::new(abc, cfg).with_index(index.clone());
             ctx.swf_version = version;
             let run = inst.traits.iter().find_map(|t| match t.data {
                 TraitData::Method { method, .. } | TraitData::Getter { method, .. } | TraitData::Setter { method, .. } if ctx.names().name(t.name, &[], true, true) == "run" => Some(method),

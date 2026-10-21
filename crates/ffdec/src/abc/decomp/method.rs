@@ -35,6 +35,8 @@ pub struct Assigned {
 pub struct ConvertData {
     pub assigned: Vec<(*const Trait, Assigned)>,
     pub this_has_default_to_primitive: bool,
+    /// `deobfuscationMode`, when it differs from the config's.
+    pub deobfuscate: Option<bool>,
 }
 
 impl ConvertData {
@@ -140,13 +142,25 @@ pub fn local_reg_names(ctx: &Ctx, method: usize, code: &Code, max_regs: usize) -
     ret
 }
 
-/// `convertMethodBody` without deobfuscation: the prepared instruction list.
-pub fn prepare_code(ctx: &Ctx, body: &crate::abc::MethodBody) -> Code {
+/// `convertMethodBody`: the prepared instruction list, with traps removed when deobfuscating.
+pub fn prepare_code(ctx: &Ctx, body: &crate::abc::MethodBody, deobfuscate: bool, method: usize, is_static: bool, script_index: i32, class_index: i32) -> Code {
     let mut code = Code::new(ctx.abc, body);
     code.fix_jumps();
-    code.push_false_if_false();
+    if deobfuscate {
+        code = super::deobf::deobfuscate(ctx, body, code, method, is_static, script_index, class_index).unwrap_or_else(|| {
+            let mut c = Code::new(ctx.abc, body);
+            c.fix_jumps();
+            c
+        });
+    } else {
+        code.push_false_if_false();
+    }
     code.calculate_debug_file_line(ctx.abc);
     code
+}
+
+pub(super) fn is_timeout(e: &(dyn std::any::Any + Send)) -> bool {
+    e.is::<Timeout>()
 }
 
 /// `MethodBody.convert`: decompiles to items, then prints once to a null writer like FFDec.
@@ -168,7 +182,7 @@ pub fn convert_into(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &Has
             if outer.is_some() {
                 std::panic::resume_unwind(e);
             }
-            let n = ctx.abc.body(req.method).map_or(0, |b| prepare_code(ctx, b).len());
+            let n = ctx.abc.body(req.method).map_or(0, |b| prepare_code(ctx, b, cd.deobfuscate.unwrap_or(ctx.cfg.deobfuscate), req.method, req.is_static, req.script_index, req.class_index).len());
             Err(format!("{TIMEOUT_ERROR}{n}"))
         }
         Err(e) => Err(e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_else(|| "decompilation failed".into())),
@@ -179,7 +193,7 @@ fn convert_inner(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSe
     let abc = ctx.abc;
     let bi = abc.body_of.get(req.method).copied().flatten().ok_or("method has no body")?;
     let body = &abc.bodies[bi];
-    let code = prepare_code(ctx, body);
+    let code = prepare_code(ctx, body, cd.deobfuscate.unwrap_or(ctx.cfg.deobfuscate), req.method, req.is_static, req.script_index, req.class_index);
     let names = local_reg_names(ctx, req.method, &Code::new(abc, body), body.max_regs);
     let items = to_graph_target_items(ctx, req, cd, &code, &names);
     let mut seen = seen.clone();

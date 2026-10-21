@@ -12,11 +12,16 @@ pub struct Config {
     pub register_name_format: String,
     pub local_names_from_debug: bool,
     pub param_names: bool,
+    /// FFDec's `autoDeobfuscate`.
+    pub deobfuscate: bool,
 }
+
+/// FFDec's global `autoDeobfuscate` setting, which new configs start from.
+pub static AUTO_DEOBFUSCATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl Default for Config {
     fn default() -> Self {
-        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false }
+        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false, deobfuscate: AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed) }
     }
 }
 

@@ -576,7 +576,50 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 heads.push(h);
             }
         }
+        if self.tr.ctx.cfg.deobfuscate {
+            self.flatten_jumps(&heads, &mut all);
+        }
         heads
+    }
+
+    /// `flattenJumps`: blocks holding a single jump are bypassed.
+    fn flatten_jumps(&mut self, heads: &[P], all: &mut Vec<P>) {
+        let n = self.code_len();
+        loop {
+            let mut modified = false;
+            let mut i = 0;
+            while i < all.len() {
+                let part = all[i];
+                i += 1;
+                let (start, height) = (self.parts[part].start, self.parts[part].height());
+                if heads.contains(&part) || height != 1 || start < 0 || start >= n || self.tr.code.ins[start as usize].code != super::code::op::JUMP || self.parts[part].next.len() != 1 {
+                    continue;
+                }
+                let next = self.parts[part].next[0];
+                if next == part {
+                    continue;
+                }
+                for r in self.parts[part].refs.clone() {
+                    for x in self.parts[r].next.iter_mut() {
+                        if *x == part {
+                            *x = next;
+                        }
+                    }
+                }
+                if let Some(k) = self.parts[next].refs.iter().position(|&x| x == part) {
+                    self.parts[next].refs.remove(k);
+                }
+                let refs = self.parts[part].refs.clone();
+                self.parts[next].refs.extend(refs);
+                i -= 1;
+                all.remove(i);
+                i += 1;
+                modified = true;
+            }
+            if !modified {
+                break;
+            }
+        }
     }
 
     // Small helpers shared by the structuring code.
