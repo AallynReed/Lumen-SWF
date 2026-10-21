@@ -1441,3 +1441,8 @@ pub fn deobfuscate(list: &mut ActionList) {
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| d.run()));
     list.actions = d.stored;
 }
+
+/// `BrokenScriptDetector.codeIsBroken`: decompiled code FFDec could not express as ActionScript.
+pub fn code_is_broken(code: &str) -> bool {
+    code.contains("\u{a7}\u{a7}")
+}

@@ -84,3 +84,9 @@ fn pop_must_stay_intact() {
     let expected = "test < 100 ? (test > -100 ? 0 : f()) : g();";
     assert_eq!(recompile(expected).trim(), expected);
 }
+
+#[test]
+fn broken_scripts_are_detected() {
+    assert!(ffdec::action::deobf::code_is_broken("\u{a7}\u{a7}push(1);"));
+    assert!(!ffdec::action::deobf::code_is_broken("trace(1);"));
+}
