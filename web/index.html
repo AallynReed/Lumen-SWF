@@ -66,7 +66,20 @@
 
 <main class="workspace">
     <aside class="sidebar" id="sidebar">
-        <div class="filter"><input id="filter" type="search" placeholder="Filter tree" spellcheck="false"></div>
+        <div class="filter">
+            <input id="filter" type="search" placeholder="Filter tree" spellcheck="false">
+            <button id="btn-find" class="btn" disabled title="Search scripts and texts (Ctrl+Shift+F)">Search</button>
+        </div>
+        <form id="find" class="find" hidden>
+            <input id="find-text" type="search" placeholder="Search scripts and texts" spellcheck="false">
+            <div class="find-opts">
+                <select id="find-in" aria-label="Search in"><option value="scripts">ActionScript</option><option value="pcode">P-code</option><option value="texts">Texts</option></select>
+                <label><input type="checkbox" id="find-case"> Match case</label>
+                <label><input type="checkbox" id="find-regex"> Regex</label>
+                <label><input type="checkbox" id="find-all"> All files</label>
+            </div>
+            <ul id="find-results" class="find-results"></ul>
+        </form>
         <div id="tree" class="tree" tabindex="0" role="tree"></div>
     </aside>
     <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"></div>

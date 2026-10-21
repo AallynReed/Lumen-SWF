@@ -178,6 +178,10 @@ impl<'a> Exporter<'a> {
         Exporter { swf, names: Names::new(swf), jpeg_tables, renderer: Renderer::new(swf), as3: OnceLock::new(), as2_fields: OnceLock::new() }
     }
 
+    pub fn swf(&self) -> &'a Swf {
+        self.swf
+    }
+
     fn as3(&self) -> &As3 {
         self.as3.get_or_init(|| {
             let mut abcs = Vec::new();

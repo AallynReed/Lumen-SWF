@@ -208,6 +208,8 @@ function updateButtons() {
     $('btn-raw').disabled = !tagSelected;
     $('btn-remove').disabled = !(state.selected && state.selected.node.kind === 'tag');
     $('btn-export-all').disabled = !has;
+    $('btn-find').disabled = !has;
+    if (!has) $('find').hidden = true;
 }
 
 function select(sel) {
@@ -877,11 +879,88 @@ $('btn-export-go').addEventListener('click', async () => {
     else status(`Exported ${r.written} files to ${r.dir}`);
 });
 
+// ---- search ----
+
+function toggleFind(show = $('find').hidden) {
+    $('find').hidden = !show;
+    $('btn-find').classList.toggle('primary', show);
+    if (show) $('find-text').select();
+}
+
+$('btn-find').addEventListener('click', () => toggleFind());
+
+// The key of the tree node with this tag path and script, with its parents expanded.
+function revealNode(doc, hit) {
+    const walk = (nodes, prefix) => {
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i];
+            const key = `${doc.id}:${prefix}${i}`;
+            if (n.kind !== 'folder' && n.path === hit.path && (n.script || null) === (hit.script || null)) return [key];
+            const sub = walk(n.children, `${prefix}${i}.`);
+            if (sub) return [key, ...sub];
+        }
+        return null;
+    };
+    const keys = walk(doc.tree, '');
+    if (!keys) return null;
+    state.expanded.add(`${doc.id}:`);
+    keys.slice(0, -1).forEach((k) => state.expanded.add(k));
+    return keys[keys.length - 1];
+}
+
+function showHit(li) {
+    const doc = state.docs.find((d) => d.id === Number(li.dataset.doc));
+    if (!doc) return;
+    if (state.filter) {
+        state.filter = '';
+        $('filter').value = '';
+    }
+    const key = revealNode(doc, JSON.parse(li.dataset.hit));
+    render();
+    $('find-results').querySelectorAll('li.active').forEach((x) => x.classList.remove('active'));
+    li.classList.add('active');
+    const sel = key && nodeIndex.get(key);
+    if (sel) select(sel);
+}
+
+$('find').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = $('find-text').value;
+    if (!text) return;
+    const mode = $('find-in').value;
+    const docs = $('find-all').checked ? state.docs : [selectedDoc() || state.docs[0]].filter(Boolean);
+    const out = [];
+    status(`Searching for "${text}"…`);
+    for (const doc of docs) {
+        const hits = await call('search', { id: doc.id, text, ignoreCase: !$('find-case').checked, regex: $('find-regex').checked, pcode: mode === 'pcode', texts: mode === 'texts' }).catch(() => null);
+        if (!hits) return;
+        for (const h of hits) {
+            const where = docs.length > 1 ? `<span class="where">${esc(doc.name)}</span>` : '';
+            out.push(`<li data-doc="${doc.id}" data-hit="${esc(JSON.stringify(h))}" title="${esc(h.label)}">${esc(h.label)}${where}</li>`);
+        }
+    }
+    $('find-results').innerHTML = out.length ? out.join('') : '<li class="none">No matches</li>';
+    status(out.length ? `${out.length} match${out.length === 1 ? '' : 'es'} for "${text}"` : `No matches for "${text}"`);
+});
+
+$('find-results').addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-hit]');
+    if (li) showHit(li);
+});
+
+$('find').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        toggleFind(false);
+        $('tree').focus();
+    }
+});
+
 document.addEventListener('keydown', (e) => {
     if (!e.ctrlKey) return;
     if (e.key === 'o') openDialog();
     else if (e.key.toLowerCase() === 's' && e.shiftKey) { if (selectedDoc()) $('btn-save-as').click(); }
     else if (e.key === 's') saveSelected();
+    else if (e.key.toLowerCase() === 'f' && e.shiftKey) { if (state.docs.length) toggleFind(true); }
     else if (e.key === 'f') $('filter').focus();
     else return;
     e.preventDefault();

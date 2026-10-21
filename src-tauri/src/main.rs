@@ -560,6 +560,13 @@ async fn export_all(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, kinds
     })
 }
 
+/// Scripts or texts of one file matching a pattern.
+#[tauri::command]
+async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool, regex: bool, pcode: bool, texts: bool) -> Res<Vec<ffdec::search::Hit>> {
+    let q = ffdec::search::Query { text, ignore_case, regex, pcode, texts };
+    with_doc(&docs, id, |d| ffdec::search::search(d.exporter(), &q).map_err(|e| e.to_string()))
+}
+
 #[tauri::command]
 fn startup_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect()
@@ -629,6 +636,7 @@ fn main() {
             preview_data,
             export_asset,
             export_all,
+            search,
             startup_files
         ])
         .run(tauri::generate_context!())

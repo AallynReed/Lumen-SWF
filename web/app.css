@@ -118,8 +118,10 @@ button { font: inherit; color: inherit; }
     min-height: 0;
     background: var(--surface);
 }
-.filter { padding: 6px; border-bottom: 1px solid var(--border); }
-.filter input {
+.filter { display: flex; gap: 6px; padding: 6px; border-bottom: 1px solid var(--border); }
+.filter input, .find input[type="search"] {
+    flex: 1;
+    min-width: 0;
     width: 100%;
     padding: 4px 8px;
     border: 1px solid var(--border);
@@ -128,6 +130,18 @@ button { font: inherit; color: inherit; }
     color: var(--text);
     font: inherit;
 }
+
+.find { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-bottom: 1px solid var(--border); max-height: 45%; min-height: 0; }
+.find[hidden] { display: none; }
+.find-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; }
+.find-opts select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
+.find-opts label { display: inline-flex; align-items: center; gap: 4px; }
+.find-results { list-style: none; margin: 0; padding: 0; overflow: auto; min-height: 0; }
+.find-results li { padding: 3px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.find-results li:hover { background: var(--bg); }
+.find-results li.active { background: var(--select); color: var(--select-text); }
+.find-results .where { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.find-results .none { color: var(--muted); cursor: default; }
 
 .splitter { cursor: col-resize; background: var(--border); border-left: 2px solid var(--bg); border-right: 2px solid var(--bg); }
 
