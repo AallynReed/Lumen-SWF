@@ -2,7 +2,7 @@
 
 A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler), shipped as a standalone Windows installer. No Java required.
 
-> **Status: phase 6 of 7 done.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets, texts, shapes, fonts, ActionScript and p-code. See [Roadmap](#roadmap).
+> **Status: phase 7 of 7 in progress.** Opens, inspects and re-saves SWF files, exports their assets, renders shapes, sprites and frames, decompiles ActionScript 3 and ActionScript 1/2, and edits assets, texts, shapes, fonts, ActionScript and p-code. Phase 7 adds SWC/ZIP bundles, search, SWC export and AMF/shared objects so far. See [Roadmap](#roadmap).
 
 ## What works
 
@@ -37,6 +37,11 @@ A Rust port of [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpe
   - edit AS3 scripts as ActionScript, compiled by a port of FFDec's AS3 compiler that matches FFDec 26.4's bytes on all 1,207 single-definition corpus scripts it compiles. Unlike FFDec, a class in a script that defines several things compiles without making the new script the SWF's entry point or leaving the old initializer creating the removed class, Flex embed classes keep their names, and code that would fail Flash Player's verifier is refused;
   - edit AS1/2 p-code per script and AS3 p-code per method, with errors reported by line. Every corpus script and all 12,229 AS3 methods re-assemble to themselves, and re-serialized ABCs match byte for byte;
   - an edited AS3 method's stack, scope and register limits grow to fit its code. FFDec keeps the old limits, so its p-code edits can fail Flash Player's verifier.
+- Bundles, as in FFDec: every SWF in a ZIP, every library in an SWC's catalog, and SWFs embedded in any other file (such as a projector `.exe`). Edited ZIP and SWC entries save back into the archive.
+- SWC export, a port of FFDec's: the SWF as `library.swf` with a catalog of each script's definitions and dependencies, matching FFDec 26.4's catalogs on all 57 corpus AS3 SWFs. Unlike FFDec, the stub document class really replaces the original one in `library.swf`.
+- Search through decompiled ActionScript, p-code or texts, plain or by regular expression, in one file or all open files (Ctrl+Shift+F); results open in the tree.
+- AMF0 and AMF3, ported from FFDec: PlaceObject4 metadata is shown as FFDec's AMF text, and shared objects (`.sol`) open, edit as that text and save. FFDec's text matches on every corpus file it can read, and files re-save byte for byte. Unlike FFDec, integral AMF3 doubles stay doubles when edited, duplicate keys are kept, and dates show in UTC.
+- Colliding AS3 names (two `public var a` in different namespaces) get FFDec's `#namespace` suffix.
 - Drag and drop, and the installer adds an "Open with" entry for `.swf`.
 
 ## Download
@@ -72,6 +77,11 @@ ffdec-cli replace in.swf out.swf frame_1/DoAction script.pcode
 ffdec-cli replace in.swf out.swf com.example.Main Main.as
 ffdec-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 ffdec-cli replace in.swf out.swf 12/3 body.bin --raw
+ffdec-cli bundle game.exe outdir
+ffdec-cli swc movie.swf movie.swc
+ffdec-cli sol data.sol
+ffdec-cli sol data.sol --set data.txt --out edited.sol
+ffdec-cli amf value.bin
 ```
 
 A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path. An AS1/2 script is assembled from `.pcode` and compiled from anything else; an AS3 class is compiled whole, or one method's p-code is assembled with `--method`.
@@ -111,7 +121,7 @@ cargo test -p ffdec --release
 4. **ActionScript 3:** ABC bytecode, p-code and decompiler done; deobfuscation next.
 5. **ActionScript 1/2:** actions, p-code and decompiler. Done.
 6. **Editing:** asset, text, shape and font import, header editing, p-code editing and the AS1/2 and AS3 compilers. Done.
-7. **Extras:** SWC/ZIP bundles, search, XFL/FLA export, Iggy, AMF.
+7. **Extras:** SWC/ZIP bundles, search, SWC export and AMF done; XFL/FLA export and Iggy next.
 
 ## License
 
