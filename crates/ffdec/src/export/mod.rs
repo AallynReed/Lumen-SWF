@@ -398,7 +398,7 @@ impl<'a> Exporter<'a> {
         let mut assets: Vec<(String, Vec<u8>)> = Vec::new();
         for (_, abc) in &as3.abcs {
             let files = crate::abc::decomp::with_big_stack(|| {
-                let cfg = crate::abc::decomp::ctx::Config { pcode, ..Default::default() };
+                let cfg = crate::abc::decomp::ctx::Config { pcode, file_writer: true, ..Default::default() };
                 let mut ctx = crate::abc::decomp::ctx::Ctx::new(abc, cfg).with_index(as3.index.clone());
                 ctx.swf_version = as3.swf.version;
                 ctx.doc = as3.swf.doc.clone();

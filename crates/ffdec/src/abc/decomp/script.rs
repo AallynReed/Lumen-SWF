@@ -164,7 +164,7 @@ fn prop_get(it: &It) -> Option<(It, Option<String>)> {
 pub fn pack_source(ctx: &Ctx, pack: &Pack) -> String {
     let mut sp = Sp { ctx, cd: ConvertData::default(), convs: HashMap::new(), class_init_empty: HashMap::new(), script_init_empty: true, fla_ignored: HashMap::new() };
     sp.convert_pack(pack);
-    let mut w = Writer::new();
+    let mut w = if ctx.cfg.file_writer { Writer::stream() } else { Writer::new() };
     sp.append_pack(pack, &mut w);
     w.finish()
 }

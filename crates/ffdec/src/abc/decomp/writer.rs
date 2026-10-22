@@ -20,6 +20,9 @@ pub struct LoopWithType {
 /// A text writer. In "nul" mode it only measures and tracks loop labels, like `NulWriter`.
 pub struct Writer {
     nul: bool,
+    /// `StreamTextWriter`'s line lengths, as FFDec's file export counts them: each append
+    /// once, indentation not at all.
+    stream: bool,
     sb: String,
     new_line: bool,
     indent: i32,
@@ -32,11 +35,15 @@ pub struct Writer {
 
 impl Writer {
     pub fn new() -> Writer {
-        Writer { nul: false, sb: String::new(), new_line: true, indent: 0, line_length: 0, length: 0, loops: Vec::new(), string_added: false, added_stack: Vec::new() }
+        Writer { nul: false, stream: false, sb: String::new(), new_line: true, indent: 0, line_length: 0, length: 0, loops: Vec::new(), string_added: false, added_stack: Vec::new() }
     }
 
     pub fn nul() -> Writer {
         Writer { nul: true, ..Writer::new() }
+    }
+
+    pub fn stream() -> Writer {
+        Writer { stream: true, ..Writer::new() }
     }
 
     pub fn is_nul(&self) -> bool {
@@ -51,7 +58,9 @@ impl Writer {
         if self.new_line {
             self.new_line = false;
             for _ in 0..self.indent.max(0) {
-                self.line_length += INDENT.len();
+                if !self.stream {
+                    self.line_length += INDENT.len();
+                }
                 self.sb.push_str(INDENT);
             }
         }
@@ -61,11 +70,11 @@ impl Writer {
     pub fn append(&mut self, s: &str) -> &mut Self {
         if self.nul {
             self.string_added = true;
-            self.length += s.chars().count();
-            self.line_length += s.chars().count();
+            self.length += s.encode_utf16().count();
+            self.line_length += s.encode_utf16().count();
             return self;
         }
-        self.line_length += 2 * s.chars().count();
+        self.line_length += if self.stream { 1 } else { 2 } * s.encode_utf16().count();
         self.put(s);
         self
     }
@@ -77,11 +86,11 @@ impl Writer {
     pub fn append_no_hilight(&mut self, s: &str) -> &mut Self {
         if self.nul {
             self.string_added = true;
-            self.length += s.chars().count();
-            self.line_length += s.chars().count();
+            self.length += s.encode_utf16().count();
+            self.line_length += s.encode_utf16().count();
             return self;
         }
-        self.line_length += s.chars().count();
+        self.line_length += s.encode_utf16().count();
         self.put(s);
         self
     }

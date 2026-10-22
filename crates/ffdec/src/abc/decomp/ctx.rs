@@ -16,6 +16,8 @@ pub struct Config {
     pub deobfuscate: bool,
     /// `ScriptExportMode.PCODE`: method bodies are printed as p-code.
     pub pcode: bool,
+    /// Wrap lines as FFDec's file export does (`StreamTextWriter`), not as its editor does.
+    pub file_writer: bool,
 }
 
 /// FFDec's global `autoDeobfuscate` setting, which new configs start from.
@@ -23,7 +25,7 @@ pub static AUTO_DEOBFUSCATE: std::sync::atomic::AtomicBool = std::sync::atomic::
 
 impl Default for Config {
     fn default() -> Self {
-        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false, deobfuscate: AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed), pcode: false }
+        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false, deobfuscate: AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed), pcode: false, file_writer: false }
     }
 }
 
