@@ -2047,6 +2047,10 @@ impl<'a> Parser<'a> {
                         let e = self.expression(env, false, false)?.ok_or_else(|| self.error("Expression expected"))?;
                         self.expect_t(T::ParentClose)?;
                         e
+                    } else if s.t == T::Integer {
+                        node(Item::Int(int_of(&s)))
+                    } else if let (T::Double, V::Double(d)) = (s.t, &s.v) {
+                        node(Item::Double(*d))
                     } else {
                         node(Item::Str(s.text()))
                     };

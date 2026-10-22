@@ -579,7 +579,12 @@ impl Cx {
             Item::NewObject(pairs) => {
                 let mut m = M::new();
                 for (k, v) in &pairs {
-                    m.c(self.src(ld, k)?).c(self.src(ld, v)?);
+                    m.c(self.src(ld, k)?);
+                    // A numeric key is converted to its name at run time, as mxmlc does.
+                    if matches!(&*k.borrow(), Item::Int(_) | Item::Double(_)) {
+                        m.op(op::CONVERT_S, &[]);
+                    }
+                    m.c(self.src(ld, v)?);
                 }
                 m.op(op::NEW_OBJECT, &[pairs.len() as i64]);
                 m.0
