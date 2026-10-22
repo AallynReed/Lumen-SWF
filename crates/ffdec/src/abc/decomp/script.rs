@@ -612,7 +612,8 @@ impl<'c, 'a> Sp<'c, 'a> {
             let mut req = self.req(class.cinit, true, script, c, fqn, Vec::new());
             req.init_traits = Some(&class.traits);
             req.initializer = TRAIT_CLASS_INITIALIZER;
-            self.print_body(&req, c, w);
+            // FFDec prints both initializers with TraitClass's own class index, -1 here.
+            self.print_body(&req, -1, w);
         }
         let ignored = self.fla_ignored.get(&ci).cloned().unwrap_or_default();
         self.traits_to_string(&inst.traits, &mut first, &[Kind::Slot], false, script, c, w, fqn, &ignored, iface);
