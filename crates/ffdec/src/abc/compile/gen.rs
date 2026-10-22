@@ -174,6 +174,13 @@ fn reuses_stored_local(prev: &[I], next: &[I]) -> bool {
     if ins_local(&first.borrow(), false) != Some(r) {
         return false;
     }
+    // mxmlc reads the local back when the next statement converts it or copies it to another.
+    if next.get(1).is_some_and(|i| {
+        let i = i.borrow();
+        matches!(i.code, 0x70 | 0x73..=0x77 | 0x80..=0x85 | 0x88 | 0x89) || ins_local(&i, true).is_some()
+    }) {
+        return false;
+    }
     let end = code_len(prev);
     let mut addr = 0;
     for i in prev {
