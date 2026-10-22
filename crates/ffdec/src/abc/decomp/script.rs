@@ -56,15 +56,8 @@ pub fn packs(ctx: &Ctx, script: usize) -> Vec<Pack> {
         if !is_package_kind(kind(t)) {
             continue;
         }
-        let mut ti = vec![j];
-        ti.append(&mut initial_private);
-        for (k, t2) in traits.iter().enumerate().skip(j + 1) {
-            if is_package_kind(kind(t2)) {
-                break;
-            }
-            ti.push(k);
-        }
-        ret.push(Pack { script, traits: ti, is_simple });
+        initial_private.clear();
+        ret.push(Pack { script, traits: crate::abc::scripts::pack_traits(ctx.abc, script, j), is_simple });
     }
     if ret.is_empty() && !initial_private.is_empty() {
         for &t in &initial_private {
@@ -633,7 +626,7 @@ impl<'c, 'a> Sp<'c, 'a> {
                 let mut req = self.req(inst.iinit, false, script, c, fqn, Vec::new());
                 req.init_traits = Some(&inst.traits);
                 req.initializer = TRAIT_INSTANCE_INITIALIZER;
-                self.print_body(&req, c, w);
+                self.print_body(&req, -1, w);
             }
             w.end_block().new_line();
         }

@@ -480,7 +480,9 @@ fn main() -> Result<()> {
                     src.set_compiled(&mut swf, &c)?;
                 }
             } else if let Some((path, id)) = abcs(&swf).iter().find_map(|(p, a)| ffdec::abc::scripts::entries(a).into_iter().find(|e| e.full_name() == target).map(|e| (p.clone(), e.id()))) {
-                ffdec::edit::set_script_source(&mut swf, &path, &id, &text()).map_err(|e| anyhow!("line {}: {}", e.line, e.message))?;
+                let dir = data.parent().map(Path::to_path_buf).unwrap_or_default();
+                let include = |name: &str| std::fs::read(dir.join(name)).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
+                ffdec::edit::set_script_source_with(&mut swf, &path, &id, &text(), &include).map_err(|e| anyhow!("line {}: {}", e.line, e.message))?;
             } else {
                 return Err(anyhow!("no character or script '{target}'"));
             }

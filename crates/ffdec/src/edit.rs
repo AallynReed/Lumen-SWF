@@ -59,6 +59,18 @@ pub fn set_script_pcode(swf: &mut Swf, path: &[usize], script: &str, method: Opt
 
 /// Compiles ActionScript in place of a script, as FFDec's script editor does.
 pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Result<(), ParseError> {
+    set_script_source_with(swf, path, script, text, &|_| None)
+}
+
+/// `set_script_source` for an AS3 script's own pack, whose `include "File.as";` lines are
+/// read with `include` first and otherwise taken from the current decompile of that pack.
+pub fn set_script_source_with(swf: &mut Swf, path: &[usize], script: &str, text: &str, include: &dyn Fn(&str) -> Option<String>) -> Result<(), ParseError> {
+    if let Some((s, None)) = parse_id(script) {
+        if crate::abc::tag_abc(swf.tag(path).ok_or_else(|| fail("tag not found"))?).is_some() {
+            let expanded = expand_includes(swf, path, s, text, include)?;
+            return set_as3_source(swf, path, script, &expanded);
+        }
+    }
     use crate::action::compile::{compile, swf_classes, Target};
     use crate::action::scripts::Kind;
     let Some(src) = as2_source(swf, path, script) else { return set_as3_source(swf, path, script, text) };
@@ -70,6 +82,44 @@ pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str
     };
     let c = compile(text, swf.header.version, target, &swf_classes(swf), Some(swf)).map_err(|e| ParseError { line: e.line, message: e.message })?;
     src.set_compiled(swf, &c).map_err(|e| fail(e.to_string()))
+}
+
+/// Replaces `include "File.as";` lines with the text of that file.
+fn expand_includes(swf: &Swf, path: &[usize], script: usize, text: &str, include: &dyn Fn(&str) -> Option<String>) -> Result<String, ParseError> {
+    let mut out = String::new();
+    for (n, line) in text.lines().enumerate() {
+        let t = line.trim();
+        let Some(name) = t.strip_prefix("include").map(str::trim).and_then(|r| r.trim_end_matches(';').trim().strip_prefix('"')).and_then(|r| r.strip_suffix('"')) else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        let body = match include(name) {
+            Some(b) => b,
+            None => pack_source_named(swf, path, script, name).ok_or_else(|| ParseError { line: n + 1, message: format!("cannot include \"{name}\"") })?,
+        };
+        out.push_str(&body);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// The decompiled text of the pack of `script` that FFDec exports as `name`.
+fn pack_source_named(swf: &Swf, path: &[usize], script: usize, name: &str) -> Option<String> {
+    let tag = swf.tag(path)?;
+    let (data, _) = crate::abc::tag_abc(tag)?;
+    let abc = Abc::parse(data).ok()?;
+    let want = name.replace('\\', "/");
+    let e = entries(&abc).into_iter().find(|e| {
+        e.script == script && e.trait_index.is_some() && {
+            let mut parts: Vec<&str> = if e.package.is_empty() { Vec::new() } else { e.package.split('.').collect() };
+            let file = format!("{}.as", e.name);
+            parts.push(&file);
+            parts.join("/") == want
+        }
+    })?;
+    let index = crate::abc::decomp::index_for(&[&abc]);
+    Some(crate::abc::decomp::entry_source(&index, &abc, &e, &crate::abc::decomp::SwfContext::of(swf)))
 }
 
 /// Compiles an AS3 script pack, with every ABC of the SWF in scope.

@@ -58,8 +58,58 @@ pub fn entries(abc: &Abc) -> Vec<Entry> {
             };
             out.push(Entry { package: abc.package_of(t.name), name: abc.local_name(t.name), script: si, trait_index: Some(ti), kind: k });
         }
-        if !any {
+        // Scripts with several public definitions also have a pack of their own, which
+        // includes the others.
+        if script.traits.iter().filter(|t| is_public(abc, t)).count() != 1 {
             out.push(Entry { package: String::new(), name: format!("script_{si}"), script: si, trait_index: None, kind: "script" });
+        }
+    }
+    out
+}
+
+fn is_public(abc: &Abc, t: &super::Trait) -> bool {
+    matches!(abc.ns_kind_of(t.name), ns_kind::PACKAGE | ns_kind::PACKAGE_INTERNAL)
+}
+
+/// The public trait a file-private trait was written next to. mxmlc names the private
+/// namespace after the source file (`Name.as$N`), which tells the file apart when one script
+/// holds several public definitions.
+fn private_home(abc: &Abc, script: usize, t: usize) -> Option<usize> {
+    let traits = &abc.scripts[script].traits;
+    if abc.ns_kind_of(traits[t].name) != ns_kind::PRIVATE {
+        return None;
+    }
+    let ns = abc.package_of(traits[t].name);
+    let stem = ns.rsplit_once(".as$")?.0;
+    let stem = stem.rsplit(['/', ':', '\\']).next()?;
+    traits.iter().position(|p| is_public(abc, p) && abc.local_name(p.name) == stem)
+}
+
+/// The traits of the pack of public trait `t`: `ScriptInfo.getPacks` takes the private traits
+/// after it (and, for the first, those before it); a private trait whose namespace names
+/// another public definition's file goes with that one instead.
+pub fn pack_traits(abc: &Abc, script: usize, t: usize) -> Vec<usize> {
+    let traits = &abc.scripts[script].traits;
+    let first_public = traits.iter().position(|p| is_public(abc, p));
+    let mut out = vec![t];
+    let mut take = |k: usize, out: &mut Vec<usize>| {
+        if private_home(abc, script, k).is_none_or(|h| h == t) {
+            out.push(k);
+        }
+    };
+    if first_public == Some(t) {
+        for k in 0..t {
+            take(k, &mut out);
+        }
+    }
+    let mut k = t + 1;
+    while k < traits.len() && !is_public(abc, &traits[k]) {
+        take(k, &mut out);
+        k += 1;
+    }
+    for k in 0..traits.len() {
+        if !out.contains(&k) && private_home(abc, script, k) == Some(t) {
+            out.push(k);
         }
     }
     out

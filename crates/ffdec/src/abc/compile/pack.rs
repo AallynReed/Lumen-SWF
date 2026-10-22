@@ -579,17 +579,9 @@ pub fn pack_of(abc: &Abc, script: usize, trait_index: Option<usize>) -> (Vec<usi
     let public = |i: usize| matches!(names.simple_ns_kind(traits[i].name), ns_kind::PACKAGE | ns_kind::PACKAGE_INTERNAL);
     let count = (0..traits.len()).filter(|&i| public(i)).count();
     let simple = count == 1;
-    let Some(t) = trait_index else { return (Vec::new(), simple) };
-    let mut out = vec![t];
-    if (0..t).all(|i| !public(i)) {
-        out.extend(0..t);
-    }
-    let mut k = t + 1;
-    while k < traits.len() && !public(k) {
-        out.push(k);
-        k += 1;
-    }
-    (out, simple)
+    // A whole script is replaced like a script's only definition.
+    let Some(t) = trait_index else { return ((0..traits.len()).collect(), true) };
+    (crate::abc::scripts::pack_traits(abc, script, t), simple)
 }
 
 /// `FFDecAs3ScriptReplacer.replaceScript`: compiles `text` in place of a script pack of
@@ -631,6 +623,10 @@ pub fn replace_script_renamed(abcs: &[Abc], selected: usize, script: usize, trai
         let tr = &abc.scripts[script].traits[t];
         if matches!(names.simple_ns_kind(tr.name), ns_kind::PACKAGE | ns_kind::PACKAGE_INTERNAL) {
             script_name = names.name(tr.name, &[], false, true);
+            // A whole script is named after its first definition, the file the others include.
+            if trait_index.is_none() {
+                break;
+            }
         }
     }
     let old_bodies = abc.bodies.len();

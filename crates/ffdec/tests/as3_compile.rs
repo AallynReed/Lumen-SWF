@@ -185,7 +185,7 @@ fn recompiles_like_ffdec() {
                     // FFDec appends these as the entry script, so only check ours is whole.
                     let bytes = out.to_bytes();
                     let names = |a: &Abc| {
-                        let mut v: Vec<String> = ffdec::abc::scripts::entries(a).into_iter().map(|e| e.full_name()).collect();
+                        let mut v: Vec<String> = ffdec::abc::scripts::entries(a).into_iter().filter(|e| e.trait_index.is_some()).map(|e| e.full_name()).collect();
                         v.sort();
                         v
                     };
