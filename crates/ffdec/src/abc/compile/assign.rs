@@ -276,13 +276,13 @@ impl Cx {
             handle_and_or_coerce(&av, &pt);
             self.ret_type(&av)?;
             let mut m = M::new();
-            if !is_super {
+            if is_super {
+                // `this` is the receiver of setsuper, as mxmlc pushes it.
+                m.op(op::GET_LOCAL0, &[]);
+            } else {
                 m.c(self.obj_code(ld, obj)?);
             }
             m.c(self.src(ld, &av)?);
-            if is_super {
-                m.op(op::FIND_PROPERTY, &[pid]).op(op::SWAP, &[]);
-            }
             let mut rt = -1;
             if needs_ret {
                 m.c(self.dup_set_temp(ld, &mut rt));
