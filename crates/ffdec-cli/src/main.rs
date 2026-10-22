@@ -7,7 +7,7 @@ use ffdec::tree::{self, Node};
 use ffdec::{Compression, SaveOptions, Swf};
 
 #[derive(Parser)]
-#[command(name = "ffdec-cli", version, about = "Rust-FFDec command line")]
+#[command(name = "ffdec-cli", version = option_env!("FFDEC_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")), about = "Rust-FFDec command line")]
 struct Cli {
     /// Remove obfuscation traps from scripts before decompiling, like FFDec's automatic deobfuscation
     #[arg(long, global = true)]
@@ -50,7 +50,7 @@ enum Cmd {
         file: PathBuf,
         outdir: PathBuf,
         /// Comma-separated kinds: images, sounds, binaryData, fonts, texts, movies, shapes,
-        /// morphshapes, frames, sprites, buttons (default all)
+        /// morphshapes, frames, sprites, buttons, scripts (default all)
         #[arg(long, value_delimiter = ',')]
         kinds: Vec<String>,
         /// Write every image as PNG

@@ -51,6 +51,8 @@ jobs:
 
       - name: Build CLI
         run: cargo build --release -p ffdec-cli
+        env:
+          FFDEC_VERSION: ${{ steps.version.outputs.version }}
 
       - uses: actions/upload-artifact@v4
         with:
