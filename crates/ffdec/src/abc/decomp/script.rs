@@ -422,10 +422,7 @@ impl<'c, 'a> Sp<'c, 'a> {
                 if matches!(t.data, TraitData::Slot { .. } | TraitData::Const { .. }) {
                     continue;
                 }
-                let ns = self.own_ns(t.name);
-                if !is_package_kind(names.ns_kind(ns)) || ns == 0 {
-                    continue;
-                }
+                // FFDec 25 lists the file-private classes too, as `File/as$N/Class.as`.
                 let full = names.name_with_ns(t.name, false).printable(&self.ctx.ids);
                 w.append_no_hilight(&format!("include \"{}.as\";", full.replace('.', "/"))).new_line();
             }
