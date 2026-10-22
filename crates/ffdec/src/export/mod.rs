@@ -292,7 +292,13 @@ impl<'a> Exporter<'a> {
             DEFINE_FONT4 => ".cff".into(),
             _ => String::new(),
         };
-        make_file_name(&format!("{}{ext}", self.character_export_file(id)))
+        let mut stem = self.character_export_file(id);
+        if matches!(tag.code, DEFINE_FONT | DEFINE_FONT2 | DEFINE_FONT3) {
+            // `FontTag.getCharacterExportFileName` appends the font's name in the tag.
+            let name = crate::xfl::text::FontData::read(self.swf, tag).and_then(|f| f.name_in_tag);
+            stem = format!("{stem}_{}", name.as_deref().unwrap_or("null"));
+        }
+        make_file_name(&format!("{stem}{ext}"))
     }
 
     /// `InstanceInfo.getClassHeaderStr`'s `[Embed(...)]` lines, by raw class name. In FLA
