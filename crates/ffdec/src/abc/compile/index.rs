@@ -262,7 +262,7 @@ pub fn player_global() -> &'static PlayerGlobal {
                 }
             });
         }
-        let mut idx = Index { levels: vec![Level::default(), Level::default()], with_player: false };
+        let mut idx = Index { levels: vec![Level::default(), Level::default()], with_player: false, found: Default::default() };
         for (i, a) in abcs.iter().enumerate() {
             idx.add_abc(1, a, AbcId::Pg(i), None);
         }
@@ -276,11 +276,13 @@ pub struct Index {
     pub levels: Vec<Level>,
     /// Whether the player global library sits under these levels.
     pub with_player: bool,
+    /// `find_property` results, cleared whenever an ABC is added.
+    found: std::cell::RefCell<HashMap<(PropKey, u8), Option<(TraitIndex, bool)>>>,
 }
 
 impl Index {
     pub fn new() -> Index {
-        Index { levels: vec![Level::default()], with_player: true }
+        Index { levels: vec![Level::default()], with_player: true, found: Default::default() }
     }
 
     fn level(&self, l: usize) -> Option<&Level> {
@@ -299,6 +301,7 @@ impl Index {
 
     /// `addAbc`, into level `l`.
     pub fn add_abc(&mut self, l: usize, abc: &Abc, id: AbcId, deleted: Option<&Deleted>) {
+        self.found.get_mut().clear();
         let names = raw_names(abc);
         let mut added = Vec::new();
         for (si, script) in abc.scripts.iter().enumerate() {
@@ -380,7 +383,13 @@ impl Index {
 
     /// `findProperty`; the bool is whether it was found static.
     pub fn find_property<'a>(&self, abc_of: &dyn Fn(AbcId) -> &'a Abc, key: &PropKey, find_static: bool, find_instance: bool, find_protected: bool) -> Option<(TraitIndex, bool)> {
-        self.find_property_from(0, abc_of, key, find_static, find_instance, find_protected)
+        let k = (key.clone(), find_static as u8 | (find_instance as u8) << 1 | (find_protected as u8) << 2);
+        if let Some(r) = self.found.borrow().get(&k) {
+            return r.clone();
+        }
+        let r = self.find_property_from(0, abc_of, key, find_static, find_instance, find_protected);
+        self.found.borrow_mut().insert(k, r.clone());
+        r
     }
 
     fn find_property_from<'a>(&self, l: usize, abc_of: &dyn Fn(AbcId) -> &'a Abc, key: &PropKey, find_static: bool, find_instance: bool, find_protected: bool) -> Option<(TraitIndex, bool)> {
