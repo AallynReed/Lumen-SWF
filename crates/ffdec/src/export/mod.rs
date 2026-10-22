@@ -381,8 +381,10 @@ impl<'a> Exporter<'a> {
 
     /// FFDec's script export: one file per script pack, named after its public definition,
     /// with `[Embed]` headers; `fla` is the mode the FLA export runs it in. Returns the
-    /// sources and, in FLA mode, the `_assets` files they embed.
-    pub fn as3_pack_sources(&self, fla: bool) -> (Vec<(String, String)>, Vec<(String, Vec<u8>)>) {
+    /// sources and, in FLA mode, the `_assets` files they embed. With `pcode`, method bodies are
+    /// p-code and the files are `.pcode`.
+    pub fn as3_pack_sources(&self, fla: bool, pcode: bool) -> (Vec<(String, String)>, Vec<(String, Vec<u8>)>) {
+        let ext = if pcode { ".pcode" } else { ".as" };
         let as3 = self.as3();
         let embeds = self.as3_embeds(fla);
         let mut out: Vec<(String, String)> = Vec::new();
@@ -390,7 +392,8 @@ impl<'a> Exporter<'a> {
         let mut assets: Vec<(String, Vec<u8>)> = Vec::new();
         for (_, abc) in &as3.abcs {
             let files = crate::abc::decomp::with_big_stack(|| {
-                let mut ctx = crate::abc::decomp::ctx::Ctx::new(abc, Default::default()).with_index(as3.index.clone());
+                let cfg = crate::abc::decomp::ctx::Config { pcode, ..Default::default() };
+                let mut ctx = crate::abc::decomp::ctx::Ctx::new(abc, cfg).with_index(as3.index.clone());
                 ctx.swf_version = as3.swf.version;
                 ctx.doc = as3.swf.doc.clone();
                 ctx.embeds = embeds.clone();
@@ -413,7 +416,7 @@ impl<'a> Exporter<'a> {
                             }
                         }
                         let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::abc::decomp::script::pack_source(&ctx, &pack))).unwrap_or_else(|_| "/*\r\n * Decompilation error\r\n */\r\n".into());
-                        package.push(format!("{}.as", make_file_name(&name)));
+                        package.push(format!("{}{ext}", make_file_name(&name)));
                         files.push((package.join("/"), text, class));
                     }
                 }
@@ -423,8 +426,8 @@ impl<'a> Exporter<'a> {
                 let mut p = path.clone();
                 let mut i = 2;
                 while used.contains(&p.to_lowercase()) {
-                    let stem = path.strip_suffix(".as").unwrap_or(&path);
-                    p = format!("{stem}_{i}.as");
+                    let stem = path.strip_suffix(ext).unwrap_or(&path);
+                    p = format!("{stem}_{i}{ext}");
                     i += 1;
                 }
                 used.insert(p.to_lowercase());
@@ -474,6 +477,13 @@ impl<'a> Exporter<'a> {
     pub fn script_source(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
         let abc = self.abc_at(path)?;
         Ok(crate::abc::decomp::entry_source(&self.as3().index, abc, e, &self.as3().swf))
+    }
+
+    /// FFDec's p-code export: the class outline with each method body as p-code.
+    pub fn script_pcode(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
+        let abc = self.abc_at(path)?;
+        let cfg = crate::abc::decomp::ctx::Config { pcode: true, ..Default::default() };
+        Ok(crate::abc::decomp::entry_source_with(&self.as3().index, abc, e, &self.as3().swf, cfg))
     }
 
     pub fn renderer(&self) -> &Renderer<'a> {
@@ -621,7 +631,7 @@ impl<'a> Exporter<'a> {
                     .map(|e| {
                         let mut name: Vec<String> = if e.package.is_empty() { Vec::new() } else { e.package.split('.').map(make_file_name).collect() };
                         name.push(make_file_name(&format!("{}.{ext}", e.name)));
-                        let text = if opts.scripts_pcode { crate::abc::scripts::entry_pcode(abc, e) } else { self.script_source(path, e)? };
+                        let text = if opts.scripts_pcode { self.script_pcode(path, e)? } else { self.script_source(path, e)? };
                         Ok(File { name: name.join("/"), mime: "text/plain", data: text.into_bytes() })
                     })
                     .collect()
@@ -767,7 +777,7 @@ impl<'a> Exporter<'a> {
     pub fn export_all(&self, kinds: &[Kind], opts: Options) -> Vec<(Kind, Vec<usize>, Result<File>)> {
         let mut out = Vec::new();
         self.swf.walk(|path, t| {
-            if let Some(k) = Kind::of(t.code) {
+            if let Some(k) = Kind::of(t.code).filter(|&k| k != Kind::Scripts) {
                 let empty_stream = k == Kind::Sounds && t.code != DEFINE_SOUND && self.sound(t, path).map_or(true, |s| s.chunks.is_empty());
                 if kinds.contains(&k) && !empty_stream {
                     match self.export(path, opts) {
@@ -781,6 +791,8 @@ impl<'a> Exporter<'a> {
             out.extend(self.export_frames(opts).into_iter().map(|r| (Kind::Frames, Vec::new(), r)));
         }
         if kinds.contains(&Kind::Scripts) {
+            let (sources, _) = self.as3_pack_sources(false, opts.scripts_pcode);
+            out.extend(sources.into_iter().map(|(name, text)| (Kind::Scripts, Vec::new(), Ok(File { name, mime: "text/plain", data: text.into_bytes() }))));
             out.extend(self.export_as2_scripts(opts.scripts_pcode).into_iter().map(|(p, f)| (Kind::Scripts, p, Ok(f))));
         }
         out

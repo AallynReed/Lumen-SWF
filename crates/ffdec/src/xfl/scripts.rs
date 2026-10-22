@@ -328,7 +328,7 @@ impl<'a> Converter<'a> {
     pub fn export_scripts(&self) -> Vec<(String, Vec<u8>)> {
         let mut out = Vec::new();
         if self.as3 {
-            let (sources, assets) = self.ex.as3_pack_sources(true);
+            let (sources, assets) = self.ex.as3_pack_sources(true, false);
             for (name, text) in sources {
                 out.push((name, text.into_bytes()));
             }
