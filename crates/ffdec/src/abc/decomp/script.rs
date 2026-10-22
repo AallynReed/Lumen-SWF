@@ -646,10 +646,29 @@ impl<'c, 'a> Sp<'c, 'a> {
         w.new_line();
     }
 
+    /// `Trait.isVisible` with `handleSkinPartsAutomatically`: Flex's generated `skinParts`
+    /// getter and `_skinParts` slot are left out.
+    fn is_visible(&self, t: &Trait, is_static: bool) -> bool {
+        let names = self.names();
+        let name = names.name(t.name, &[], true, true);
+        let ns_kind = names.simple_ns_kind(t.name);
+        match t.data {
+            TraitData::Getter { method, .. } if name == "skinParts" => {
+                let mi = &self.abc().methods[method];
+                !(mi.param_types.is_empty() && names.name_with_ns(mi.return_type, true).raw() == "Object" && ns_kind == ns_kind::PROTECTED)
+            }
+            TraitData::Slot { .. } if is_static && name == "_skinParts" => ns_kind != ns_kind::PRIVATE,
+            _ => true,
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn traits_to_string(&mut self, traits: &'a [Trait], first: &mut bool, kinds: &[Kind], is_static: bool, script: usize, class: i32, w: &mut Writer, fqn: &mut Vec<Dotted>, ignored: &[String], inside_interface: bool) {
         for t in traits {
             if !kinds.contains(&Kind::of(t)) {
+                continue;
+            }
+            if !self.is_visible(t, is_static) {
                 continue;
             }
             if ignored.contains(&self.names().name(t.name, &[], false, false)) {
