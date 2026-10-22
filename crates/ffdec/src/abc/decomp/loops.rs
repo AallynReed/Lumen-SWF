@@ -354,10 +354,25 @@ fn find_breaks(c: &mut LoopCtx, loops: &[usize], back_edges: &[Edge], throw_stat
         if all_out_reachable.is_empty() {
             continue;
         }
-        // A return or throw is no break when the loop also leaves normally (FFDec takes it, and
-        // then moves code that follows the loop's normal exit).
-        let dead_end = |p: P| walker.next(parts, p).is_empty();
-        if let Some(exit) = nearest_common_post_dominator(parts, &local_out, back_edges, &classified, walker, ignored, &excluded, &out_parts).filter(|&e| natural_out.is_empty() || !dead_end(e)) {
+        // Code that only returns or throws is no break when the loop also leaves another way
+        // (FFDec 26 takes it, and then moves code that follows the loop's normal exit).
+        let dead_end = |p: P| {
+            let (mut seen, mut stack) = (vec![p], vec![p]);
+            while let Some(q) = stack.pop() {
+                for n in walker.next(parts, q) {
+                    let e = Edge { from: Some(q), to: n };
+                    if edges_contain(parts, back_edges, &e) || set_contains(parts, &abrupt, n) || set_contains(parts, &out_parts, n) || seen.len() > 64 {
+                        return false;
+                    }
+                    if !set_contains(parts, &seen, n) {
+                        seen.push(n);
+                        stack.push(n);
+                    }
+                }
+            }
+            true
+        };
+        if let Some(exit) = nearest_common_post_dominator(parts, &local_out, back_edges, &classified, walker, ignored, &excluded, &out_parts).filter(|&e| !dead_end(e) || out_parts.iter().all(|&o| dead_end(o))) {
             c.arena[l].brk = Some(exit);
             continue;
         }
