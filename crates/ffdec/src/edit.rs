@@ -94,14 +94,29 @@ fn expand_includes(swf: &Swf, path: &[usize], script: usize, text: &str, include
             out.push('\n');
             continue;
         };
-        let body = match include(name) {
+        let body = match include(name).or_else(|| pack_source_named(swf, path, script, name)) {
             Some(b) => b,
-            None => pack_source_named(swf, path, script, name).ok_or_else(|| ParseError { line: n + 1, message: format!("cannot include \"{name}\"") })?,
+            // FFDec 25 lists a file-private class as `File/as$N/Class.as` but writes it into File.as.
+            None if is_private_class_file(swf, path, script, name) => String::new(),
+            None => return Err(ParseError { line: n + 1, message: format!("cannot include \"{name}\"") }),
         };
         out.push_str(&body);
         out.push('\n');
     }
     Ok(out)
+}
+
+/// Whether `name` is `File/as$N/Class.as` for a file-private class of `script`.
+fn is_private_class_file(swf: &Swf, path: &[usize], script: usize, name: &str) -> bool {
+    let name = name.replace('\\', "/");
+    let mut parts = name.rsplit('/');
+    let (Some(class), Some(ns)) = (parts.next().and_then(|c| c.strip_suffix(".as")), parts.next()) else { return false };
+    if !ns.strip_prefix("as$").is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())) {
+        return false;
+    }
+    let Some((data, _)) = swf.tag(path).and_then(crate::abc::tag_abc) else { return false };
+    let Ok(abc) = Abc::parse(data) else { return false };
+    abc.scripts.get(script).is_some_and(|s| s.traits.iter().any(|t| abc.ns_kind_of(t.name) == crate::abc::ns_kind::PRIVATE && abc.local_name(t.name) == class))
 }
 
 /// The decompiled text of the pack of `script` that FFDec exports as `name`.
