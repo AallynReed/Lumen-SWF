@@ -123,36 +123,15 @@ fn recompile_pcode(pcode: &str, pass: fn(&mut Abc, usize)) -> String {
     let mut abc = test_abc(pcode);
     pass(&mut abc, 0);
     let text = method_pcode(&abc, 0);
-    let start = text.find("      code
-").unwrap() + "      code
-".len();
+    let start = text.find("      code\n").unwrap() + "      code\n".len();
     let end = text.find("      end ; code").unwrap();
-    text[start..end].lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| format!("{l}
-")).collect()
+    text[start..end].lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| format!("{l}\n")).collect()
 }
 
 #[test]
 fn jumps_to_jumps_are_redirected() {
-    let res = recompile_pcode("pushbyte 3
-pushbyte 4
-ifeq a
-jump b
-a:jump c
-c:pushbyte 4
-b:pushbyte 3
-", deobf::jumps_in_place);
-    assert_eq!(res, "getlocal0
-pushscope
-pushbyte 3
-pushbyte 4
-ifeq ofs000e
-jump ofs0010
-ofs000e:
-pushbyte 4
-ofs0010:
-pushbyte 3
-returnvoid
-");
+    let res = recompile_pcode("pushbyte 3\npushbyte 4\nifeq a\njump b\na:jump c\nc:pushbyte 4\nb:pushbyte 3\n", deobf::jumps_in_place);
+    assert_eq!(res, "getlocal0\npushscope\npushbyte 3\npushbyte 4\nifeq ofs000e\njump ofs0010\nofs000e:\npushbyte 4\nofs0010:\npushbyte 3\nreturnvoid\n");
 }
 
 #[test]
@@ -160,28 +139,6 @@ fn parts_are_grouped() {
     let group = |abc: &mut Abc, m: usize| {
         assert!(deobf::group_parts_in_place(abc, m));
     };
-    let res = recompile_pcode("pushbyte 1
-pop
-jump A
-B:pushbyte 3
-pop
-jump C
-A:pushbyte 2
-pop
-jump B
-C:pushbyte 4
-pop
-", group);
-    assert_eq!(res, "getlocal0
-pushscope
-pushbyte 1
-pop
-pushbyte 2
-pop
-pushbyte 3
-pop
-pushbyte 4
-pop
-returnvoid
-");
+    let res = recompile_pcode("pushbyte 1\npop\njump A\nB:pushbyte 3\npop\njump C\nA:pushbyte 2\npop\njump B\nC:pushbyte 4\npop\n", group);
+    assert_eq!(res, "getlocal0\npushscope\npushbyte 1\npop\npushbyte 2\npop\npushbyte 3\npop\npushbyte 4\npop\nreturnvoid\n");
 }
