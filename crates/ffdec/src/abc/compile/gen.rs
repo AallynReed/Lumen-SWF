@@ -71,6 +71,10 @@ pub struct Ld {
     pub imported: Imports,
     pub opened: NsList,
     pub return_type: Option<Node>,
+    /// The statements still to come in each enclosing block, innermost last.
+    pub following: Vec<Nodes>,
+    /// Counter and collection registers the next for-in takes over from declarations.
+    pub for_in_regs: Option<(i64, i64)>,
 }
 
 impl Default for Ld {
@@ -103,6 +107,8 @@ impl Default for Ld {
             imported: Rc::new(std::cell::RefCell::new(Vec::new())),
             opened: ns_list(Vec::new()),
             return_type: None,
+            following: Vec::new(),
+            for_in_regs: None,
         }
     }
 }
@@ -146,6 +152,45 @@ pub fn get_loc(r: i64) -> Option<I> {
         0..=3 => Some(ins(op::GET_LOCAL0 + r as u8, &[])),
         _ => Some(ins(op::GET_LOCAL, &[r])),
     }
+}
+
+fn ins_local(i: &ins::Ins, set: bool) -> Option<i64> {
+    let (base, long) = if set { (op::SET_LOCAL0, op::SET_LOCAL) } else { (op::GET_LOCAL0, op::GET_LOCAL) };
+    if i.pseudo != Pseudo::None {
+        return None;
+    }
+    match i.code {
+        c if (base..base + 4).contains(&c) => Some((c - base) as i64),
+        c if c == long => i.ops.first().copied(),
+        _ => None,
+    }
+}
+
+/// Whether `prev` (one statement) ends storing a local that `next` starts by reading, with no
+/// jump in `prev` landing after the store.
+fn reuses_stored_local(prev: &[I], next: &[I]) -> bool {
+    let (Some(last), Some(first)) = (prev.last(), next.first()) else { return false };
+    let Some(r) = ins_local(&last.borrow(), true) else { return false };
+    if ins_local(&first.borrow(), false) != Some(r) {
+        return false;
+    }
+    let end = code_len(prev);
+    let mut addr = 0;
+    for i in prev {
+        let i = i.borrow();
+        let len = i.len() as i64;
+        if i.pseudo != Pseudo::None && !i.is_mark() {
+            return false;
+        }
+        if (0x0c..=0x1a).contains(&i.code) && i.pseudo == Pseudo::None && addr + len + i.ops[0] >= end {
+            return false;
+        }
+        if i.code == 0x1b {
+            return false;
+        }
+        addr += len;
+    }
+    true
 }
 
 /// Builds instruction lists the way `toSourceMerge` concatenates its arguments.
@@ -758,11 +803,26 @@ impl Cx {
         }
     }
 
-    /// `generate(localData, commands)`.
+    /// `generate(localData, commands)`, with mxmlc's peephole: a statement that stores a local
+    /// the next one starts by reading becomes `dup; setlocal`.
     pub fn gen_list(&mut self, ld: &mut Ld, cmds: &[Node]) -> R<Code> {
-        let mut c = Vec::new();
-        for i in cmds {
-            c.extend(self.src_ignore(ld, i)?);
+        let mut c: Code = Vec::new();
+        let mut last_start = 0;
+        for (k, i) in cmds.iter().enumerate() {
+            ld.for_in_regs = if k >= 2 { self.declared_for_in(ld, &cmds[k - 2], &cmds[k - 1], i) } else { None };
+            ld.following.push(cmds[k + 1..].to_vec());
+            let part = self.src_ignore(ld, i);
+            ld.following.pop();
+            ld.for_in_regs = None;
+            let mut part = part?;
+            let reusable = !matches!(&*i.borrow(), Item::DoWhile { .. } | Item::Try(_) | Item::With { .. });
+            if reusable && reuses_stored_local(&c[last_start..], &part) {
+                part.remove(0);
+                let at = c.len() - 1;
+                c.insert(at, ins(op::DUP, &[]));
+            }
+            last_start = c.len();
+            c.extend(part);
         }
         Ok(c)
     }
@@ -1032,7 +1092,47 @@ impl Cx {
         Ok(ret)
     }
 
+    /// `var i:int = 0; var o = x; for(k in o)`, as the decompiler prints mxmlc's for-in: the
+    /// loop's registers are `i` and `o` when nothing else reads them.
+    fn declared_for_in(&self, ld: &Ld, counter: &Node, coll: &Node, for_in: &Node) -> Option<(i64, i64)> {
+        let decl = |n: &Node| match &*n.borrow() {
+            Item::Name(nm) if nm.definition => nm.assigned.clone().map(|a| (nm.var.clone(), a)),
+            _ => None,
+        };
+        let (cname, cval) = decl(counter)?;
+        let (oname, _) = decl(coll)?;
+        if !matches!(&*cval.borrow(), Item::Int(0)) || cname == oname {
+            return None;
+        }
+        let (expr, body) = match &*for_in.borrow() {
+            Item::ForIn { expr, body, .. } => (expr.clone(), body.clone()),
+            _ => return None,
+        };
+        let names_coll = match &*expr.borrow() {
+            Item::Bin { r, .. } => match &*r.borrow() {
+                Item::Name(nm) => nm.var == oname,
+                Item::Unresolved(u) => u.resolved.as_ref().is_some_and(|x| matches!(&*x.borrow(), Item::Name(nm) if nm.var == oname)),
+                _ => false,
+            },
+            _ => false,
+        };
+        if !names_coll {
+            return None;
+        }
+        let quoted = [format!("\"{cname}\""), format!("\"{oname}\"")];
+        let mentions = |nodes: &[Node]| nodes.iter().any(|n| {
+            let t = format!("{:?}", n.borrow());
+            quoted.iter().any(|q| t.contains(q.as_str()))
+        });
+        if mentions(&body) || ld.following.iter().any(|f| mentions(f)) {
+            return None;
+        }
+        let reg = |name: &str| ld.register_vars.iter().find(|(k, _)| k == name).map(|(_, r)| *r);
+        Some((reg(&cname)?, reg(&oname)?))
+    }
+
     fn gen_for_in(&mut self, ld: &mut Ld, id: LoopId, collection: &Node, assignable: &Node, commands: &[Node], each: bool) -> R<Code> {
+        let declared = ld.for_in_regs.take();
         ld.opened_loops.push(id.0);
         let mut ret = Vec::new();
         let mut counter = 0;
@@ -1044,11 +1144,15 @@ impl Cx {
             };
             r.unwrap_or_else(|| assignable.clone())
         };
-        ret.push(ins(op::PUSH_BYTE, &[0]));
-        ret.extend(self.set_temp(ld, &mut counter));
-        ret.extend(self.src(ld, collection)?);
-        ret.push(self.generate_coerce(Some(ld), &unbounded())?);
-        ret.extend(self.set_temp(ld, &mut coll));
+        if let Some((c, o)) = declared {
+            (counter, coll) = (c, o);
+        } else {
+            ret.push(ins(op::PUSH_BYTE, &[0]));
+            ret.extend(self.set_temp(ld, &mut counter));
+            ret.extend(self.src(ld, collection)?);
+            ret.push(self.generate_coerce(Some(ld), &unbounded())?);
+            ret.extend(self.set_temp(ld, &mut coll));
+        }
         let assigned = node(Item::ForInAssigned { collection: coll, counter, each });
         set_assigned(&assignable, Some(assigned));
         let mut for_body = vec![ins(op::LABEL, &[])];
