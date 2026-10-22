@@ -354,7 +354,10 @@ fn find_breaks(c: &mut LoopCtx, loops: &[usize], back_edges: &[Edge], throw_stat
         if all_out_reachable.is_empty() {
             continue;
         }
-        if let Some(exit) = nearest_common_post_dominator(parts, &local_out, back_edges, &classified, walker, ignored, &excluded, &out_parts) {
+        // A return or throw is no break when the loop also leaves normally (FFDec takes it, and
+        // then moves code that follows the loop's normal exit).
+        let dead_end = |p: P| walker.next(parts, p).is_empty();
+        if let Some(exit) = nearest_common_post_dominator(parts, &local_out, back_edges, &classified, walker, ignored, &excluded, &out_parts).filter(|&e| natural_out.is_empty() || !dead_end(e)) {
             c.arena[l].brk = Some(exit);
             continue;
         }
