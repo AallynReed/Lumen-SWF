@@ -296,6 +296,13 @@ fn class_header(abc: &Abc, class: usize, out: &mut Out) {
     out.line("end ; class");
 }
 
+/// `convertTraitHeader`: the trait lines before its method.
+pub fn trait_header_pcode(abc: &Abc, t: &Trait) -> String {
+    let mut out = Out::default();
+    trait_header(abc, t, &mut out);
+    out.s
+}
+
 /// A trait with its method (for methods, getters, setters and functions).
 pub fn trait_pcode(abc: &Abc, t: &Trait) -> String {
     let mut out = Out::default();

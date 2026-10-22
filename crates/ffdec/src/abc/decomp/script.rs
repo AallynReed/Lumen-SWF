@@ -169,6 +169,16 @@ pub fn pack_source(ctx: &Ctx, pack: &Pack) -> String {
     w.finish()
 }
 
+/// Text with its own indentation, line by line under the writer's.
+fn write_lines(w: &mut Writer, text: &str) {
+    for l in text.lines() {
+        if !l.is_empty() {
+            w.append_no_hilight(l);
+        }
+        w.new_line();
+    }
+}
+
 fn global_item() -> It {
     bare(K::Global, prec::PRIMARY)
 }
@@ -212,11 +222,20 @@ impl<'c, 'a> Sp<'c, 'a> {
     }
 
     fn convert_body(&mut self, req: &MethodReq, w: &mut Writer) {
+        if self.ctx.cfg.pcode {
+            // FFDec writes the p-code to the null writer instead of decompiling.
+            w.append(" ");
+            return;
+        }
         let r = method::convert_into(self.ctx, req, &mut self.cd, &HashSet::new(), w);
         self.convs.insert(req.method, r);
     }
 
     fn print_body(&mut self, req: &MethodReq, class_index: i32, w: &mut Writer) {
+        if self.ctx.cfg.pcode {
+            write_lines(w, &crate::abc::pcode::method_pcode(self.abc(), req.method));
+            return;
+        }
         if !self.convs.contains_key(&req.method) {
             let mut nw = Writer::nul();
             self.convert_body(req, &mut nw);
@@ -564,7 +583,7 @@ impl<'c, 'a> Sp<'c, 'a> {
         let inst = &abc.instances[ci];
         let class = &abc.classes[ci];
         let iface = inst.flags & instance_flags::INTERFACE != 0;
-        if let Some(d) = &self.ctx.doc {
+        if let Some(d) = self.ctx.doc.as_ref().filter(|_| !self.ctx.cfg.pcode) {
             if d.name == self.names().name_with_ns(inst.name, false).raw() {
                 let rate = if (d.frame_rate - d.frame_rate.round()).abs() < 0.001 { format!("{}", d.frame_rate.round() as i64) } else { format!("{}", d.frame_rate) };
                 let bg = d.background.as_ref().map(|b| format!(", backgroundColor=\"{b}\"")).unwrap_or_default();
@@ -669,6 +688,11 @@ impl<'c, 'a> Sp<'c, 'a> {
             w.append_no_hilight(";");
         } else {
             w.start_block();
+            if self.ctx.cfg.pcode {
+                // FFDec's trait header leaves the writer indented one level deeper.
+                write_lines(w, &crate::abc::pcode::trait_header_pcode(abc, t));
+                w.indent();
+            }
             let req = self.req(mi, is_static, script, class, fqn, Vec::new());
             self.print_body(&req, class, w);
             w.end_block();

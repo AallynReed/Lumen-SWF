@@ -14,6 +14,8 @@ pub struct Config {
     pub param_names: bool,
     /// FFDec's `autoDeobfuscate`.
     pub deobfuscate: bool,
+    /// `ScriptExportMode.PCODE`: method bodies are printed as p-code.
+    pub pcode: bool,
 }
 
 /// FFDec's global `autoDeobfuscate` setting, which new configs start from.
@@ -21,7 +23,7 @@ pub static AUTO_DEOBFUSCATE: std::sync::atomic::AtomicBool = std::sync::atomic::
 
 impl Default for Config {
     fn default() -> Self {
-        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false, deobfuscate: AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed) }
+        Config { display_dup_instructions: false, qname_obfuscated_in_brackets: false, register_name_format: "_loc%d_".into(), local_names_from_debug: true, param_names: false, deobfuscate: AUTO_DEOBFUSCATE.load(std::sync::atomic::Ordering::Relaxed), pcode: false }
     }
 }
 
