@@ -2290,7 +2290,23 @@ impl<'a> Parser<'a> {
         let mut pkg = None;
         let mut items = Vec::new();
         let mut loops = Loops::default();
-        while self.script_traits_block(&imported, &opened, &all_ns, script_index, &file, &mut items, &sinit_act, &mut loops, &sinit_variables, &mut pkg)? {}
+        // Like mxmlc, a script of several files defines its packages' contents before the
+        // file-private definitions that follow each package.
+        let mut private = Vec::new();
+        loop {
+            let (mut block, mut p) = (Vec::new(), None);
+            let more = self.script_traits_block(&imported, &opened, &all_ns, script_index, &file, &mut block, &sinit_act, &mut loops, &sinit_variables, &mut p)?;
+            if p.is_some() {
+                pkg = p;
+                items.extend(block);
+            } else {
+                private.extend(block);
+            }
+            if !more {
+                break;
+            }
+        }
+        items.extend(private);
         if self.lex()?.t != T::Eof {
             return self.err("Parsing finished before end of the file");
         }
