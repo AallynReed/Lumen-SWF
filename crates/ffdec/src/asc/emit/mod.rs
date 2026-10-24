@@ -15,3 +15,5 @@ pub mod instance_builder;
 pub mod package_builder;
 pub mod runtime_constants;
 pub mod with_builder;
+pub mod action_block_emitter;
+pub mod bytecode_emitter;
