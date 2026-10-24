@@ -4,3 +4,4 @@ node_modules/
 /web/ruffle/
 src-tauri/gen/
 *.msi
+/flex-sdk/
