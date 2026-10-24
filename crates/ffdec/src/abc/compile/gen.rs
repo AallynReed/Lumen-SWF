@@ -29,6 +29,8 @@ pub struct Cx {
     /// Body index before `pack` to index after it.
     pub body_map: Vec<Option<usize>>,
     fin_id: i64,
+    /// Static consts of the class being generated, for parameter defaults that name them.
+    pub class_consts: Vec<(String, Node)>,
 }
 
 /// An `ABCException` the generator fills in.
@@ -267,7 +269,7 @@ pub fn string_ty() -> Node {
 impl Cx {
     pub fn new(abc: Abc, others: Vec<Abc>) -> Cx {
         let n = abc.instances.len();
-        Cx { abc, others, index: Index::new(), deleted: Deleted::default(), class_ids: (0..n).collect(), next_class_id: n, document_class: None, pending: HashMap::new(), class_pos: 0, body_map: Vec::new(), fin_id: 1 }
+        Cx { abc, others, index: Index::new(), deleted: Deleted::default(), class_ids: (0..n).collect(), next_class_id: n, document_class: None, pending: HashMap::new(), class_pos: 0, body_map: Vec::new(), fin_id: 1, class_consts: Vec::new() }
     }
 
     pub fn abc_of(&self, id: AbcId) -> &Abc {

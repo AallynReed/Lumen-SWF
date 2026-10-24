@@ -205,6 +205,15 @@ impl Cx {
             Item::Unresolved(u) if param && u.name.len() == 1 && u.name.last() == "NaN" && u.resolved.is_none() => (pool::double_id(&mut self.abc, f64::NAN), 0x06),
             Item::Null => (0x0c, 0x0c),
             Item::Undefined => (0, 0),
+            // Like mxmlc, a default may name a static const of the class with a constant value.
+            Item::Unresolved(u) if param && u.name.len() == 1 => {
+                let v = self.class_consts.iter().find(|(n, _)| *n == u.name.last()).map(|(_, v)| v.clone())?;
+                return self.value_kind_of(ty, Some(&v), generated_ns, false);
+            }
+            Item::Name(n) if param => {
+                let v = self.class_consts.iter().find(|(c, _)| *c == n.var).map(|(_, v)| v.clone())?;
+                return self.value_kind_of(ty, Some(&v), generated_ns, false);
+            }
             _ => return None,
         })
     }
@@ -1207,6 +1216,13 @@ impl Cx {
         _metadata: &Meta,
     ) -> R<()> {
         let trait_items: Nodes = commands.iter().filter(|it| matches!(&*it.borrow(), Item::Slot(_) | Item::Class(_) | Item::Interface(_) | Item::Method(_))).cloned().collect();
+        self.class_consts = trait_items
+            .iter()
+            .filter_map(|t| match &*t.borrow() {
+                Item::Slot(s) if s.is_const && s.is_static => s.value.clone().map(|v| (s.var.clone(), v)),
+                _ => None,
+            })
+            .collect();
         for t in &trait_items {
             let md = match &*t.borrow() {
                 Item::Method(m) => m.f.metadata.clone(),
