@@ -535,6 +535,7 @@ use crate::asc::emit::features::{TARGET_AVM1, TARGET_AVM2};
 use crate::asc::emit::instance_builder::new_instance_builder;
 use crate::asc::emit::runtime_constants::*;
 use crate::asc::parser::tokens::{GET_TOKEN, SET_TOKEN};
+use crate::asc::semantics::emitter::EmitterRef;
 use crate::asc::semantics::namespace_value::new_namespace_value;
 use crate::asc::semantics::object_value::{object_value_compare, ObjectValue};
 use crate::asc::semantics::q_name::QName;
@@ -544,9 +545,8 @@ use crate::asc::semantics::type_value::TypeValue;
 use crate::asc::semantics::unresolved_namespace::new_unresolved_namespace;
 use crate::asc::semantics::value::Value;
 use crate::asc::util::bit_set::BitSet;
-use crate::asc::util::block::Block;
+use crate::asc::util::block::{Block, BlockRef};
 use crate::asc::util::decimal128_context::Decimal128Context;
-use crate::asc::util::namespaces::Namespaces;
 use crate::asc::util::namespaces_table::NamespacesTable;
 
 pub const NS_PUBLIC: u8 = 0x00;
@@ -572,11 +572,6 @@ pub static OMIT_TRACE: AtomicBool = AtomicBool::new(false);
 thread_local! {
     /// `Context.contextIds`.
     static CONTEXT_IDS: Cell<i32> = const { Cell::new(0) };
-}
-
-/// `Emitter.GetMethodId`, which the base `Builder.Method` asks the context's current emitter for.
-pub trait EmitterMethodIds {
-    fn get_method_id(&mut self, name: &str, namespaces: &Namespaces) -> i32;
 }
 
 /// The lazily created builtin types and singletons (`ContextStatics._noType` and friends).
@@ -610,7 +605,7 @@ pub struct BuiltinCache {
 
 /// The semantic-model fields of `ContextStatics`.
 pub struct SemanticStatics {
-    pub emitter: Option<Rc<RefCell<dyn EmitterMethodIds>>>,
+    pub emitter: Option<EmitterRef>,
     pub bytecode_factory: Option<Rc<RefCell<ByteCodeFactory>>>,
     pub scopes: Vec<ObjectValue>,
     pub versions: Vec<i32>,
@@ -1047,11 +1042,11 @@ impl Context {
         }
     }
 
-    pub fn set_emitter(&self, emitter: Option<Rc<RefCell<dyn EmitterMethodIds>>>) {
+    pub fn set_emitter(&self, emitter: Option<EmitterRef>) {
         self.statics.borrow_mut().sem.emitter = emitter;
     }
 
-    pub fn get_emitter(&self) -> Option<Rc<RefCell<dyn EmitterMethodIds>>> {
+    pub fn get_emitter(&self) -> Option<EmitterRef> {
         self.statics.borrow().sem.emitter.clone()
     }
 
@@ -1073,8 +1068,8 @@ impl Context {
         s.sem.bytecode_factory.get_or_insert_with(|| Rc::new(RefCell::new(ByteCodeFactory::new()))).clone()
     }
 
-    pub fn new_block(&self) -> Block {
-        Block::new()
+    pub fn new_block(&self) -> BlockRef {
+        Rc::new(RefCell::new(Block::new()))
     }
 
     /// `cx.scriptAssistParsing`.

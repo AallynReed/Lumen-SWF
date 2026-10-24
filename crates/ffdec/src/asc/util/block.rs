@@ -1,7 +1,13 @@
 //! Port of `macromedia/asc/util/Block.java`.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::asc::util::bit_set::BitSet;
 use crate::asc::util::int_list::IntList;
+
+/// A Java `Block` reference, shared by the flow graph and the nodes it covers.
+pub type BlockRef = Rc<RefCell<Block>>;
 
 #[derive(Clone, Default, Debug)]
 pub struct Block {

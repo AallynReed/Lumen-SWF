@@ -49,7 +49,7 @@ const POSITION_MASK: i32 = 0xFFFFFFC;
 
 pub struct Node {
     pub flags: i32,
-    pub block: Option<Block>,
+    pub block: Option<BlockRef>,
     pub kind: Kind,
 }
 
@@ -604,7 +604,7 @@ impl Node {
     }
 
     pub fn in_terminal_block(&self) -> bool {
-        self.block.as_ref().map_or(false, |b| b.succs_size() == 0)
+        self.block.as_ref().map_or(false, |b| b.borrow().succs_size() == 0)
     }
 
     pub fn is_synthetic(&self) -> bool {
@@ -2420,7 +2420,7 @@ pub struct FunctionCommonNode {
     pub var_count: i32,
     pub temp_count: i32,
     pub internal_name: String,
-    pub blocks: Option<Vec<Block>>,
+    pub blocks: Option<Vec<BlockRef>>,
     pub with_depth: i32,
     pub scope_chain: Option<Vec<ObjectValue>>,
     pub debug_name: String,
@@ -3502,7 +3502,7 @@ pub struct ProgramNode {
     pub imports: Vec<NodeRef>,
     pub temp_count: i32,
     pub var_count: i32,
-    pub blocks: Option<Vec<Block>>,
+    pub blocks: Option<Vec<BlockRef>>,
     pub cx: Option<ContextRef>,
     pub has_unnamed_package: bool,
     pub frame: Option<ObjectValue>,

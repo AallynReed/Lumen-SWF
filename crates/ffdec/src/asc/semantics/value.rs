@@ -19,7 +19,7 @@ pub use crate::asc::semantics::meta_data::MetaData;
 pub use crate::asc::semantics::q_name::QName;
 pub use crate::asc::semantics::slot::Slot;
 pub use crate::asc::util::bit_set::BitSet;
-pub use crate::asc::util::block::Block;
+pub use crate::asc::util::block::{Block, BlockRef};
 pub use crate::asc::util::byte_list::ByteList;
 pub use crate::asc::util::multinames::Multinames;
 pub use crate::asc::util::namespaces::Namespaces;

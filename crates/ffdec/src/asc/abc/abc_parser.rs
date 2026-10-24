@@ -996,9 +996,17 @@ pub(crate) mod tests {
     const PLAYERGLOBAL: &str = r"C:\Program Files\Adobe\Adobe Animate 2024\Common\Configuration\ActionScript 3.0\FP11.2\playerglobal.swc";
 
     /// `ActionBlockEmitter.GetMethodId`: one global list of method names.
-    struct GlobalMethodNames(Vec<String>);
+    struct GlobalMethodNames(Vec<String>, crate::asc::semantics::emitter::EmitterBase);
 
-    impl crate::asc::util::context::EmitterMethodIds for GlobalMethodNames {
+    impl crate::asc::semantics::emitter::Emitter for GlobalMethodNames {
+        fn emitter_base(&self) -> &crate::asc::semantics::emitter::EmitterBase {
+            &self.1
+        }
+
+        fn emitter_base_mut(&mut self) -> &mut crate::asc::semantics::emitter::EmitterBase {
+            &mut self.1
+        }
+
         fn get_method_id(&mut self, name: &str, _namespaces: &Namespaces) -> i32 {
             if let Some(i) = self.0.iter().position(|n| n == name) {
                 return i as i32 + 1;
@@ -1019,7 +1027,7 @@ pub(crate) mod tests {
             s.set_abc_version(TARGET_AVM2);
         }
         let cx = Rc::new(RefCell::new(Context::new(statics)));
-        cx.borrow().set_emitter(Some(Rc::new(RefCell::new(GlobalMethodNames(Vec::new())))));
+        cx.borrow().set_emitter(Some(Rc::new(RefCell::new(GlobalMethodNames(Vec::new(), Default::default())))));
         Context::get_node_factory(&cx);
         cx
     }
