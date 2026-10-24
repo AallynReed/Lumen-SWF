@@ -1,4 +1,4 @@
-//! FFDec's `AVM2Graph`: exception handling, finally blocks and strict-equality switches.
+//! AVM2 graph: exception handling, finally blocks and strict-equality switches.
 
 use super::code::op;
 use super::graph::*;

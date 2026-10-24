@@ -1,4 +1,4 @@
-//! FFDec's AS1/2 `ActionScriptLexer` (lexers/actionscript_script.flex).
+//! AS1/2 lexer.
 
 use super::CompileError;
 
@@ -372,7 +372,7 @@ impl Lexer {
         char::from_u32(u32::from_str_radix(&h.iter().collect::<String>(), 16).ok()?)
     }
 
-    /// `STRING` and `CHARLITERAL`: an unknown escape keeps only its backslash, as FFDec does.
+    /// `STRING` and `CHARLITERAL`: an unknown escape keeps only its backslash.
     fn string(&mut self, quote: char) -> Result<Sym, CompileError> {
         let mut out = String::new();
         loop {

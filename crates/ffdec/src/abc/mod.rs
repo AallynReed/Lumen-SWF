@@ -1,4 +1,4 @@
-//! ActionScript 3 bytecode (ABC) as found in DoABC/DoABC2 tags, read like FFDec's `ABC`.
+//! ActionScript 3 bytecode (ABC) as found in DoABC/DoABC2 tags.
 
 pub mod asm;
 pub mod compile;
@@ -275,7 +275,7 @@ pub fn read_u30(r: &mut Reader) -> Result<usize> {
     Ok((read_u32v(r)? & 0x3fff_ffff) as usize)
 }
 
-/// FFDec's `readS32`, including its handling of the fifth byte's sign.
+/// Reads an s32, including the sign handling of its fifth byte.
 pub fn read_s32v(r: &mut Reader) -> Result<i32> {
     let mut v: i64 = 0;
     let mut shift = 0;

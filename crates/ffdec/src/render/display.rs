@@ -103,7 +103,7 @@ fn apply_tag(list: &mut DisplayList, tag: &Tag, frame: usize) {
         PLACE_OBJECT | PLACE_OBJECT2 | PLACE_OBJECT3 | PLACE_OBJECT4 => {
             let Ok(p) = read_place(tag) else { return };
             let existing = list.get(&p.depth).cloned();
-            // Like FFDec: a plain place needs a free depth and a move needs an occupied one.
+            // A plain place needs a free depth and a move needs an occupied one.
             let mut obj = match (p.is_move, p.id, existing) {
                 (false, Some(id), None) => Placed {
                     depth: p.depth,
@@ -853,7 +853,7 @@ impl<'a> Renderer<'a> {
         Ok(doc.finish(b.width_px(), b.height_px(), &wrapped))
     }
 
-    /// An animated SVG morphing between the start and end shapes, like FFDec's default.
+    /// An animated SVG morphing between the start and end shapes.
     pub fn morph_svg(&self, id: u16) -> Result<String> {
         let m = self.morph(id).ok_or_else(|| Error::Other(format!("morph shape {id} not found")))?;
         let start = m.shape_at(0);

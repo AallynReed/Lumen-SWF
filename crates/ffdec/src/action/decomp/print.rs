@@ -1,4 +1,4 @@
-//! AS1/2 items as source text: the `appendTo` methods of FFDec's `flash.action.model`.
+//! AS1/2 items as source text.
 
 use std::collections::HashSet;
 use std::rc::Rc;

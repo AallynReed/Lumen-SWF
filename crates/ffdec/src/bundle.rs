@@ -1,4 +1,4 @@
-//! Files holding several SWFs, like FFDec's `Bundle`s: ZIP archives, SWC libraries (the SWFs
+//! Files holding several SWFs: ZIP archives, SWC libraries (the SWFs
 //! their catalog lists) and any other file, searched for embedded SWF headers.
 
 use std::io::{Cursor, Read, Write};
@@ -25,7 +25,7 @@ pub struct Bundle {
 }
 
 impl Bundle {
-    /// FFDec's `isReadOnly`: only archives can take an edited SWF back.
+    /// Only archives can take an edited SWF back.
     pub fn read_only(&self) -> bool {
         self.kind == Kind::Binary
     }

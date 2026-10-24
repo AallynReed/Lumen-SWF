@@ -6,7 +6,7 @@ use ffdec::tags::code::{DEFINE_FONT2, DEFINE_FONT3};
 
 fn corpus() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let mut stack = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata")];
+    let mut stack = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata")];
     while let Some(dir) = stack.pop() {
         for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
             let p = e.path();
@@ -21,7 +21,7 @@ fn corpus() -> Vec<PathBuf> {
     out
 }
 
-/// Corpus fonts written back read the same; glyph shapes written with FFDec's field sizes are
+/// Corpus fonts written back read the same; glyph shapes written with minimal field sizes are
 /// not always the original bytes.
 #[test]
 fn fonts_write_back() {
@@ -78,12 +78,12 @@ fn glyph_distance(a: &[Record], b: &[Record]) -> Option<i32> {
     Some(d)
 }
 
-/// Compares adding characters from a font file with JPEXS 26.4's FontTag.addCharacter, read
-/// from `FFDEC_FONT_REF` (`dir=fontfile;...`, each dir the FontDump driver's output). JPEXS takes
+/// Compares adding characters from a font file with the reference output, read
+/// from `FFDEC_FONT_REF` (`dir=fontfile;...`, each dir the FontDump driver's output). The reference takes
 /// outlines and advances through Java's AWT, which hints them and may start a composite glyph's
 /// contours elsewhere, so glyphs are counted rather than required to match.
 #[test]
-fn fonts_import_like_jpexs() {
+fn fonts_import_like_reference() {
     let Ok(refs) = std::env::var("FFDEC_FONT_REF") else { return };
     let (mut total, mut exact, mut reordered, mut worst, mut bad) = (0, 0, 0, 0, Vec::new());
     for pair in refs.split(';') {
@@ -113,7 +113,7 @@ fn fonts_import_like_jpexs() {
                 if let (Some(g), Some(w)) = (gl, wl) {
                     for (i, (a, b)) in g.advances.iter().zip(&w.advances).enumerate() {
                         if (*a as i32 - *b as i32).abs() > 4 * got.v3.then_some(20).unwrap_or(1) {
-                            bad.push(format!("{label}: advance of {:?} is {a}, JPEXS {b}", char::from_u32(got.codes[i] as u32)));
+                            bad.push(format!("{label}: advance of {:?} is {a}, expected {b}", char::from_u32(got.codes[i] as u32)));
                         }
                     }
                 }
@@ -152,7 +152,7 @@ fn fonts_import_like_jpexs() {
 #[test]
 fn replaced_fonts_relayout_their_texts() {
     let (Ok(data), Ok(ttf)) = (
-        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/debug_game/as2_scoring.swf")),
+        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/debug_game/as2_scoring.swf")),
         std::fs::read(r"C:\Windows\Fonts\consola.ttf"),
     ) else {
         return;

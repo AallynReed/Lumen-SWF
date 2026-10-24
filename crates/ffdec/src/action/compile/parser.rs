@@ -99,13 +99,13 @@ fn direct_str(it: &It, pool: &Pool) -> Option<String> {
     }
 }
 
-/// Every item under `it`, `it` included, as FFDec's `visitRecursively`.
+/// Every item under `it`, `it` included.
 pub fn walk(it: &mut It, f: &mut dyn FnMut(&mut It)) {
     f(it);
     children(it, &mut |c| walk(c, f));
 }
 
-/// Direct sub-items, as FFDec's `visit`.
+/// Direct sub-items.
 pub fn children(it: &mut It, f: &mut dyn FnMut(&mut It)) {
     let all = |v: &mut Vec<It>, f: &mut dyn FnMut(&mut It)| v.iter_mut().for_each(|c| f(c));
     match it {

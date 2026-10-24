@@ -1,4 +1,4 @@
-//! FFDec-style resource tree (shapes, sprites, images, …) and the raw tag list.
+//! Resource tree (shapes, sprites, images, …) and the raw tag list.
 
 use std::collections::HashMap;
 

@@ -5,7 +5,7 @@ use ffdec::abc::pcode::method_pcode;
 use ffdec::abc::{tag_abc, Abc};
 
 fn sample() -> Option<Abc> {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/as3_new/bin/as3_new.flex.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/as3_new/bin/as3_new.flex.swf");
     let swf = ffdec::Swf::parse(&std::fs::read(f).ok()?).ok()?;
     let mut abc = None;
     swf.walk(|_, t| {

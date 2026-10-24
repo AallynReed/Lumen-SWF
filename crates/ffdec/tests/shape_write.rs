@@ -4,7 +4,7 @@ use ffdec::shape::{is_shape, ShapeTag};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
-    let mut stack = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata")];
+    let mut stack = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata")];
     while let Some(dir) = stack.pop() {
         for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
             let p = e.path();
@@ -46,13 +46,13 @@ fn shapes_write_back() {
     assert!(bad.is_empty(), "{:?}", &bad[..bad.len().min(10)]);
 }
 
-/// Compares image-to-shape import with JPEXS 26.4's ShapeImporter, read from
+/// Compares image-to-shape import with the reference output, read from
 /// `FFDEC_SHAPE_REF` (the ShapeDump driver's output: per SWF, per image and fill mode, the new
 /// image tag and the shape body).
 #[test]
-fn shape_images_match_jpexs() {
+fn shape_images_match_reference() {
     let Ok(dir) = std::env::var("FFDEC_SHAPE_REF") else { return };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
     let images = [("png", std::fs::read(root.join("as2/as2/LIBRARY/Database-Delete-32.png")).unwrap()), ("jpg", std::fs::read(root.join("gfx/test_images/LIBRARY/pony_small.jpg")).unwrap())];
     let (mut total, mut bad) = (0, Vec::new());
     for d in std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()) {

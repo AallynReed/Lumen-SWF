@@ -1,37 +1,37 @@
-//! AMF reading, writing and text, checked on the JPEXS test data. With `FFDEC_AMF_TEXT` set to a
-//! folder of FFDec's own text (name.txt, dates in UTC), the text must match it too.
+//! AMF reading, writing and text, checked on the test data. With `FFDEC_AMF_TEXT` set to a
+//! folder of reference text (name.txt, dates in UTC), the text must match it too.
 
 use std::path::{Path, PathBuf};
 
 use ffdec::amf::{self, Sol};
 
 fn data(dir: &str) -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata").join(dir);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata").join(dir);
     let mut v: Vec<PathBuf> = std::fs::read_dir(root).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default();
     v.sort();
     v
 }
 
-/// Our text with integral doubles printed the way FFDec prints them.
-fn as_ffdec(s: &str) -> String {
+/// Our text with integral doubles printed without `.0`, as the reference prints them.
+fn as_reference(s: &str) -> String {
     regex::Regex::new(r"(\d)\.0\b").unwrap().replace_all(s, "$1").into_owned()
 }
 
 fn expect(name: &str, ours: &str) {
     let Ok(dir) = std::env::var("FFDEC_AMF_TEXT") else { return };
     if let Ok(out) = std::env::var("FFDEC_AMF_OUT") {
-        std::fs::write(Path::new(&out).join(format!("{name}.txt")), as_ffdec(ours)).unwrap();
+        std::fs::write(Path::new(&out).join(format!("{name}.txt")), as_reference(ours)).unwrap();
         return;
     }
     let want = std::fs::read_to_string(Path::new(&dir).join(format!("{name}.txt"))).unwrap();
-    // FFDec merges amf0test's duplicate keys and truncates an object at a member it can not read.
+    // The reference merges duplicate keys and truncates an object at an unreadable member.
     if name == "amf0test.sol" || name == "noserializer_object_sealed.bin" {
         return;
     }
     if want.starts_with("ERROR") {
-        assert!(ours.starts_with("ERROR"), "{name}: FFDec failed but we read it");
+        assert!(ours.starts_with("ERROR"), "{name}: reference failed but we read it");
     } else {
-        assert_eq!(as_ffdec(ours), want, "{name}");
+        assert_eq!(as_reference(ours), want, "{name}");
     }
 }
 

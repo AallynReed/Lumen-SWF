@@ -584,8 +584,7 @@ pub fn pack_of(abc: &Abc, script: usize, trait_index: Option<usize>) -> (Vec<usi
     (crate::abc::scripts::pack_traits(abc, script, t), simple)
 }
 
-/// `FFDecAs3ScriptReplacer.replaceScript`: compiles `text` in place of a script pack of
-/// `abcs[selected]` and returns the new ABC.
+/// Compiles `text` in place of a script pack of `abcs[selected]` and returns the new ABC.
 pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index: Option<usize>, text: &str, document_class: Option<&str>) -> R<Abc> {
     replace_script_renamed(abcs, selected, script, trait_index, text, document_class, &[])
 }

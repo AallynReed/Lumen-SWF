@@ -440,7 +440,7 @@ pub fn java_double(v: f64) -> String {
     java_chars(negative, &digits, e)
 }
 
-/// FFDec's `doubleToString`: Java's form without a trailing `.0`.
+/// Java's double text without a trailing `.0`.
 pub fn double_str(v: f64) -> String {
     let s = java_double(v);
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)

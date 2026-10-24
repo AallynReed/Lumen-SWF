@@ -1,4 +1,4 @@
-//! DefineVideoStream + VideoFrame tags to FLV, following FFDec's `MovieExporter`.
+//! DefineVideoStream + VideoFrame tags to FLV.
 
 use std::collections::BTreeMap;
 

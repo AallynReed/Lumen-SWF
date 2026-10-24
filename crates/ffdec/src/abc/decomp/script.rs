@@ -1,4 +1,4 @@
-//! AS3 source of whole scripts: FFDec's `ScriptPack`, the `Trait*.toString` family and import resolution.
+//! AS3 source of whole scripts: script packs, trait printing and import resolution.
 
 use std::collections::{HashMap, HashSet};
 
@@ -216,7 +216,7 @@ impl<'c, 'a> Sp<'c, 'a> {
 
     fn convert_body(&mut self, req: &MethodReq, w: &mut Writer) {
         if self.ctx.cfg.pcode {
-            // FFDec writes the p-code to the null writer instead of decompiling.
+            // P-code mode writes to the null writer instead of decompiling.
             w.append(" ");
             return;
         }
@@ -422,7 +422,7 @@ impl<'c, 'a> Sp<'c, 'a> {
                 if matches!(t.data, TraitData::Slot { .. } | TraitData::Const { .. }) {
                     continue;
                 }
-                // FFDec 25 lists the file-private classes too, as `File/as$N/Class.as`.
+                // File-private classes are listed too, as `File/as$N/Class.as`.
                 let full = names.name_with_ns(t.name, false).printable(&self.ctx.ids);
                 w.append_no_hilight(&format!("include \"{}.as\";", full.replace('.', "/"))).new_line();
             }
@@ -602,7 +602,7 @@ impl<'c, 'a> Sp<'c, 'a> {
             let mut req = self.req(class.cinit, true, script, c, fqn, Vec::new());
             req.init_traits = Some(&class.traits);
             req.initializer = TRAIT_CLASS_INITIALIZER;
-            // FFDec prints both initializers with TraitClass's own class index, -1 here.
+            // Both initializers print with TraitClass's own class index, -1 here.
             self.print_body(&req, -1, w);
         }
         let ignored = self.fla_ignored.get(&ci).cloned().unwrap_or_default();
@@ -699,7 +699,7 @@ impl<'c, 'a> Sp<'c, 'a> {
         } else {
             w.start_block();
             if self.ctx.cfg.pcode {
-                // FFDec's trait header leaves the writer indented one level deeper.
+                // The trait header leaves the writer indented one level deeper.
                 write_lines(w, &crate::abc::pcode::trait_header_pcode(abc, t));
                 w.indent();
             }

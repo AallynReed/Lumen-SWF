@@ -1,5 +1,4 @@
-//! `UninitializedClassFieldsDetector`: class fields used through `this` or the class but never
-//! declared, which FFDec adds to decompiled AS2 classes.
+//! Class fields used through `this` or the class but never declared, added to AS2 classes.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};

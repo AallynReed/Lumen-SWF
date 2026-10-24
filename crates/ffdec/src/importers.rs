@@ -1,5 +1,4 @@
-//! Asset importers: FFDec's `ImageImporter`, `SoundImporter` (DefineSound), `BinaryDataImporter`,
-//! `ShapeImporter` (images, and SVG through svg_import), `TextImporter` and font glyphs.
+//! Asset importers: images, sounds, binary data, shapes (images and SVG), texts and font glyphs.
 
 use std::io::Write;
 
@@ -372,9 +371,7 @@ impl Asset {
     }
 }
 
-/// Replaces a font from a TrueType or OpenType file: a DefineFont4 takes the file as its font
-/// data; a DefineFont2/3 gets new glyphs for the characters it has and for `extra`, as FFDec's
-/// font panel adds them. Returns how many glyphs were set.
+/// Replaces a font from a TrueType or OpenType file; returns how many glyphs were set.
 pub fn font(swf: &mut Swf, path: &[usize], data: &[u8], extra: &[char]) -> Result<usize> {
     let (code, old) = tag_of(swf, path)?;
     if code == DEFINE_FONT4 {
@@ -396,8 +393,7 @@ pub fn font(swf: &mut Swf, path: &[usize], data: &[u8], extra: &[char]) -> Resul
     Ok(n)
 }
 
-/// Lays the static texts using `font` out again from their formatted text without letter
-/// spacing, so their advances follow the font's new glyphs (FFDec's font panel offers this).
+/// Lays the static texts using `font` out again without letter spacing, to fit its new glyphs.
 fn relayout_texts(swf: &mut Swf, font: u16) -> Result<()> {
     let paths: Vec<usize> = swf.timeline.tags.iter().enumerate().filter(|(_, t)| t.code == DEFINE_TEXT || t.code == DEFINE_TEXT2).map(|(i, _)| i).collect();
     for i in paths {

@@ -1,5 +1,4 @@
-//! FFDec's automatic AS1/2 deobfuscation (`ActionDeobfuscator`): conditions and fake functions
-//! that evaluate to constants are run on a small interpreter and replaced by jumps.
+//! Automatic AS1/2 deobfuscation: constant conditions and fake functions become jumps.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,7 +9,7 @@ use crate::abc::decomp::ecma::{self, Ty, V};
 /// `as12DeobfuscatorExecutionLimit`.
 const EXECUTION_LIMIT: usize = 10000;
 
-/// A Java exception in FFDec: deobfuscation stops and keeps what it had stored.
+/// An abort: deobfuscation stops and keeps what it had stored.
 struct Abort;
 
 type R<T> = Result<T, Abort>;
@@ -1049,7 +1048,7 @@ fn execute_actions(f: &Fast, mut item: usize, lda: &mut Lda, pool: Option<&Arc<V
 
 struct Deob {
     f: Fast,
-    /// What FFDec's `ActionList` holds: the last list stored by `setActions`.
+    /// The last list stored by `setActions`.
     stored: Vec<Action>,
 }
 
@@ -1392,11 +1391,11 @@ impl Deob {
 
     /// `actionListParsed`.
     fn run(&mut self) -> R<()> {
-        // The reader gave each push its constant pool; that is the identity FFDec compares.
+        // The reader gave each push its constant pool; that is the identity compared.
         self.fix_constant_pools(false);
         self.f.remove_unknown();
         self.f.expand_pushes();
-        // FFDec's ActionList shares the pushes that expandPushes cut down to their first value.
+        // The stored list shares the pushes that expandPushes cut down to their first value.
         for (i, stored) in self.stored.iter_mut().enumerate() {
             if let (Op::Push { values, .. }, Op::Push { values: sv, .. }) = (&self.f.it[i].a.op, &mut stored.op) {
                 sv.truncate(values.len());
@@ -1431,8 +1430,7 @@ fn push(v: Value) -> Action {
     Action::new(0x96, Op::Push { values: vec![v], pool: None })
 }
 
-/// Runs FFDec's AS1/2 deobfuscator on a freshly read action list. When it fails part way, the
-/// list is left as FFDec leaves it: as last stored.
+/// Deobfuscates a freshly read action list; on failure it is left as last stored.
 pub fn deobfuscate(list: &mut ActionList) {
     if list.actions.is_empty() {
         return;
@@ -1442,7 +1440,7 @@ pub fn deobfuscate(list: &mut ActionList) {
     list.actions = d.stored;
 }
 
-/// `BrokenScriptDetector.codeIsBroken`: decompiled code FFDec could not express as ActionScript.
+/// Whether decompiled code could not be expressed as ActionScript.
 pub fn code_is_broken(code: &str) -> bool {
     code.contains("\u{a7}\u{a7}")
 }

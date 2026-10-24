@@ -1,5 +1,4 @@
-//! `SwfToIggyConvertor`: a SWF movie written into an Iggy file, either a new one or the file
-//! it was converted from, with FFDec's checks, unsupported-tag filtering and warnings.
+//! A SWF movie written into a new Iggy file or the one it was converted from.
 
 use std::collections::{HashMap, HashSet};
 
@@ -47,7 +46,7 @@ fn into_result<T>(r: R<T>) -> Result<T> {
     })
 }
 
-// ---- the SWF as FFDec's tag objects see it ----
+// ---- the SWF as tag objects see it ----
 
 #[derive(Clone)]
 struct Node {
@@ -95,7 +94,7 @@ impl Model {
         ids
     }
 
-    /// Locations as FFDec's filter numbers them on its reloaded copy.
+    /// Locations as the filter numbers them on its reloaded copy.
     fn relocate(&mut self) {
         let root = self.root.clone();
         self.locate(&root, "main");
@@ -1086,7 +1085,7 @@ fn color(b: &mut Buf, at: u64, c: Rgba) {
     b.u8(at + 3, c.a as u32);
 }
 
-/// FFDec's MATRIX fields as floats, as `readMatrix` gives them.
+/// MATRIX fields as floats, as `readMatrix` gives them.
 fn mx(m: &Matrix) -> (f32, f32, f32, f32, i32, i32) {
     (m.a as f32, m.d as f32, m.b as f32, m.c as f32, m.tx as i32, m.ty as i32)
 }

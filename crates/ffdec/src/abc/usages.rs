@@ -1,6 +1,4 @@
-//! FFDec's `ABC.refreshMultinameNamespaceSuffixes`: the definitions whose names collide, which
-//! are printed with a `#namespace` suffix. Only `MultinameUsageDetector`'s definition usages
-//! can collide, so only those are collected.
+//! Definitions whose names collide and are printed with a `#namespace` suffix.
 
 use std::collections::{HashMap, HashSet};
 

@@ -1,4 +1,4 @@
-//! SVG document assembly and the shape → SVG mapping of FFDec's `SVGShapeExporter`.
+//! SVG document assembly and the shape → SVG mapping.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -9,7 +9,7 @@ use crate::types::{ColorTransform, Matrix, Rgba};
 
 use super::paths::{Edge, Paths, Seg};
 
-/// Pixel value from twips, rounded to 1/100 px like FFDec.
+/// Pixel value from twips, rounded to 1/100 px.
 pub fn px(twips: f64) -> f64 {
     (twips / 20.0 * 100.0).round() / 100.0
 }
@@ -107,7 +107,7 @@ pub struct ShapeStyle<'a> {
     pub cxform: &'a ColorTransform,
     pub nonzero: bool,
     pub bitmaps: &'a dyn Bitmaps,
-    /// Scale of the shape on screen; strokes stay at least 1 px wide there, like FFDec.
+    /// Scale of the shape on screen; strokes stay at least 1 px wide there.
     pub stroke_scale: f64,
 }
 
@@ -391,7 +391,7 @@ pub fn clip_body(paths: &Paths, nonzero: bool, transform: &Matrix) -> String {
     out
 }
 
-/// An SVG filter chain for Flash filters, following FFDec's `SvgFiltering`.
+/// An SVG filter chain for Flash filters.
 pub fn filters_def(doc: &mut Doc, filters: &[Filter]) -> Option<String> {
     let mut body = String::new();
     let mut n = 0;
@@ -435,7 +435,7 @@ pub fn filters_def(doc: &mut Doc, filters: &[Filter]) -> Option<String> {
                     cur = r;
                 }
                 let r = res(&mut n);
-                // FFDec always composites glows with the source.
+                // Glows always composite with the source.
                 let composite = is_glow || s.composite_source;
                 let op = if s.inner {
                     if s.knockout || !composite { ("in", &cur, &input) } else { ("atop", &cur, &input) }

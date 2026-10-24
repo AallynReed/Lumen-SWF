@@ -1,4 +1,4 @@
-//! Instruction translation: FFDec's `AVM2Code.toSourceOutput` and the per-instruction `translate`.
+//! Instruction translation to items.
 
 use std::collections::HashMap;
 use std::rc::Rc;

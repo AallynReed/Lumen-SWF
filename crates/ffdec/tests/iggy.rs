@@ -5,8 +5,8 @@ use ffdec::iggy::{from_swf, texture, to_swf};
 use ffdec::tags::code::*;
 use ffdec::Swf;
 
-fn jpexs(rel: &str) -> Option<Vec<u8>> {
-    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler").join(rel)).ok()
+fn corpus(rel: &str) -> Option<Vec<u8>> {
+    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus").join(rel)).ok()
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn empty_movies_round_trip() {
 
 #[test]
 fn converts_swf_to_iggy_and_back() {
-    let Some(data) = jpexs("libsrc/ffdec_lib/testdata/as2/as2.swf") else { return };
+    let Some(data) = corpus("libsrc/ffdec_lib/testdata/as2/as2.swf") else { return };
     let swf = Swf::parse(&data).unwrap();
     let (mut file, warnings) = from_swf::create(&swf, Variant::X64, "as2.swf").unwrap();
     assert!(warnings.iter().any(|w| w.starts_with("Skipping DoAction at main/")));
@@ -63,10 +63,10 @@ fn decodes_textures() {
     assert!(texture::decode(4, 4, texture::DXT5, &block).is_err());
 }
 
-/// Compares with JPEXS: `FFDEC_IGGY_DIR` holds `n.VARIANT.iggy` made by `createIggy` from
+/// Compares with reference output: `FFDEC_IGGY_DIR` holds `n.VARIANT.iggy` made by `createIggy` from
 /// line n of `FFDEC_IGGY_LIST`, their `.swf`/`.warn`/`.err` results and `.edit.iggy` edits.
 #[test]
-fn matches_jpexs_output() {
+fn matches_reference_output() {
     let (Ok(dir), Ok(list)) = (std::env::var("FFDEC_IGGY_DIR"), std::env::var("FFDEC_IGGY_LIST")) else { return };
     let files: Vec<String> = std::fs::read_to_string(list).unwrap().lines().map(str::to_string).collect();
     let mut failures = Vec::new();
@@ -83,7 +83,7 @@ fn matches_jpexs_output() {
                 failures.push(format!("{base}: warnings"));
             }
             if created.save().unwrap() != expected {
-                // Lossless bitmaps FFDec re-encodes differ in zlib output and JPEG decoding.
+                // Re-encoded lossless bitmaps differ in zlib output and JPEG decoding.
                 lossless += 1;
             }
             let file = IggyFile::read(&expected, Some(&format!("{i}.{name}.iggy"))).unwrap();

@@ -1,4 +1,4 @@
-//! AS1/2 compiler: FFDec's `ActionScript2Parser` and `ActionSourceGenerator`.
+//! AS1/2 compiler: parser and code generator.
 
 mod gen;
 mod lexer;
@@ -132,7 +132,7 @@ pub enum PrintKind {
 
 pub type B = Box<It>;
 
-/// The model items the parser builds, as FFDec's `GraphTargetItem` subclasses.
+/// The model items the parser builds.
 #[derive(Debug, Clone)]
 pub enum It {
     Direct(Val),

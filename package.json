@@ -1,12 +1,12 @@
 {
-  "name": "rust-ffdec",
+  "name": "lumen-swf",
   "version": "0.6.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": "Aallyn",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AallynReed/Rust-FFDec.git"
+    "url": "git+https://github.com/AallynReed/Lumen-SWF.git"
   },
   "scripts": {
     "dev": "tauri dev",

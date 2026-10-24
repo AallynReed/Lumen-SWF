@@ -1,4 +1,4 @@
-//! SWF to SWC, FFDec's `SwfToSwcExporter`: the SWF as library.swf, with a stub document class,
+//! SWF to SWC: the SWF as library.swf, with a stub document class,
 //! and a catalog of each DoABC2 tag's definitions and dependencies.
 
 use std::io::{Cursor, Write};
@@ -30,7 +30,7 @@ fn dep_id(d: &Dotted) -> String {
     }
 }
 
-/// The SWF as FFDec stores it in an SWC: the stub DoABC2 tag before the first ABC tag, and
+/// The SWF as stored in an SWC: the stub DoABC2 tag before the first ABC tag, and
 /// the stub as the document class.
 pub fn library(swf: &Swf) -> Result<Swf> {
     let mut swf = swf.clone();

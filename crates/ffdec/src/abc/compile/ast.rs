@@ -1,5 +1,4 @@
-//! The parse tree FFDec's `ActionScript3Parser` builds: `GraphTargetItem` subclasses, shared and
-//! mutable because resolution and code generation update them in place.
+//! The parse tree, mutable because resolution and code generation update it in place.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -437,7 +436,7 @@ pub fn is_type_named(n: &Node, parts: &[&str]) -> bool {
     matches!(&*n.borrow(), Item::Type { full, ns: None } if *full == Dotted::new(parts))
 }
 
-/// `toString()` as FFDec's items render it in the compiler.
+/// An item's text as the compiler renders it.
 pub fn text(n: &Node) -> String {
     match &*n.borrow() {
         Item::Type { full, .. } => full.raw(),

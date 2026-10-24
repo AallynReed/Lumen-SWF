@@ -1,11 +1,10 @@
-//! FFDec's `EcmaScript` value semantics and the `getResult` of AS3 items, used by the
-//! deobfuscator to decide conditions it can evaluate statically.
+//! ECMAScript value semantics and item results, for statically decided conditions.
 
 use std::rc::Rc;
 
 use super::item::{Bin, It, K, Un};
 
-/// A Java value as FFDec's `getResult` returns it.
+/// A value as item evaluation returns it.
 #[derive(Debug, Clone)]
 pub enum V {
     /// Java `null`: not computable.
@@ -292,7 +291,7 @@ pub fn result_as_bool(it: &It) -> bool {
     to_boolean(&result(it))
 }
 
-/// `GraphTargetItem.getResult` for the items FFDec can evaluate.
+/// The value of an item that can be evaluated statically.
 pub fn result(it: &It) -> V {
     let b = it.borrow();
     let v = b.value.clone();

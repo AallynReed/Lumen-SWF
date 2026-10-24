@@ -1,4 +1,4 @@
-//! ActionScript 1/2 bytecode (SWF actions), read like FFDec's `ActionListReader`.
+//! ActionScript 1/2 bytecode (SWF actions).
 
 pub mod asm;
 pub mod compile;
@@ -12,7 +12,7 @@ pub mod write;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
-/// Text encoding of SWF strings: UTF-8 from SWF 6, FFDec's default ANSI charset before.
+/// Text encoding of SWF strings: UTF-8 from SWF 6, the default ANSI charset before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Charset {
     Utf8,
@@ -52,7 +52,7 @@ fn cp1252(c: u8) -> char {
     }
 }
 
-/// FFDec's `Utf8Helper.decode`: invalid bytes become `{invalid_utf8=N}`.
+/// Decodes UTF-8; invalid bytes become `{invalid_utf8=N}`.
 pub fn utf8_decode(data: &[u8]) -> String {
     let esc = |v: u8, out: &mut Vec<u8>| out.extend_from_slice(format!("{{invalid_utf8={v}}}").as_bytes());
     let mut out = Vec::with_capacity(data.len());
@@ -106,7 +106,7 @@ pub fn utf8_decode(data: &[u8]) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// FFDec's `Utf8Helper.getBytes`: `{invalid_utf8=N}` stands for the raw byte N.
+/// UTF-8 bytes, where `{invalid_utf8=N}` stands for the raw byte N.
 pub fn utf8_bytes(s: &str) -> Vec<u8> {
     if !s.contains("invalid_utf8") {
         return s.as_bytes().to_vec();
@@ -211,7 +211,7 @@ pub struct Action {
     pub op: Op,
 }
 
-/// FFDec's p-code name of an action without operands, by action code.
+/// The p-code name of an action without operands, by action code.
 pub fn simple_name(code: u8) -> Option<&'static str> {
     Some(match code {
         0x04 => "NextFrame",
@@ -301,8 +301,7 @@ pub fn simple_name(code: u8) -> Option<&'static str> {
     })
 }
 
-/// A byte reader over the whole action buffer that, like FFDec's stream, may read past an
-/// action's declared length.
+/// A byte reader over the whole action buffer that may read past an action's declared length.
 struct In<'a> {
     data: &'a [u8],
     pos: usize,
@@ -396,7 +395,7 @@ fn read_push_value(r: &mut In) -> Option<Option<Value>> {
     }))
 }
 
-/// FFDec's `SWFInputStream.readAction`; `None` at the end of the data.
+/// Reads one action; `None` at the end of the data.
 fn read_action(data: &[u8], pos: usize, charset: Charset) -> Option<Action> {
     let mut r = In { data, pos, bit: 0, charset };
     let code = r.u8()?;
@@ -530,7 +529,7 @@ impl Action {
         self.length as u64 + 1 + if self.code >= 0x80 { 2 } else { 0 }
     }
 
-    /// FFDec's `getContentBytesLength`.
+    /// Length of the action's content bytes.
     pub fn content_len(&self, cs: Charset) -> usize {
         let utf8 = |s: &str| utf8_bytes(s).len();
         match &self.op {
@@ -657,7 +656,7 @@ fn push_value_len(v: &Value, cs: Charset) -> usize {
     }
 }
 
-/// A decoded action list (FFDec's `ActionList`), addressed from 0.
+/// A decoded action list, addressed from 0.
 #[derive(Debug, Clone)]
 pub struct ActionList {
     pub actions: Vec<Action>,
@@ -672,7 +671,7 @@ impl ActionList {
 }
 
 /// Reads the actions of an action record (`data[start..end]`), following jumps from `start`
-/// like FFDec, then re-addresses them from 0 with deobfuscation jumps where code is out of order.
+/// and re-addresses them from 0 with deobfuscation jumps where code is out of order.
 pub fn read_action_list(data: &[u8], start: usize, end: usize, version: u8) -> ActionList {
     let charset = Charset::for_version(version);
     let mut map: BTreeMap<u64, Action> = BTreeMap::new();
@@ -797,7 +796,7 @@ fn near_address(actions: &[Action], address: u64) -> Option<usize> {
     }
 }
 
-/// FFDec's `ActionListReader.fixActionList`. Jump targets, stores and container ends are kept as
+/// Fixes up an action list: jump targets, stores and container ends are kept as
 /// indices into the list while addresses and lengths are recomputed.
 pub fn fix_action_list(list: &mut ActionList, next: Option<&HashMap<u64, u64>>) {
     let cs = list.charset;

@@ -1,4 +1,4 @@
-//! Dotted names, identifier escaping and multiname resolution as FFDec prints them in AS3.
+//! Dotted names, identifier escaping and multiname resolution as printed in AS3.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -12,7 +12,7 @@ pub struct Part {
     pub suffix: String,
 }
 
-/// FFDec's `DottedChain`.
+/// A dotted name chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Dotted(pub Vec<Part>);
 
@@ -144,7 +144,7 @@ fn ident_next(c: char) -> bool {
     ident_first(c) || c.is_numeric()
 }
 
-/// FFDec's `IdentifiersDeobfuscation.isValidName` for AS3.
+/// Whether `s` is a valid AS3 identifier.
 pub fn is_valid_name(s: &str) -> bool {
     if is_reserved(s) {
         return false;
@@ -207,7 +207,7 @@ pub fn escape_oidentifier(s: &str) -> String {
     out
 }
 
-/// Per-SWF identifier printing state: FFDec's obfuscated-identifier map.
+/// Per-SWF identifier printing state: the obfuscated-identifier map.
 #[derive(Default)]
 pub struct Idents {
     map: RefCell<Vec<(String, String)>>,

@@ -13,7 +13,7 @@ use crate::abc::decomp::props::{has_side_effect, invert, not_coerced_no_dup, thr
 use super::super::{Action, Op, Value};
 use super::items::*;
 
-/// FFDec's `variables`/`functions` maps (`LinkedHashMap<String, GraphTargetItem>`).
+/// Ordered `variables`/`functions` maps.
 #[derive(Debug, Clone, Default)]
 pub struct JMap(pub Vec<(String, Option<It>)>);
 

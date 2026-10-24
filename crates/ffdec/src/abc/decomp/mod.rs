@@ -1,4 +1,4 @@
-//! AS3 decompiler: a port of FFDec's AVM2 graph decompiler.
+//! AS3 decompiler on the AVM2 control-flow graph.
 
 pub mod avm2graph;
 pub mod avm2post;

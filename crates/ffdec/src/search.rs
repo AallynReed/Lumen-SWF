@@ -1,4 +1,4 @@
-//! Searching scripts and texts, like FFDec's `ActionScriptSearch` and text search: a plain or
+//! Searching scripts and texts: a plain or
 //! regular-expression pattern over decompiled ActionScript (or p-code) and formatted texts.
 
 use serde::Serialize;

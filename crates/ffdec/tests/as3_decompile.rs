@@ -1,4 +1,4 @@
-//! JPEXS's AS3 decompiler expectations, scored against our port.
+//! AS3 decompiler expectations, scored against our port.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -117,9 +117,9 @@ fn decompile(abcs: &[Abc], index: &std::sync::Arc<AbcIndex>, version: u8, method
 
 #[test]
 fn as3_decompile_fixtures() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib");
     if !root.exists() {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     }
     if std::env::var("AS3_DEBUG").is_err() {
@@ -167,12 +167,12 @@ fn as3_decompile_fixtures() {
     eprintln!("AS3 decompile fixtures: {pass}/{total} pass (report: {})", out.display());
 }
 
-/// JPEXS's whole-class expectations (`ActionScript3ClassTest`).
+/// Whole-class expectations (`ActionScript3ClassTest`).
 #[test]
 fn as3_class_fixtures() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib");
     if !root.exists() {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     }
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/as3_classes.json");

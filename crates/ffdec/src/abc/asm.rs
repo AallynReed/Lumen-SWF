@@ -1,4 +1,4 @@
-//! AVM2 p-code assembler: FFDec's `Flasm3Lexer` and `ASM3Parser.parse` for one method.
+//! AVM2 p-code assembler for one method.
 
 use std::collections::HashMap;
 
@@ -251,7 +251,7 @@ impl Lexer {
                             self.pos += d + 1;
                             continue;
                         }
-                        // FFDec prints parameter names unescaped, so keep such backslashes.
+                        // Parameter names are printed unescaped, so keep such backslashes.
                         other => {
                             out.push('\\');
                             other
@@ -311,7 +311,7 @@ fn uint(lx: &Lexer, s: &Sym) -> R<u32> {
     u32::try_from(v).or_else(|_| lx.err("unsigned integer expected"))
 }
 
-/// A number's text; also `NaN` and `Infinity`, which FFDec prints but cannot lex.
+/// A number's text, including `NaN` and `Infinity`.
 fn float_text(lx: &Lexer, s: &Sym, what: &str, strip: &[char]) -> R<String> {
     match s {
         Sym::Num(n) => Ok(n.trim_end_matches(strip).to_string()),
@@ -606,7 +606,7 @@ fn value(lx: &mut Lexer, p: &mut Pool) -> R<ValueKind> {
             let kind = match k { "True" => 0x0b, "False" => 0x0a, "null" => 0x0c, _ => 0x00 };
             vk(kind, kind as usize)
         }
-        // FFDec prints `Null()`, which its own lexer does not know.
+        // The disassembler prints `Null()`, which is no lexer keyword.
         Sym::Ident(n) if n == "Null" => {
             empty_parens(lx)?;
             vk(0x0c, 0x0c)
@@ -761,7 +761,7 @@ struct Fix {
     case: bool,
 }
 
-/// Bytes of an instruction, as FFDec's `AVM2Instruction.getBytes`.
+/// Bytes of an instruction.
 pub fn encode(ins: &Instruction) -> Vec<u8> {
     let mut w = crate::io::Writer::new();
     w.u8(ins.code);

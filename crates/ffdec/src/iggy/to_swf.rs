@@ -1,5 +1,4 @@
-//! `IggyToSwfConvertor`: an Iggy movie as an uncompressed SWF, written the way FFDec's tag
-//! classes serialize the objects it builds.
+//! An Iggy movie as an uncompressed SWF.
 
 use std::collections::HashSet;
 
@@ -101,7 +100,7 @@ fn fx(f: f32) -> i32 {
     (f as f64 * 65536.0) as i32
 }
 
-/// FFDec's `MATRIX`, with float scale and skew.
+/// A MATRIX with float scale and skew.
 #[derive(Clone, Copy, Debug)]
 pub struct Mx {
     pub has_scale: bool,

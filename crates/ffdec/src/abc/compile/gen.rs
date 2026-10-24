@@ -1,4 +1,4 @@
-//! FFDec's `AVM2SourceGenerator`: the item tree to AVM2 instructions.
+//! Code generation: the item tree to AVM2 instructions.
 
 use std::collections::HashMap;
 use std::rc::Rc;

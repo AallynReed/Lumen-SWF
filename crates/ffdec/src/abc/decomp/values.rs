@@ -87,7 +87,7 @@ fn handle_single_xml(s: &str, in_attr: &mut bool, in_tag: &mut bool) -> String {
     out
 }
 
-/// A small well-formedness check standing in for FFDec's `checkBasicXmlOnly`.
+/// A small XML well-formedness check.
 fn basic_xml(s: &str) -> bool {
     let b = s.trim();
     if !b.starts_with('<') || !b.ends_with('>') {

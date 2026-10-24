@@ -1,4 +1,4 @@
-//! Fonts and texts in the XFL: `DOMFontItem`s, static, dynamic and input texts (with FFDec's
+//! Fonts and texts in the XFL: `DOMFontItem`s, static, dynamic and input texts (with their
 //! HTML text parser), and filters.
 
 use std::collections::HashMap;
@@ -694,7 +694,7 @@ fn csm_settings(swf: &crate::Swf, id: u16) -> Option<(f32, f32)> {
     None
 }
 
-/// A token of FFDec's `XmlLexer` over edit text HTML.
+/// A token of the edit text HTML lexer.
 enum Tok {
     Open(String, Vec<(String, String)>, bool),
     Close(String),

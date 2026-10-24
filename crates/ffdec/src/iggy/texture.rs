@@ -407,7 +407,7 @@ impl External {
         Ok(External { width, height, pixel, kind, format, length, scale, file_name, resource, replacement })
     }
 
-    /// The pixels from the registered companion file, or FFDec's red placeholder.
+    /// The pixels from the registered companion file, or a red placeholder.
     pub fn image(&self) -> RgbaImage {
         let name = String::from_utf8_lossy(&self.file_name).to_ascii_lowercase();
         let texture = COMPANIONS.lock().unwrap().iter().rev().find(|c| c.0 == name).map(|c| c.1.clone());

@@ -1,4 +1,4 @@
-//! JPEXS's `ActionScript2DeobfuscatorTest`, with automatic deobfuscation on.
+//! `ActionScript2DeobfuscatorTest`, with automatic deobfuscation on.
 
 use ffdec::action::compile::{compile, Target};
 use ffdec::action::decomp::actions_to_source;

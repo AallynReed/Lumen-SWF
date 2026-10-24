@@ -1,5 +1,4 @@
-//! FFDec's AS3 `ActionScriptLexer` (lexers/actionscript3_script.flex), with JFlex's longest
-//! match and its XML states.
+//! AS3 lexer with longest-match rules and XML states.
 
 use super::CompileError;
 

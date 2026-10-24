@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use ffdec::export::{Exporter, Kind, Options};
 
 fn corpus() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
     let mut out = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
@@ -23,10 +23,10 @@ fn corpus() -> Vec<PathBuf> {
 
 /// Every asset in the corpus exports in both default and PNG/WAV modes.
 #[test]
-fn jpexs_corpus_exports() {
+fn corpus_exports() {
     let files = corpus();
     if files.is_empty() {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     }
     let mut failures = Vec::new();

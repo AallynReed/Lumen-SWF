@@ -1,4 +1,4 @@
-//! Turns shape records into per-style paths, porting FFDec's `ShapeExporterBase`:
+//! Turns shape records into per-style paths:
 //! fill0 edges are reversed, edges are grouped by style and chained end to start.
 //! Edges can carry a second coordinate set (a morph shape's end state) that follows the
 //! same ordering, so start and end paths line up command for command.
@@ -180,7 +180,7 @@ fn flatten(map: EdgeMap) -> Vec<Edge> {
 
 const NONE: usize = usize::MAX;
 
-/// FFDec's `cleanEdgeMap` for one style: reorders edges so each starts where the
+/// Reorders one style's edges so each starts where the
 /// previous ended, reversing an edge when only its end point connects.
 fn chain(mut edges: Vec<Edge>) -> Vec<Edge> {
     let n = edges.len();

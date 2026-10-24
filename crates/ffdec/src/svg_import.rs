@@ -1,5 +1,4 @@
-//! SVG into a shape: a port of FFDec's SvgImporter, SvgStyle and CubicToQuad. CSS selectors are
-//! matched on the document directly rather than through FFDec's CSS-to-XPath conversion.
+//! SVG into a shape; CSS selectors are matched on the document directly.
 
 use std::collections::HashMap;
 
@@ -13,7 +12,7 @@ use crate::Swf;
 
 const XLINK: &str = "http://www.w3.org/1999/xlink";
 
-/// FFDec's double-precision matrix (commonshape.Matrix).
+/// A double-precision matrix.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct M {
     sx: f64,
@@ -561,7 +560,7 @@ impl<'a, 'i, 's> Importer<'a, 'i, 's> {
         Ok(id)
     }
 
-    /// SvgStyle.parseGradient; None where FFDec falls back to a random colour.
+    /// Parses a gradient paint; None falls back to a random colour.
     fn gradient(&mut self, el: Node<'a, 'i>) -> Option<Paint> {
         let name = tag(el);
         let (mut units, mut transform, mut spread, mut interpolation) = (None, None, None, None);
@@ -1626,8 +1625,7 @@ fn cubic_to_quad(p1x: f64, p1y: f64, c1x: f64, c1y: f64, c2x: f64, c2y: f64, p2x
     result
 }
 
-// CSS: rulesets with FFDec's specificity (summed over a selector list), and selector matching.
-// Rules inside @media apply; FFDec's parser loses them and every rule after them.
+// CSS rulesets with specificity summed over a selector list; rules inside @media apply.
 
 fn css_rules(text: &str) -> Vec<(String, i64, String)> {
     let mut s = String::new();

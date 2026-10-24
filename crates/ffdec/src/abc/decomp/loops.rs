@@ -1,4 +1,4 @@
-//! FFDec's `LoopDetector` and `GraphPrecontinueDetector`.
+//! Loop and precontinue detection.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -355,7 +355,7 @@ fn find_breaks(c: &mut LoopCtx, loops: &[usize], back_edges: &[Edge], throw_stat
             continue;
         }
         // Code that only returns or throws is no break when the loop also leaves another way
-        // (FFDec 26 takes it, and then moves code that follows the loop's normal exit).
+        // (taking it would move code that follows the loop's normal exit).
         let dead_end = |p: P| {
             let (mut seen, mut stack) = (vec![p], vec![p]);
             while let Some(q) = stack.pop() {

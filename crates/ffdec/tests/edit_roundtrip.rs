@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use ffdec::action::{self, scripts};
 
 fn corpus() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
     let mut out = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
@@ -84,7 +84,7 @@ fn pcode_assembles_to_itself() {
                 let bytes = l.to_bytes();
                 action::pcode::to_pcode(&action::read_action_list(&bytes, 0, bytes.len(), swf.header.version))
             });
-            // FFDec's assembler drops an empty constant pool.
+            // The assembler drops an empty constant pool.
             let expected = before.replace("ConstantPool\n", "");
             match after {
                 Ok(a) if a == expected => {}

@@ -1,6 +1,6 @@
 //! Graph parts (basic blocks), loops and throw states, kept in arenas and referenced by index.
 //!
-//! FFDec's `GraphPart.equals` compares `start` and `end`, and several decisions depend on Java's
+//! `GraphPart.equals` compares `start` and `end`, and several decisions depend on Java's
 //! `HashSet` iteration order, so `PartSet` reproduces that order.
 
 use super::item::PartId as P;

@@ -1,4 +1,4 @@
-//! FFDec's `ActionScript3Parser`: AS3 source to the item tree, resolving names it can as it goes.
+//! AS3 source to the item tree, resolving names it can as it goes.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -19,7 +19,7 @@ fn vars() -> Vars {
     Rc::new(RefCell::new(Vec::new()))
 }
 
-/// What FFDec threads through every parse method.
+/// State threaded through every parse method.
 #[derive(Clone)]
 pub struct Env {
     pub all_ns: AllNs,
@@ -84,7 +84,7 @@ pub struct Parser<'a> {
     pub lx: Lexer,
     uniq: i64,
     pub cx: &'a mut Cx,
-    /// Printed identifiers to restore: FFDec's `@identifier` replacements.
+    /// Printed identifiers to restore: `@identifier` replacements.
     pub replacements: HashMap<String, String>,
 }
 

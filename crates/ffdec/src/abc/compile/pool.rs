@@ -1,6 +1,4 @@
-//! `AVM2ConstantPool` lookups: find an entry, adding it when asked to. FFDec's pools are hash
-//! lists, so a value stored twice is found at its last index, and type names are never
-//! found again (their hash covers the identity of the parameter array).
+//! Constant pool lookups: a value stored twice is found at its last index; type names never match.
 
 use crate::abc::{Abc, Multiname, Namespace};
 

@@ -57,7 +57,7 @@ pub fn set_script_pcode(swf: &mut Swf, path: &[usize], script: &str, method: Opt
     swf.set_abc(path, &abc).map_err(|e| fail(e.to_string()))
 }
 
-/// Compiles ActionScript in place of a script, as FFDec's script editor does.
+/// Compiles ActionScript in place of a script.
 pub fn set_script_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Result<(), ParseError> {
     set_script_source_with(swf, path, script, text, &|_| None)
 }
@@ -96,7 +96,7 @@ fn expand_includes(swf: &Swf, path: &[usize], script: usize, text: &str, include
         };
         let body = match include(name).or_else(|| pack_source_named(swf, path, script, name)) {
             Some(b) => b,
-            // FFDec 25 lists a file-private class as `File/as$N/Class.as` but writes it into File.as.
+            // A file-private class is listed as `File/as$N/Class.as` but written into File.as.
             None if is_private_class_file(swf, path, script, name) => String::new(),
             None => return Err(ParseError { line: n + 1, message: format!("cannot include \"{name}\"") }),
         };
@@ -119,7 +119,7 @@ fn is_private_class_file(swf: &Swf, path: &[usize], script: usize, name: &str) -
     abc.scripts.get(script).is_some_and(|s| s.traits.iter().any(|t| abc.ns_kind_of(t.name) == crate::abc::ns_kind::PRIVATE && abc.local_name(t.name) == class))
 }
 
-/// The decompiled text of the pack of `script` that FFDec exports as `name`.
+/// The decompiled text of the pack of `script` exported as `name`.
 fn pack_source_named(swf: &Swf, path: &[usize], script: usize, name: &str) -> Option<String> {
     let tag = swf.tag(path)?;
     let (data, _) = crate::abc::tag_abc(tag)?;
@@ -159,7 +159,7 @@ fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Re
     swf.set_abc(path, &abc).map_err(|e| fail(e.to_string()))
 }
 
-/// The editable text of a text tag: FFDec's formatted text for DefineText/2, the initial text
+/// The editable text of a text tag: formatted text for DefineText/2, the initial text
 /// (HTML when the field is HTML) for DefineEditText. None for other tags.
 pub fn text_source(swf: &Swf, path: &[usize]) -> Result<Option<String>, ParseError> {
     use crate::tags::code::*;
@@ -245,7 +245,7 @@ pub fn set_header(swf: &mut Swf, h: &HeaderEdit) -> Result<(), String> {
 pub enum Deobfuscation {
     DeadCode,
     Traps,
-    /// FFDec's `AVM2DeobfuscatorGroupParts`, which its own menu does not offer.
+    /// Moves blocks reached by a single jump to where they are jumped to.
     GroupParts,
 }
 

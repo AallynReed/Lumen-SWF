@@ -1,4 +1,4 @@
-//! FFDec's statement-level clean-up passes on the structured tree (generic `Graph` part).
+//! Statement-level clean-up passes on the structured tree (generic `Graph` part).
 
 use super::graph::*;
 use super::item::*;

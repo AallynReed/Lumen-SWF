@@ -1695,6 +1695,10 @@ impl Parser {
             || (HAS_DESCENDOPERATORS && lt == DOUBLEDOT_TOKEN)
             || lt == ATSIGN_TOKEN
         {
+            if lt == ATSIGN_TOKEN {
+                // parsePropertyOperator consumes nothing for '@', so Java recurses until the stack overflows
+                panic!("StackOverflowError");
+            }
             first = self.parse_property_operator(first);
             result = self.parse_full_new_subexpression_prime(first);
         }

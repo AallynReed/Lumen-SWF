@@ -19,7 +19,7 @@ pub fn alpha_f(c: &Rgba) -> f32 {
     c.a as f32 / 255.0
 }
 
-/// A parsed matrix as FFDec holds it (float scale and skew, integer translation).
+/// A parsed matrix (float scale and skew, integer translation).
 pub fn jmatrix(m: &Matrix) -> JMatrix {
     JMatrix {
         has_scale: m.a != 1.0 || m.d != 1.0,

@@ -1,5 +1,4 @@
-//! FFDec's `XFLXmlWriter`, a small DOM for the tween detectors, and the pretty printer FFDec
-//! runs its XML through (the JDK identity transform with `strip-space` and indent 5).
+//! XFL XML writer, a small DOM for the tween detectors, and the XML pretty printer.
 
 use std::fmt::Write as _;
 

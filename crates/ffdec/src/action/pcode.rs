@@ -1,4 +1,4 @@
-//! AS1/2 p-code text, as FFDec's `Action.actionsToString`.
+//! AS1/2 p-code text.
 
 use std::collections::{HashMap, HashSet};
 
@@ -16,7 +16,7 @@ fn number(v: f64) -> String {
     ecma_number(v)
 }
 
-/// FFDec's `ActionPush.valueToString`.
+/// P-code text of a push value.
 pub fn value_to_string(v: &Value, pool: Option<&[String]>) -> String {
     match v {
         Value::Constant(i) => match pool.and_then(|p| p.get(*i as usize)) {
@@ -37,7 +37,7 @@ pub fn value_to_string(v: &Value, pool: Option<&[String]>) -> String {
     }
 }
 
-/// FFDec's `getASMSource` of one action.
+/// P-code source of one action.
 pub fn action_source(a: &Action) -> String {
     let q = |s: &str| format!("\"{}\"", escape_as(s));
     match &a.op {

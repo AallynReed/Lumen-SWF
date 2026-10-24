@@ -1,5 +1,4 @@
-//! DefineMorphShape/2: start and end styles and edges, interpolated by ratio like FFDec's
-//! `MorphShapeTag.getShapeAtRatio`.
+//! DefineMorphShape/2: start and end styles and edges, interpolated by ratio.
 
 use crate::error::{Error, Result};
 use crate::io::Reader;

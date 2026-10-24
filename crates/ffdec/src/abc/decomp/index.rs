@@ -1,4 +1,4 @@
-//! Type information about classes and properties: FFDec's `AbcIndexing`.
+//! Type information about classes and properties.
 //!
 //! The index keeps its own copies of names and types, so it outlives the ABCs it was built from.
 //! The player's own classes come from an embedded `playerglobal` library.
@@ -155,7 +155,6 @@ fn ns_key(name: &str, ns: Dotted, abc_id: usize, ns_index: usize, kind: u8) -> N
     NsKey { name: name.into(), ns, ns_index: if keep { ns_index } else { 0 }, abc: if keep { abc_id } else { 0 } }
 }
 
-/// FFDec's `AbcIndexing`.
 #[derive(Default)]
 pub struct AbcIndex {
     level: usize,

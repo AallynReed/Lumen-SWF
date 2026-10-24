@@ -13,6 +13,7 @@ use super::debug_info::DebugInfo;
 use super::features::TARGET_AVM1;
 use super::runtime_constants::*;
 use crate::abc::decomp::ecma::java_parse_double;
+use crate::asc::parser::chars::java_digit16;
 use crate::asc::parser::node::NodeRef;
 use crate::asc::parser::tokens::{EMPTY_TOKEN, GET_TOKEN, SET_TOKEN};
 use crate::asc::semantics::builder::REMOVE_BUILDER_NAMES;
@@ -1039,7 +1040,7 @@ impl ActionBlockEmitter {
             return NumberConstant::Double(f64::NEG_INFINITY);
         }
 
-        let s: Vec<char> = str.chars().collect();
+        let s: Vec<u16> = str.encode_utf16().collect();
         let mut is_int = false;
         if (str.contains('.') || str.contains('e') || str.contains('E') || s.len() > 10) && !(str.contains('x') || str.contains('X')) {
             sum = parse_double(str);
@@ -1051,25 +1052,25 @@ impl ActionBlockEmitter {
             let mut negative = false;
             if len > 1 {
                 let c0 = s[0];
-                if c0 == '-' || c0 == '+' {
+                if c0 == b'-' as u16 || c0 == b'+' as u16 {
                     start_index += 1;
-                    if c0 == '-' {
+                    if c0 == b'-' as u16 {
                         negative = true;
                     }
                 }
             }
-            if len > 2 && s[start_index] == '0' {
+            if len > 2 && s[start_index] == b'0' as u16 {
                 start_index += 1;
                 let c0 = s[start_index];
-                if c0 == 'x' || c0 == 'X' {
+                if c0 == b'x' as u16 || c0 == b'X' as u16 {
                     base = 16;
                     start_index += 1;
                 }
             }
-            while (start_index as i64) < len as i64 - 1 && s[start_index] == '0' {
+            while (start_index as i64) < len as i64 - 1 && s[start_index] == b'0' as u16 {
                 start_index += 1;
             }
-            let str2: Vec<char> = s[start_index..len].to_vec();
+            let str2: Vec<u16> = s[start_index..len].to_vec();
             len -= start_index;
             start_index = 0;
             let mut new_digit = 0;
@@ -1084,7 +1085,7 @@ impl ActionBlockEmitter {
                         end += 1;
                     }
                     if sum > 2147483647.0 {
-                        let t: String = str2.iter().collect();
+                        let t = String::from_utf16_lossy(&str2);
                         sum = parse_double(&t);
                     }
                 }
@@ -1094,13 +1095,13 @@ impl ActionBlockEmitter {
                         if end >= len {
                             break;
                         }
-                        new_digit = un_hex(str2[end]);
+                        new_digit = java_digit16(str2[end]);
                         sum = sum * base as f64 + new_digit as f64;
                         end += 1;
                     }
                     if end < len {
                         let bit53 = new_digit & 0x1;
-                        new_digit = un_hex(str2[end]);
+                        new_digit = java_digit16(str2[end]);
                         let bit54 = (new_digit & 0x8) >> 3;
                         round_up = (new_digit & 0x7) != 0;
 
@@ -1110,7 +1111,7 @@ impl ActionBlockEmitter {
                             if end >= len {
                                 break;
                             }
-                            new_digit = un_hex(str2[end]);
+                            new_digit = java_digit16(str2[end]);
                             round_up |= new_digit != 0;
                             factor *= base as f64;
                         }
@@ -1145,7 +1146,7 @@ impl ActionBlockEmitter {
         if d.is_nan() {
             d = f64::NAN;
         } else if d.is_infinite() {
-            d = if s[0] == '-' { f64::NEG_INFINITY } else { f64::INFINITY };
+            d = if s[0] == b'-' as u16 { f64::NEG_INFINITY } else { f64::INFINITY };
         }
         NumberConstant::Double(d)
     }

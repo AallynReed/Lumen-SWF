@@ -102,7 +102,7 @@ impl<'a> Sound<'a> {
         }
     }
 
-    /// FFDec's default "MP3/WAV/FLV" choice.
+    /// The default "MP3/WAV/FLV" choice.
     pub fn native_kind(&self) -> Kind {
         match self.format {
             format::MP3 if self.stream && self.latency > 0 => Kind::Wav,
@@ -239,7 +239,7 @@ impl AdpcmState {
     }
 }
 
-/// Port of FFDec's `AdpcmDecoder`, including its choice not to emit each packet's initial sample.
+/// ADPCM decoder; does not emit each packet's initial sample.
 fn adpcm(data: &[u8], stereo: bool, out: &mut Vec<i16>) {
     let mut r = Reader::new(data);
     let Ok(code_size) = r.ub(2) else { return };
@@ -314,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn adpcm_four_bit_matches_ffdec_tables() {
+    fn adpcm_four_bit_matches_reference_tables() {
         let mut s = super::AdpcmState { sample: 0, index: 0 };
         assert_eq!(s.step(0b0111, 4), 7 / 8 + 7 / 4 + 7 / 2 + 7);
         assert_eq!(s.index, 8);

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Rust-FFDec",
-  "mainBinaryName": "Rust-FFDec",
+  "productName": "Lumen-SWF",
+  "mainBinaryName": "Lumen-SWF",
   "version": "0.7.0",
   "identifier": "net.aallyn.rustffdec",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Rust-FFDec",
+        "title": "Lumen-SWF",
         "width": 1280,
         "height": 800,
         "minWidth": 720,
@@ -37,7 +37,9 @@
       "icons/icon.png"
     ],
     "resources": {
-      "../LICENSE": "LICENSE"
+      "../LICENSE": "LICENSE",
+      "../NOTICE": "NOTICE",
+      "../licenses/Apache-2.0.txt": "licenses/Apache-2.0.txt"
     },
     "fileAssociations": [
       {
@@ -47,7 +49,7 @@
         "role": "Viewer"
       }
     ],
-    "copyright": "Aallyn Reed 2026-Present. Based on JPEXS Free Flash Decompiler.",
+    "copyright": "Aallyn Reed 2026-Present. Based on Free Flash Decompiler.",
     "shortDescription": "Flash SWF decompiler",
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },

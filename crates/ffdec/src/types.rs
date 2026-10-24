@@ -105,7 +105,7 @@ impl Matrix {
         Ok(m)
     }
 
-    /// Writes the matrix with the smallest fields, as FFDec's writeMatrix does.
+    /// Writes the matrix with the smallest fields.
     pub fn write(&self, w: &mut Writer) {
         let fx = |v: f64| (v * 65536.0) as i64 as i32;
         let scale = self.a != 1.0 || self.d != 1.0;

@@ -1,4 +1,4 @@
-/// SVG colour keywords, as FFDec's SvgColor knows them.
+/// SVG colour keywords.
 const COLORS: &[(&str, [u8; 3])] = &[
     ("aliceblue", [240, 248, 255]),
     ("antiquewhite", [250, 235, 215]),

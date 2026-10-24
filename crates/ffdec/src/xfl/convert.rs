@@ -81,8 +81,8 @@ impl Default for Options {
             version: FlaVersion::Cc,
             export_script: true,
             timestamp: None,
-            generator: "Rust-FFDec".into(),
-            generator_version_name: "Rust-FFDec".into(),
+            generator: "Lumen-SWF".into(),
+            generator_version_name: "Lumen-SWF".into(),
             generator_version: env!("CARGO_PKG_VERSION").into(),
         }
     }
@@ -111,7 +111,7 @@ impl<'a> Item<'a> {
         }
     }
 
-    /// Identity of the tag, as FFDec compares tag objects.
+    /// Identity of the tag.
     pub fn key(&self) -> usize {
         match self {
             Item::Tag(t) | Item::NoMatrix(t) => *t as *const Tag as usize,
@@ -120,7 +120,7 @@ impl<'a> Item<'a> {
     }
 }
 
-/// A timeline's tags without the End tag, which FFDec's tag lists do not hold.
+/// A timeline's tags without the End tag.
 pub fn items(tags: &[Tag]) -> Vec<Item<'_>> {
     tags.iter().filter(|t| t.code != END).map(Item::Tag).collect()
 }
@@ -2091,7 +2091,7 @@ fn filter_delta(f: &crate::filters::Filter) -> (f64, f64) {
 }
 
 impl<'a> Converter<'a> {
-    /// `BoundedTag.getRect` as FFDec computes it (sprites: every placement, matrices truncated).
+    /// A character's bounds (sprites: every placement, matrices truncated).
     pub fn java_rect(&self, id: u16) -> crate::types::Rect {
         if let Some(r) = self.rect_cache.borrow().get(&id) {
             return *r;

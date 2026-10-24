@@ -10,6 +10,7 @@ use super::decoder::Decoder;
 use super::decoder_exception::DecoderException;
 use super::visitor::Visitor;
 use crate::asc::emit::constants::*;
+use crate::asc::util::jhash::JHashMap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Current {
@@ -2310,21 +2311,19 @@ impl DerefMut for BytecodeBuffer2 {
 
 struct BytecodeBuffer3 {
     buf: BytecodeBuffer,
-    offsets: HashMap<i32, i32>,
+    offsets: JHashMap<i32, i32>,
     decoders: Vec<Rc<BytecodeBuffer>>,
 }
 
-/// `HashMap.toString()`, with entries in key order rather than Java's bucket order.
-fn offsets_string(offsets: &HashMap<i32, i32>) -> String {
-    let mut keys: Vec<&i32> = offsets.keys().collect();
-    keys.sort();
-    let body: Vec<String> = keys.iter().map(|k| format!("{}={}", k, offsets[k])).collect();
+/// `HashMap.toString()`.
+fn offsets_string(offsets: &JHashMap<i32, i32>) -> String {
+    let body: Vec<String> = offsets.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
     format!("{{{}}}", body.join(", "))
 }
 
 impl BytecodeBuffer3 {
     fn new(decoders: Vec<Rc<BytecodeBuffer>>, estimated_size: i32) -> BytecodeBuffer3 {
-        BytecodeBuffer3 { buf: BytecodeBuffer::with_size(estimated_size), offsets: HashMap::new(), decoders }
+        BytecodeBuffer3 { buf: BytecodeBuffer::with_size(estimated_size), offsets: JHashMap::new(), decoders }
     }
 
     fn map_offsets(&mut self, offset: i64) {

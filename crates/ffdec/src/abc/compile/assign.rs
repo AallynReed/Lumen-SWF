@@ -1,5 +1,4 @@
-//! Code for names, properties, index and namespaced access, calls and construction: the
-//! `toSource`/`toSourceChange` methods of FFDec's assignable items.
+//! Code for names, properties, index and namespaced access, calls and construction.
 
 use std::rc::Rc;
 

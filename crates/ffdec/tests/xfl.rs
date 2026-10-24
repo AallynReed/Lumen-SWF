@@ -3,8 +3,8 @@ use std::path::Path;
 use ffdec::xfl::{convert, FlaVersion, Options};
 use ffdec::Swf;
 
-fn jpexs(rel: &str) -> Option<Vec<u8>> {
-    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler").join(rel)).ok()
+fn corpus(rel: &str) -> Option<Vec<u8>> {
+    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus").join(rel)).ok()
 }
 
 fn file<'a>(out: &'a ffdec::xfl::convert::Output, name: &str) -> &'a str {
@@ -13,7 +13,7 @@ fn file<'a>(out: &'a ffdec::xfl::convert::Output, name: &str) -> &'a str {
 
 #[test]
 fn converts_timelines_and_tweens() {
-    let Some(data) = jpexs("libsrc/ffdec_lib/testdata/morphshape_ease/morphshape_ease.swf") else { return };
+    let Some(data) = corpus("libsrc/ffdec_lib/testdata/morphshape_ease/morphshape_ease.swf") else { return };
     let swf = Swf::parse(&data).unwrap();
     let opts = Options { version: if swf.is_as3() { FlaVersion::Cc } else { FlaVersion::Cs6 }, timestamp: Some(0), ..Default::default() };
     let out = convert(&swf, "movie", &opts).unwrap();
@@ -22,17 +22,17 @@ fn converts_timelines_and_tweens() {
     assert!(dom.contains("tweenType=\"shape\""));
     assert!(file(&out, "PublishSettings.xml").contains("<flashFileName>movie.swf</flashFileName>"));
 
-    let Some(data) = jpexs("libsrc/ffdec_lib/testdata/motion_object/41_ease_sine/reference.swf") else { return };
+    let Some(data) = corpus("libsrc/ffdec_lib/testdata/motion_object/41_ease_sine/reference.swf") else { return };
     let swf = Swf::parse(&data).unwrap();
     let opts = Options { version: if swf.is_as3() { FlaVersion::Cc } else { FlaVersion::Cs6 }, timestamp: Some(0), ..Default::default() };
     let out = convert(&swf, "movie", &opts).unwrap();
     assert!(file(&out, "DOMDocument.xml").contains("tweenType=\"motion object\""));
 }
 
-/// Compares with JPEXS output: `FFDEC_XFL_LIST` lists pairs of lines, a reference folder
+/// Compares with reference output: `FFDEC_XFL_LIST` lists pairs of lines, a reference folder
 /// (holding `movie/`) and its SWF.
 #[test]
-fn matches_jpexs_output() {
+fn matches_reference_output() {
     let Ok(list) = std::env::var("FFDEC_XFL_LIST") else { return };
     let text = std::fs::read_to_string(list).unwrap();
     let lines: Vec<&str> = text.lines().collect();

@@ -13,7 +13,7 @@ pub fn is_text(code: u16) -> bool {
     matches!(code, DEFINE_TEXT | DEFINE_TEXT2 | DEFINE_EDIT_TEXT)
 }
 
-/// One string per text record, like FFDec's `getTexts`.
+/// One string per text record.
 pub fn records(tag: &Tag, fonts: &HashMap<u16, Font>) -> Result<Vec<String>> {
     if tag.code == DEFINE_EDIT_TEXT {
         return Ok(vec![edit_text(tag)?]);

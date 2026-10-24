@@ -375,7 +375,7 @@ fn is_branch(op: u8) -> bool {
     matches!(op, 0x0c..=0x1a) && op != JUMP
 }
 
-/// FFDec's disassembler: follows reachable code from the entry and exception handlers,
+/// Disassembles: follows reachable code from the entry and exception handlers,
 /// then decodes unreachable regions without following their jumps, rejects overlapping
 /// or oversized lookupswitches, and leaves every byte nothing covers as a one-byte `nop`.
 pub fn disassemble(code: &[u8], handlers: &[usize], dialect: Dialect) -> Vec<Instruction> {

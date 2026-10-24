@@ -2,12 +2,12 @@ use std::path::{Path, PathBuf};
 
 use ffdec::text::{formatted, set_formatted, StaticText};
 
-/// Compares formatted text with JPEXS 26.4's, read from `FFDEC_TEXT_REF` (the TextDump
+/// Compares formatted text with the reference, read from `FFDEC_TEXT_REF` (the TextDump
 /// driver's output: one folder per SWF with swf.txt and id.txt), and checks that importing it
-/// back keeps every record. JPEXS's own re-import (id.bin) loses spacing that is relative to
+/// back keeps every record. The reference re-import (id.bin) loses spacing that is relative to
 /// letter spacing, so bodies are only compared where no letter spacing is involved.
 #[test]
-fn texts_match_jpexs() {
+fn texts_match_reference() {
     let Ok(dir) = std::env::var("FFDEC_TEXT_REF") else { return };
     let (mut total, mut bad) = (0, Vec::new());
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
@@ -36,7 +36,7 @@ fn texts_match_jpexs() {
             let original = t.clone();
             match set_formatted(&swf, &mut t, &expected, None) {
                 Ok(()) if t != original => bad.push(format!("{label}: records change")),
-                Ok(()) if !expected.contains("letterspacing") && std::fs::read(p.with_extension("bin")).is_ok_and(|b| b != t.write()) => bad.push(format!("{label}: body differs from JPEXS")),
+                Ok(()) if !expected.contains("letterspacing") && std::fs::read(p.with_extension("bin")).is_ok_and(|b| b != t.write()) => bad.push(format!("{label}: body differs from expected")),
                 Ok(()) => {}
                 Err(e) => bad.push(format!("{label}: {e}")),
             }
@@ -50,7 +50,7 @@ fn texts_match_jpexs() {
 }
 
 fn template() -> Option<ffdec::Swf> {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/swt_templates/f5_template.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/swt_templates/f5_template.swf");
     ffdec::Swf::parse(&std::fs::read(f).ok()?).ok()
 }
 

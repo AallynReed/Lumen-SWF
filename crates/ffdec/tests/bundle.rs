@@ -3,13 +3,13 @@ use std::path::Path;
 use ffdec::bundle::{self, Kind};
 use ffdec::{Compression, SaveOptions, Swf};
 
-fn jpexs(rel: &str) -> Option<Vec<u8>> {
-    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler").join(rel)).ok()
+fn corpus(rel: &str) -> Option<Vec<u8>> {
+    std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus").join(rel)).ok()
 }
 
 #[test]
 fn opens_zip_and_swc() {
-    let Some(zip) = jpexs("libsrc/ffdec_lib/testdata/zipped.zip") else { return };
+    let Some(zip) = corpus("libsrc/ffdec_lib/testdata/zipped.zip") else { return };
     let b = bundle::open(Path::new("zipped.zip"), &zip).unwrap();
     assert_eq!(b.kind, Kind::Zip);
     assert_eq!(b.entries.iter().map(|e| e.0.as_str()).collect::<Vec<_>>(), ["embedded.swf"]);
@@ -20,7 +20,7 @@ fn opens_zip_and_swc() {
     let again = bundle::open(Path::new("zipped.zip"), &out).unwrap();
     assert_eq!(again.entries[0].1, saved);
 
-    let Some(swc) = jpexs("resources/flashlib/playerglobal32_0.swc") else { return };
+    let Some(swc) = corpus("resources/flashlib/playerglobal32_0.swc") else { return };
     let b = bundle::open(Path::new("playerglobal.swc"), &swc).unwrap();
     assert_eq!(b.entries.iter().map(|e| e.0.as_str()).collect::<Vec<_>>(), ["library.swf"]);
     assert!(Swf::parse(&b.entries[0].1).unwrap().is_as3());
@@ -28,7 +28,7 @@ fn opens_zip_and_swc() {
 
 #[test]
 fn finds_embedded_swfs() {
-    let Some(zip) = jpexs("libsrc/ffdec_lib/testdata/zipped.zip") else { return };
+    let Some(zip) = corpus("libsrc/ffdec_lib/testdata/zipped.zip") else { return };
     let b = bundle::open(Path::new("zipped.zip"), &zip).unwrap();
     let swf = Swf::parse(&b.entries[0].1).unwrap();
     let fws = swf.save(&SaveOptions { compression: Compression::None, encrypt: false }).unwrap();

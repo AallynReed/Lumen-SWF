@@ -62,7 +62,7 @@ fn marker_has_length(m: u8) -> bool {
     m != 0 && m != 0xd8 && m != 0xd9 && !(0xd0..=0xd7).contains(&m)
 }
 
-/// Port of FFDec's `JpegFixer`: drops the erroneous `FFD9 FFD8` prefix and the extra
+/// Drops the erroneous `FFD9 FFD8` prefix and the extra
 /// EOI/SOI pairs Flash allows between table and image data.
 pub fn fix_jpeg(d: &[u8]) -> Vec<u8> {
     if d.len() < 2 || d[0] != 0xff || (d[1] != 0xd8 && d[1] != 0xd9) {
@@ -174,7 +174,7 @@ impl Bitmap {
         }
     }
 
-    /// The format FFDec's default "PNG/GIF/JPEG" mode writes.
+    /// The format the default "PNG/GIF/JPEG" mode writes.
     pub fn native_format(&self) -> Format {
         match &self.original {
             Some((f, _)) if self.alpha.is_none() => *f,

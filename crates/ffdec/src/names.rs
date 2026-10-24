@@ -1,5 +1,5 @@
 //! Export names (ExportAssets) and AS3 class names (SymbolClass) per character, and the
-//! file names FFDec derives from them.
+//! file names derived from them.
 
 use std::collections::HashMap;
 
@@ -52,7 +52,7 @@ impl Names {
     }
 }
 
-/// Port of FFDec's `Helper.makeFileName`: percent-encodes characters Windows rejects.
+/// Percent-encodes characters Windows rejects in file names.
 pub fn make_file_name(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {

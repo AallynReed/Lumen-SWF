@@ -1,4 +1,4 @@
-//! FFDec's `Graph.printGraph`, `handleLoop` and `handleSwitch`: turning parts into statements.
+//! Turning graph parts into statements, including loops and switches.
 
 use super::eq;
 use super::graph::*;

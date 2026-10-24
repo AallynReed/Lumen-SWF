@@ -21,7 +21,7 @@ pub fn write_u32v(w: &mut Writer, mut v: u32) {
     }
 }
 
-/// s32 as its u32 bit pattern, as FFDec's `ABCOutputStream.writeS32`.
+/// s32 as its u32 bit pattern.
 pub fn write_s32v(w: &mut Writer, v: i32) {
     write_u32v(w, v as u32);
 }

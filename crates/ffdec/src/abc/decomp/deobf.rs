@@ -1,8 +1,4 @@
-//! FFDec's automatic AS3 deobfuscation (`AVM2Code.removeTraps`): the GetSet, SimpleOld,
-//! RegistersOld, Jumps and ZeroJumpsNullPushes passes over a method's instruction list.
-//!
-//! The passes run the decompiler's own translator symbolically, as FFDec does, and fold the
-//! branches whose condition evaluates statically.
+//! Automatic AS3 deobfuscation: trap removal passes over a method's instruction list.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -19,7 +15,7 @@ use crate::abc::{method_flags, Abc, MethodBody, TraitData};
 
 const EXECUTION_LIMIT: usize = 30000;
 
-/// Why a pass stopped: FFDec throws here, and the caller falls back to the raw body.
+/// Why a pass stopped; the caller falls back to the raw body.
 struct Abort;
 
 type R<T> = Result<T, Abort>;
@@ -796,8 +792,7 @@ fn run(ctx: &Ctx, body: &MethodBody, code: Code, method: usize, is_static: bool,
     Some((d.tr.code, extras))
 }
 
-/// `convertMethodBody(true, ...)`: the fixed code with FFDec's traps removed, or None when a
-/// pass fails, which makes FFDec fall back to the plain body.
+/// The fixed code with traps removed, or None when a pass fails.
 pub fn deobfuscate(ctx: &Ctx, body: &MethodBody, code: Code, method: usize, is_static: bool, script_index: i32, class_index: i32) -> Option<Code> {
     let (mut code, _) = run(ctx, body, code, method, is_static, script_index, class_index)?;
     code.remove_labels_and_debug_line();
@@ -843,8 +838,7 @@ pub fn remove_traps(abc: &mut Abc, method: usize, is_static: bool, script_index:
     true
 }
 
-/// FFDec's optional `AVM2DeobfuscatorGroupParts` on a stored body. False when it fails; the
-/// body is then left as it was.
+/// Optional group-parts pass on a stored body; false when it fails, leaving the body as it was.
 pub fn group_parts_in_place(abc: &mut Abc, method: usize) -> bool {
     let Some(bi) = abc.body_of.get(method).copied().flatten() else { return false };
     let mut code = Code::new(abc, &abc.bodies[bi]);
@@ -899,7 +893,7 @@ fn traits_remove_traps(abc: &mut Abc, traits: &[crate::abc::Trait], script: i32,
     n
 }
 
-/// `ABC.removeTraps`: every trait method of every script, as FFDec's "Remove traps" does.
+/// Removes traps from every trait method of every script.
 pub fn remove_traps_all(abc: &mut Abc) -> usize {
     let mut n = 0;
     for s in 0..abc.scripts.len() {

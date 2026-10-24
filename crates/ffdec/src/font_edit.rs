@@ -1,5 +1,4 @@
-//! DefineFont2/DefineFont3 written back, and glyphs added from TrueType and OpenType fonts like
-//! FFDec's FontTag.addCharacter and SHAPERECORD.fontCharacterToSHAPE.
+//! DefineFont2/DefineFont3 written back, and glyphs added from TrueType and OpenType fonts.
 
 use crate::error::{Error, Result};
 use crate::io::{JavaRound, Reader, Writer};
@@ -107,7 +106,7 @@ impl Font2 {
         if self.v3 { DEFINE_FONT3 } else { DEFINE_FONT2 }
     }
 
-    /// The tag body, widening offsets and codes when they no longer fit, as FFDec does.
+    /// The tag body, widening offsets and codes when they no longer fit.
     pub fn write(&mut self) -> Vec<u8> {
         let shapes: Vec<Vec<u8>> = if self.stripped { Vec::new() } else { self.glyphs.iter().map(|g| glyph_bytes(g)).collect() };
         let n = self.glyphs.len();
@@ -295,8 +294,7 @@ fn kerning(face: &ttf_parser::Face, a: char, b: char, size: f64) -> i16 {
     (v as f64 * size / face.units_per_em() as f64).jround() as i16
 }
 
-/// Moves glyph indices at or after `from` of the font's static texts by `by`, as FFDec's
-/// shiftGlyphIndices does when glyphs are inserted.
+/// Moves glyph indices at or after `from` of the font's static texts by `by`.
 fn shift_texts(swf: &mut Swf, font: u16, from: u32) -> Result<()> {
     let mut paths = Vec::new();
     for (i, t) in swf.timeline.tags.iter().enumerate() {

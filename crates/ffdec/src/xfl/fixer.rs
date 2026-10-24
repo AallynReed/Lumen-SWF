@@ -1,4 +1,4 @@
-//! FFDec's shape fixers (`ShapeFixer`, `MorphShapeFixer`, `SwitchedFillSidesFixer`): split a
+//! Shape fixers: split a
 //! shape into per-style paths, put fills on the side Animate expects, split crossing edges,
 //! and join everything back into records with fractional coordinates.
 //!

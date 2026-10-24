@@ -1,4 +1,4 @@
-//! Human-readable fields for each tag, for the details panel and `ffdec-cli info`.
+//! Human-readable fields for each tag, for the details panel and `lumen-swf-cli info`.
 
 use serde::Serialize;
 

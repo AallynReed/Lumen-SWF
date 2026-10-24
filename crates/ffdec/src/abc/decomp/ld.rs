@@ -1,4 +1,4 @@
-//! FFDec's `BaseLocalData`/`AVM2LocalData`: translation state threaded through the graph.
+//! Translation state threaded through the graph.
 //!
 //! Java copies these objects with a copy constructor that shares most maps, so the maps are
 //! reference counted and a `clone()` behaves like `new AVM2LocalData(other)`.

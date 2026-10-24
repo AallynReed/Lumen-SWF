@@ -1,5 +1,5 @@
 name: Build
-# Tests the core against the JPEXS corpus and bundles the MSI. Every push to main publishes
+# Tests the core against the test corpus and bundles the MSI. Every push to main publishes
 # a release versioned 0.<phase>.<n> (see tools/version.mjs); pull requests only build.
 on:
   push:
@@ -22,11 +22,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch JPEXS test corpus
+      - name: Fetch test corpus
         uses: actions/checkout@v4
         with:
           repository: jindrapetrik/jpexs-decompiler
-          path: jpexs-decompiler
+          path: corpus
           sparse-checkout: libsrc/ffdec_lib/testdata
 
       - uses: dtolnay/rust-toolchain@stable
@@ -56,10 +56,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rust-ffdec-${{ steps.version.outputs.version }}
+          name: lumen-swf-${{ steps.version.outputs.version }}
           path: |
             target/release/bundle/msi/*.msi
-            target/release/ffdec-cli.exe
+            target/release/lumen-swf-cli.exe
           if-no-files-found: error
 
       - name: Publish release
@@ -68,8 +68,8 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Rust-FFDec ${{ steps.version.outputs.version }}
+          name: Lumen-SWF ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
             target/release/bundle/msi/*.msi
-            target/release/ffdec-cli.exe
+            target/release/lumen-swf-cli.exe

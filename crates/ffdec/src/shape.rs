@@ -376,7 +376,7 @@ pub fn write_styles(w: &mut Writer, s: &Styles, shape_num: u8) {
     }
 }
 
-/// Style index bits for the records up to the first new style arrays, as FFDec counts them.
+/// Style index bits for the records up to the first new style arrays.
 pub fn index_bits(records: &[Record]) -> (u32, u32) {
     let (mut fb, mut lb) = (0, 0);
     for r in records {
@@ -395,7 +395,7 @@ pub fn index_bits(records: &[Record]) -> (u32, u32) {
     (fb, lb)
 }
 
-/// Writes records and the end record, like FFDec's writeSHAPERECORDS.
+/// Writes records and the end record.
 pub fn write_records(w: &mut Writer, records: &[Record], mut fill_bits: u32, mut line_bits: u32, shape_num: u8) {
     for r in records {
         match *r {

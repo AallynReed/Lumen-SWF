@@ -1,4 +1,4 @@
-//! AVM2 p-code in FFDec's text format (`trait method …`, `body`, `code`, `ofs0010:`).
+//! AVM2 p-code text (`trait method …`, `body`, `code`, `ofs0010:`).
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -71,7 +71,7 @@ pub fn value_pcode(abc: &Abc, v: &ValueKind) -> String {
     }
 }
 
-/// One instruction without its address, as FFDec's `toStringNoAddress`.
+/// One instruction without its address.
 pub fn instruction_text(abc: &Abc, ins: &Instruction) -> String {
     let c = &abc.constants;
     let mut s = ins.name.to_string();

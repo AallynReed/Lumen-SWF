@@ -1,4 +1,4 @@
-//! Method body decompilation: FFDec's `MethodBody.convert`/`toString` and `AVM2Code.toGraphTargetItems`.
+//! Method body decompilation.
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -30,7 +30,7 @@ pub struct Assigned {
     pub method: usize,
 }
 
-/// FFDec's `ConvertData`: initializer values keyed by trait identity.
+/// Initializer values keyed by trait identity.
 #[derive(Default, Clone)]
 pub struct ConvertData {
     pub assigned: Vec<(*const Trait, Assigned)>,
@@ -49,7 +49,7 @@ impl ConvertData {
     }
 }
 
-/// FFDec's `decompilationTimeoutSingleMethod`, in seconds.
+/// Per-method decompilation timeout, in seconds.
 pub const TIMEOUT_SECS: u64 = 60;
 
 thread_local! {
@@ -70,7 +70,7 @@ pub fn check_deadline() {
     }
 }
 
-/// Runs `f` under FFDec's per-script time limit; `None` when it ran out.
+/// Runs `f` under the per-script time limit; `None` when it ran out.
 pub fn with_deadline<T>(f: impl FnOnce() -> T) -> Option<T> {
     let outer = DEADLINE.get();
     if outer.is_none() {
@@ -163,7 +163,7 @@ pub(super) fn is_timeout(e: &(dyn std::any::Any + Send)) -> bool {
     e.is::<Timeout>()
 }
 
-/// `MethodBody.convert`: decompiles to items, then prints once to a null writer like FFDec.
+/// Decompiles to items, then prints once to a null writer.
 pub fn convert(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>) -> Result<Converted, String> {
     convert_into(ctx, req, cd, seen, &mut Writer::nul())
 }
@@ -233,7 +233,7 @@ pub fn to_source(ctx: &Ctx, req: &MethodReq, conv: &Converted, seen: &HashSet<us
     print::graph_to_string(&v, w, &ld);
 }
 
-/// Convert and print a body in one go, with FFDec's error comment on failure.
+/// Convert and print a body in one go, with an error comment on failure.
 pub fn decompile_to_writer(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, seen: &HashSet<usize>, class_index: i32, w: &mut Writer) {
     match convert(ctx, req, cd, seen) {
         Ok(conv) => {
@@ -277,7 +277,7 @@ fn register_count(code: &Code) -> usize {
     (max + 1) as usize
 }
 
-/// `AVM2Graph.translateViaGraph`, run twice like FFDec's `SecondPassException` retry.
+/// Graph translation, run a second time when a pass asks for it.
 #[allow(clippy::too_many_arguments)]
 fn translate_via_graph(ctx: &Ctx, req: &MethodReq, code: &Code, names: &HashMap<i32, String>, regs: &Shared<HashMap<i32, It>>, types: &Shared<HashMap<i32, It>>, assign: &Shared<HashMap<i32, i32>>, second: Option<SecondPass>, cd: &ConvertData) -> Result<List, SecondPass> {
     let abc = ctx.abc;

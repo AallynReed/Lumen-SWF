@@ -216,7 +216,7 @@ impl Writer {
     }
 }
 
-/// Bits FFDec gives signed fields holding `values`: the largest magnitude's bits plus a sign
+/// Bits for signed fields holding `values`: the largest magnitude's bits plus a sign
 /// bit, none when all are zero.
 pub fn bits_s(values: &[i32]) -> u32 {
     values.iter().map(|&v| if v == 0 { 0 } else { 33 - v.unsigned_abs().leading_zeros() }).max().unwrap_or(0)

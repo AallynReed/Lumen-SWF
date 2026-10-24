@@ -1,4 +1,4 @@
-//! FFDec's `Graph` engine: control-flow graph construction, reachability and common parts.
+//! Graph engine: control-flow graph construction, reachability and common parts.
 //! Structuring (`printGraph`) lives in `structure.rs`, AVM2 specifics in `avm2graph.rs`.
 
 use std::collections::VecDeque;

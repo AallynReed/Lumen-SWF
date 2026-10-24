@@ -1,4 +1,4 @@
-//! FFDec's `HighlightedTextWriter` and `NulWriter`, without the highlighting.
+//! Text writers for decompiled code, without highlighting.
 
 const NEW_LINE: &str = "\r\n";
 const INDENT: &str = "   ";
@@ -20,8 +20,7 @@ pub struct LoopWithType {
 /// A text writer. In "nul" mode it only measures and tracks loop labels, like `NulWriter`.
 pub struct Writer {
     nul: bool,
-    /// `StreamTextWriter`'s line lengths, as FFDec's file export counts them: each append
-    /// once, indentation not at all.
+    /// Count line lengths as the file export does: each append once, indentation not at all.
     stream: bool,
     sb: String,
     new_line: bool,

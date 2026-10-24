@@ -1,5 +1,4 @@
-//! DefineText/DefineText2 records and FFDec's formatted text for them (StaticTextTag's
-//! getFormattedText and setFormattedText, with its TextLexer).
+//! DefineText/DefineText2 records and their formatted text.
 
 use std::collections::{HashMap, HashSet};
 
@@ -108,7 +107,7 @@ impl StaticText {
         Ok(StaticText { id, rgba, bounds, matrix, records })
     }
 
-    /// The tag body, with the smallest glyph and advance fields, as FFDec writes it.
+    /// The tag body, with the smallest glyph and advance fields.
     pub fn write(&self) -> Vec<u8> {
         let mut w = Writer::new();
         w.u16(self.id);
@@ -197,7 +196,7 @@ fn has_layout(font: &Font) -> bool {
     font.ascent.is_some()
 }
 
-/// The system font FFDec measures a font without layout with: the one named in the tag, or
+/// The system font that measures a font without layout: the one named in the tag, or
 /// the part before an underscore, else Times New Roman or Arial.
 fn system_face(font: &Font) -> Option<(Vec<u8>, u32)> {
     use crate::render::raster::fonts;
@@ -214,7 +213,7 @@ fn system_face(font: &Font) -> Option<(Vec<u8>, u32)> {
     db.with_face_data(id, |data, index| (data.to_vec(), index))
 }
 
-/// FFDec's getAdvance: from the font's layout, or for a font without one from the system font
+/// Glyph advance: from the font's layout, or for a font without one from the system font
 /// at the text's whole pixel size, as Java's AWT measures it with fractional metrics.
 fn advance(font: &Font, glyph: u32, height: i32, c: char, next: Option<char>) -> Option<i32> {
     if has_layout(font) {
@@ -299,7 +298,7 @@ fn has_style(r: &Record) -> bool {
     r.font.is_some() || r.color.is_some() || r.x.is_some() || r.y.is_some()
 }
 
-/// FFDec's formatted text: bounds and matrix, then each record's style in brackets and its
+/// Formatted text: bounds and matrix, then each record's style in brackets and its
 /// characters, with letter spacing that differs from the font's advances spelled out.
 pub fn formatted(swf: &Swf, t: &StaticText, ignore_letter_spacing: bool) -> String {
     let mut fonts = Fonts { swf, loaded: HashMap::new() };
@@ -669,7 +668,7 @@ fn color(lx: &mut Lexer, rgba: bool) -> std::result::Result<[u8; 4], ParseError>
 }
 
 /// Parses formatted text into `t`. `texts`, when given, replaces each text run in turn, which
-/// is how FFDec imports plain records into an existing layout.
+/// is how plain records are imported into an existing layout.
 pub fn set_formatted(swf: &Swf, t: &mut StaticText, formatted: &str, texts: Option<&[String]>) -> std::result::Result<(), ParseError> {
     let mut fonts = Fonts { swf, loaded: HashMap::new() };
     let mut lx = Lexer { s: formatted.chars().collect(), pos: 0, line: 1, state: State::Initial, finished: false };
@@ -818,7 +817,7 @@ pub fn set_formatted(swf: &Swf, t: &mut StaticText, formatted: &str, texts: Opti
     Ok(())
 }
 
-/// Replaces a DefineText/2 like FFDec's TextImporter: formatted text when it starts with a
+/// Replaces a DefineText/2: formatted text when it starts with a
 /// bracket line, otherwise plain records, separated as text export writes them, fitted into the
 /// existing layout.
 pub fn import(swf: &mut Swf, path: &[usize], text: &str) -> std::result::Result<(), ParseError> {

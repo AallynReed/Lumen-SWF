@@ -6,6 +6,7 @@ pub mod configuration_builder;
 pub mod configuration_evaluator;
 pub mod constant_evaluator;
 pub mod emitter;
+pub mod flow_analyzer;
 pub mod flow_graph_emitter;
 pub mod interface_walker;
 pub mod meta_data;

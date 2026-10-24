@@ -1,4 +1,4 @@
-//! Script packs: the public definitions of each script, listed by package as FFDec does.
+//! Script packs: the public definitions of each script, listed by package.
 
 use super::{ns_kind, Abc, TraitData};
 
@@ -135,7 +135,7 @@ pub fn entry_pcode(abc: &Abc, e: &Entry) -> String {
             None => return super::pcode::script_pcode(abc, e.script),
         }
     };
-    // Like FFDec, a pack also shows the script initializer and the script's private definitions.
+    // A pack also shows the script initializer and the script's private definitions.
     let mut out = format!("; script initializer\n{}\n{body}", super::pcode::method_pcode(abc, script.init));
     for t in &script.traits {
         let kind = abc.ns_kind_of(t.name);
@@ -151,7 +151,7 @@ pub fn entry_pcode(abc: &Abc, e: &Entry) -> String {
     out
 }
 
-/// A method that can be edited on its own, as FFDec's p-code trait list offers them.
+/// A method that can be edited on its own in the p-code trait list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MethodRef {
     pub label: String,

@@ -1,4 +1,4 @@
-//! Stack, scope and register needs of a method body, from FFDec's AVM2Code.getStats.
+//! Stack, scope and register needs of a method body.
 
 use std::collections::VecDeque;
 
@@ -30,7 +30,7 @@ fn runtime_args(abc: &Abc, index: i64) -> i64 {
     }
 }
 
-/// Pops and pushes on the operand stack, and the scope stack change; None where FFDec has none.
+/// Pops and pushes on the operand stack, and the scope stack change; None when unknown.
 pub(crate) fn deltas(i: &Instruction, abc: &Abc) -> Option<(i64, i64, i64)> {
     let o = &i.operands;
     let rt = || runtime_args(abc, o[0]);
@@ -72,7 +72,7 @@ fn registers(i: &Instruction) -> impl Iterator<Item = usize> + '_ {
 }
 
 /// Walks every path from the entry and from each exception handler. None when the body has
-/// an instruction or jump FFDec cannot account for.
+/// an instruction or jump that cannot be accounted for.
 pub fn stats(abc: &Abc, code: &[Instruction], handlers: &[usize], init_scope: usize) -> Option<(Stats, Option<Problem>)> {
     let pos = |at: usize| code.binary_search_by_key(&at, |i| i.offset).ok();
     let mut seen = vec![false; code.len()];

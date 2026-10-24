@@ -6,11 +6,11 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Compiles JPEXS's decompiled corpus scripts and compares the bytes with what JPEXS 26.4
-/// compiled from the same text, read from `FFDEC_AS2_COMPILE_REF` (the As2Compile driver's
+/// Compiles decompiled corpus scripts and compares the bytes with the reference compiler's
+/// output for the same text, read from `FFDEC_AS2_COMPILE_REF` (the As2Compile driver's
 /// output: one folder per SWF with swf.txt, index.txt, i.as and i.bin).
 #[test]
-fn compiles_like_jpexs() {
+fn compiles_like_reference() {
     let Ok(dir) = std::env::var("FFDEC_AS2_COMPILE_REF") else { return };
     let (mut total, mut bad) = (0, Vec::new());
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
@@ -61,9 +61,9 @@ fn pcode(src: &str) -> String {
     text.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
 }
 
-/// JPEXS's ActionScript2CompilerTest.
+/// ActionScript2CompilerTest.
 #[test]
-fn jpexs_compiler_expectations() {
+fn compiler_expectations() {
     assert_eq!(
         pcode("function outfunc() {\n\tvar v1 = function (){\n\t\tvar a = 1;\n\t\tvar v3 = 2;\n\t\t\n\t\tvar v4 = function (){\n\t\t\tvar v5 = a + 3;\n\t\t}\n\t}\n}"),
         "ConstantPool \"v1\", \"a\", \"v3\", \"v4\", \"v5\"\nDefineFunction \"outfunc\", 0 {\nPush \"v1\"\nDefineFunction2 \"\", 0, 1, false, false, true, false, true, false, true, false, false {\nPush \"a\"\nPush 1\nDefineLocal\nPush \"v3\"\nPush 2\nDefineLocal\nPush \"v4\"\nDefineFunction2 \"\", 0, 1, false, false, true, false, true, false, true, false, false {\nPush \"v5\"\nPush \"a\"\nGetVariable\nPush 3\nAdd2\nDefineLocal\n}\nDefineLocal\n}\nDefineLocal\n}"

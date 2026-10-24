@@ -1,4 +1,4 @@
-//! FFDec's tween recovery: `ClassicTweenDetector` turns runs of keyframes into classic tweens
+//! Tween recovery: `ClassicTweenDetector` turns runs of keyframes into classic tweens
 //! (or motion objects, see `motion`), `FilterTweenDetector` reads animated filters, and
 //! `EasingDetector` finds a shape tween's ease.
 

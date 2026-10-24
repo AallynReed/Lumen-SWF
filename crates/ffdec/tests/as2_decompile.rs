@@ -1,4 +1,4 @@
-//! JPEXS's AS1/2 decompiler expectations (`ActionScript2Test`, `ActionScript2ClassesTest`).
+//! AS1/2 decompiler expectations (`ActionScript2Test`, `ActionScript2ClassesTest`).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -37,9 +37,9 @@ fn clean(s: &str) -> String {
 #[test]
 fn as2_decompile_fixtures() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let testdata = root.join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let testdata = root.join("../../corpus/libsrc/ffdec_lib/testdata");
     if !testdata.is_dir() {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     }
     let mut swfs: HashMap<String, (ffdec::Swf, ffdec::names::Names, Uninitialized)> = HashMap::new();

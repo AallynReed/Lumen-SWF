@@ -1,8 +1,8 @@
-//! SWF to XFL/FLA, a port of FFDec's `XFLConverter`: the library (bitmaps, sounds, videos,
+//! SWF to XFL/FLA: the library (bitmaps, sounds, videos,
 //! fonts and symbols), every timeline with its layers, masks and tweens, the scripts and the
 //! publish settings, written as an XFL folder or a zipped CS5+ FLA.
 //!
-//! Item ids and timestamps follow the export time like FFDec's. Pre-CS5 binary FLA formats are
+//! Item ids and timestamps follow the export time. Pre-CS5 binary FLA formats are
 //! not written.
 
 pub mod convert;

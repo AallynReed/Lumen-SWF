@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 fn corpus() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
     let mut out = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
@@ -21,10 +21,10 @@ fn corpus() -> Vec<PathBuf> {
 
 /// Unmodified files must decompress and re-save byte for byte.
 #[test]
-fn jpexs_corpus_roundtrip() {
+fn corpus_roundtrip() {
     let files = corpus();
     if files.is_empty() {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     }
     let mut failures = Vec::new();

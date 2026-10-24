@@ -1,4 +1,4 @@
-//! DefineFont/2/3 glyph tables, and their conversion to TrueType like FFDec's `FontExporter`.
+//! DefineFont/2/3 glyph tables, and their conversion to TrueType.
 
 use crate::error::{Error, Result};
 use crate::io::Reader;
@@ -72,7 +72,7 @@ impl Font {
         let mut glyphs = Vec::new();
         for (i, g) in self.glyphs.iter().enumerate() {
             let mut unicode = g.code as u32;
-            // Missing or duplicate codes go to the Private Use Area, as FFDec does.
+            // Missing or duplicate codes go to the Private Use Area.
             if unicode == 0 || !seen.insert(unicode) {
                 unicode = 0xE000 + i as u32;
             }

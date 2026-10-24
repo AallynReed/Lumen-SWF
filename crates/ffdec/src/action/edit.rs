@@ -1,5 +1,4 @@
-//! Action list edits that keep jumps and containers pointing at the same actions:
-//! FFDec's `ActionListReader.removeAction`/`addAction`.
+//! Action list edits that keep jumps and containers pointing at the same actions.
 
 use std::collections::HashMap;
 

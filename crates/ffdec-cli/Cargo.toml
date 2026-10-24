@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "ffdec-cli"
+name = "lumen-swf-cli"
 path = "src/main.rs"
 
 [dependencies]

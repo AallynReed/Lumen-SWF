@@ -1,4 +1,4 @@
-//! Rendering items as ActionScript: FFDec's `appendTo` and `toString` family.
+//! Rendering items as ActionScript.
 
 use super::ctx::LocalData;
 use super::eq::eq;

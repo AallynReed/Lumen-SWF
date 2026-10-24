@@ -168,7 +168,7 @@ fn name_table(f: &Font) -> Vec<u8> {
         (0u16, f.copyright.clone()),
         (1, f.family.clone()),
         (2, sub.to_string()),
-        (3, format!("Rust-FFDec: {full}")),
+        (3, format!("Lumen-SWF: {full}")),
         (4, full),
         (5, "Version 1.0".to_string()),
         (6, ps),

@@ -7,9 +7,9 @@ use ffdec::tree::{self, Node};
 use ffdec::{Compression, SaveOptions, Swf};
 
 #[derive(Parser)]
-#[command(name = "ffdec-cli", version = option_env!("FFDEC_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")), about = "Rust-FFDec command line")]
+#[command(name = "lumen-swf-cli", version = option_env!("FFDEC_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")), about = "Lumen-SWF command line")]
 struct Cli {
-    /// Remove obfuscation traps from scripts before decompiling, like FFDec's automatic deobfuscation
+    /// Remove obfuscation traps from scripts before decompiling
     #[arg(long, global = true)]
     deobfuscate: bool,
     #[command(subcommand)]
@@ -20,12 +20,12 @@ struct Cli {
 enum Cmd {
     /// Print the header and any parse warnings
     #[command(after_help = "Examples:
-  ffdec-cli info movie.swf")]
+  lumen-swf-cli info movie.swf")]
     Info { file: PathBuf },
     /// Print the resource tree, or the raw tag list with --raw
     #[command(after_help = "Examples:
-  ffdec-cli tags movie.swf
-  ffdec-cli tags movie.swf --raw")]
+  lumen-swf-cli tags movie.swf
+  lumen-swf-cli tags movie.swf --raw")]
     Tags {
         file: PathBuf,
         #[arg(long)]
@@ -33,19 +33,19 @@ enum Cmd {
     },
     /// Print the fields of one tag, addressed by path such as 12 or 12/3
     #[command(after_help = "Examples:
-  ffdec-cli tag movie.swf 12
-  ffdec-cli tag movie.swf 12/3")]
+  lumen-swf-cli tag movie.swf 12
+  lumen-swf-cli tag movie.swf 12/3")]
     Tag { file: PathBuf, path: String },
     /// Write the raw body of one tag to a file
     #[command(after_help = "Examples:
-  ffdec-cli extract-tag movie.swf 12 body.bin")]
+  lumen-swf-cli extract-tag movie.swf 12 body.bin")]
     ExtractTag { file: PathBuf, path: String, out: PathBuf },
-    /// Export assets into <outdir>/<kind> folders, laid out like FFDec
+    /// Export assets into <outdir>/<kind> folders
     #[command(after_help = "Examples:
-  ffdec-cli export movie.swf outdir
-  ffdec-cli export movie.swf outdir --kinds shapes,sprites --png
-  ffdec-cli export movie.swf outdir --kinds scripts --pcode
-  ffdec-cli export movie.swf outdir --kinds frames --frames-svg --zoom 2")]
+  lumen-swf-cli export movie.swf outdir
+  lumen-swf-cli export movie.swf outdir --kinds shapes,sprites --png
+  lumen-swf-cli export movie.swf outdir --kinds scripts --pcode
+  lumen-swf-cli export movie.swf outdir --kinds frames --frames-svg --zoom 2")]
     Export {
         file: PathBuf,
         outdir: PathBuf,
@@ -77,8 +77,8 @@ enum Cmd {
     },
     /// Render a character (by id) or a root frame (frame:N, 1-based) to .svg or .png
     #[command(after_help = "Examples:
-  ffdec-cli render movie.swf 12 shape.svg
-  ffdec-cli render movie.swf frame:5 frame.png --zoom 2")]
+  lumen-swf-cli render movie.swf 12 shape.svg
+  lumen-swf-cli render movie.swf frame:5 frame.png --zoom 2")]
     Render {
         file: PathBuf,
         what: String,
@@ -88,18 +88,18 @@ enum Cmd {
     },
     /// Print the display list of a root frame (1-based)
     #[command(after_help = "Examples:
-  ffdec-cli frame movie.swf 5")]
+  lumen-swf-cli frame movie.swf 5")]
     Frame { file: PathBuf, frame: usize },
     /// List AS3 scripts (classes and package-level definitions) and AS1/2 scripts (export paths)
     #[command(after_help = "Examples:
-  ffdec-cli scripts movie.swf")]
+  lumen-swf-cli scripts movie.swf")]
     Scripts { file: PathBuf },
     /// Print the p-code of a script: an AS3 full name such as com.example.Main, or an AS1/2
     /// export path such as frame_1/DoAction
     #[command(after_help = "Examples:
-  ffdec-cli pcode movie.swf com.example.Main
-  ffdec-cli pcode movie.swf com.example.Main --method \"instance initializer\"
-  ffdec-cli pcode movie.swf frame_1/DoAction")]
+  lumen-swf-cli pcode movie.swf com.example.Main
+  lumen-swf-cli pcode movie.swf com.example.Main --method \"instance initializer\"
+  lumen-swf-cli pcode movie.swf frame_1/DoAction")]
     Pcode {
         file: PathBuf,
         name: String,
@@ -109,23 +109,23 @@ enum Cmd {
     },
     /// Print the decompiled ActionScript of an AS3 script by full name
     #[command(after_help = "Examples:
-  ffdec-cli as3 movie.swf com.example.Main
-  ffdec-cli as3 movie.swf com.example.Main --deobfuscate")]
+  lumen-swf-cli as3 movie.swf com.example.Main
+  lumen-swf-cli as3 movie.swf com.example.Main --deobfuscate")]
     As3 { file: PathBuf, name: String },
     /// Print the decompiled ActionScript of an AS1/2 script by export path, e.g. frame_1/DoAction
     #[command(after_help = "Examples:
-  ffdec-cli as2 movie.swf frame_1/DoAction")]
+  lumen-swf-cli as2 movie.swf frame_1/DoAction")]
     As2 { file: PathBuf, name: String },
     /// Replace a character (by id) with a file, or a script (by name) with ActionScript or
-    /// .pcode, like FFDec's -replace
+    /// .pcode
     #[command(after_help = "Examples:
-  ffdec-cli replace in.swf out.swf 4 image.png
-  ffdec-cli replace in.swf out.swf 7 shape.svg
-  ffdec-cli replace in.swf out.swf 2 font.ttf --chars \"àéü€\"
-  ffdec-cli replace in.swf out.swf frame_1/DoAction script.as
-  ffdec-cli replace in.swf out.swf com.example.Main Main.as
-  ffdec-cli replace in.swf out.swf com.example.Main method.pcode --method foo
-  ffdec-cli replace in.swf out.swf 12/3 body.bin --raw")]
+  lumen-swf-cli replace in.swf out.swf 4 image.png
+  lumen-swf-cli replace in.swf out.swf 7 shape.svg
+  lumen-swf-cli replace in.swf out.swf 2 font.ttf --chars \"àéü€\"
+  lumen-swf-cli replace in.swf out.swf frame_1/DoAction script.as
+  lumen-swf-cli replace in.swf out.swf com.example.Main Main.as
+  lumen-swf-cli replace in.swf out.swf com.example.Main method.pcode --method foo
+  lumen-swf-cli replace in.swf out.swf 12/3 body.bin --raw")]
     Replace {
         input: PathBuf,
         output: PathBuf,
@@ -143,13 +143,13 @@ enum Cmd {
     },
     /// List the SWFs in a ZIP, SWC or any other file, or extract them into OUTDIR
     #[command(after_help = "Examples:
-  ffdec-cli bundle game.exe
-  ffdec-cli bundle game.exe outdir")]
+  lumen-swf-cli bundle game.exe
+  lumen-swf-cli bundle game.exe outdir")]
     Bundle { file: PathBuf, outdir: Option<PathBuf> },
     /// Export an AS3 SWF as an SWC library
     #[command(after_help = "Examples:
-  ffdec-cli swc movie.swf movie.swc
-  ffdec-cli swc movie.swf movie.swc --no-deps")]
+  lumen-swf-cli swc movie.swf movie.swc
+  lumen-swf-cli swc movie.swf movie.swc --no-deps")]
     Swc {
         input: PathBuf,
         output: PathBuf,
@@ -159,8 +159,8 @@ enum Cmd {
     },
     /// Convert a SWF to an XFL folder (or a zipped FLA with --compressed), named after OUTPUT.fla
     #[command(after_help = "Examples:
-  ffdec-cli xfl movie.swf movie.fla
-  ffdec-cli xfl movie.swf movie.fla --compressed --version cs6")]
+  lumen-swf-cli xfl movie.swf movie.fla
+  lumen-swf-cli xfl movie.swf movie.fla --compressed --version cs6")]
     Xfl {
         input: PathBuf,
         output: PathBuf,
@@ -175,8 +175,8 @@ enum Cmd {
     },
     /// Convert a SWF to an Iggy file, skipping what Iggy cannot store (warnings go to stderr)
     #[command(after_help = "Examples:
-  ffdec-cli swf2iggy movie.swf movie.iggy
-  ffdec-cli swf2iggy movie.swf movie.iggy --variant 32")]
+  lumen-swf-cli swf2iggy movie.swf movie.iggy
+  lumen-swf-cli swf2iggy movie.swf movie.iggy --variant 32")]
     Swf2iggy {
         input: PathBuf,
         output: PathBuf,
@@ -186,12 +186,12 @@ enum Cmd {
     },
     /// Convert an Iggy file to a SWF
     #[command(after_help = "Examples:
-  ffdec-cli iggy2swf movie.iggy movie.swf")]
+  lumen-swf-cli iggy2swf movie.iggy movie.swf")]
     Iggy2swf { input: PathBuf, output: PathBuf },
-    /// Print a shared object (.sol) as FFDec's AMF text, or with --set store edited text in OUT
+    /// Print a shared object (.sol) as AMF text, or with --set store edited text in OUT
     #[command(after_help = "Examples:
-  ffdec-cli sol data.sol
-  ffdec-cli sol data.sol --set data.txt --out edited.sol")]
+  lumen-swf-cli sol data.sol
+  lumen-swf-cli sol data.sol --set data.txt --out edited.sol")]
     Sol {
         file: PathBuf,
         #[arg(long, requires = "out")]
@@ -199,33 +199,33 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
-    /// Print one AMF3 value (such as ByteArray.writeObject output) as FFDec's AMF text
+    /// Print one AMF3 value (such as ByteArray.writeObject output) as AMF text
     #[command(after_help = "Examples:
-  ffdec-cli amf value.bin")]
+  lumen-swf-cli amf value.bin")]
     Amf { file: PathBuf },
-    /// Rewrite every AS3 method with obfuscation traps removed, like FFDec's -deobfuscate
+    /// Rewrite every AS3 method with obfuscation traps removed
     #[command(after_help = "Examples:
-  ffdec-cli deobfuscate in.swf out.swf
-  ffdec-cli deobfuscate in.swf out.swf --dead-code
-  ffdec-cli deobfuscate in.swf out.swf --group-parts")]
+  lumen-swf-cli deobfuscate in.swf out.swf
+  lumen-swf-cli deobfuscate in.swf out.swf --dead-code
+  lumen-swf-cli deobfuscate in.swf out.swf --group-parts")]
     Deobfuscate {
         input: PathBuf,
         output: PathBuf,
         /// Only remove unreachable code
         #[arg(long, conflicts_with = "group_parts")]
         dead_code: bool,
-        /// Move blocks reached by a single jump to where they are jumped to (FFDec's GroupParts)
+        /// Move blocks reached by a single jump to where they are jumped to
         #[arg(long)]
         group_parts: bool,
     },
     /// Write an uncompressed copy (also removes Harman encryption)
     #[command(after_help = "Examples:
-  ffdec-cli decompress in.swf out.swf")]
+  lumen-swf-cli decompress in.swf out.swf")]
     Decompress { input: PathBuf, output: PathBuf },
     /// Recompress with zlib, lzma or abc
     #[command(after_help = "Examples:
-  ffdec-cli compress in.swf out.swf --format lzma
-  ffdec-cli compress in.swf out.swf --format zlib --encrypt")]
+  lumen-swf-cli compress in.swf out.swf --format lzma
+  lumen-swf-cli compress in.swf out.swf --format zlib --encrypt")]
     Compress {
         input: PathBuf,
         output: PathBuf,

@@ -182,7 +182,7 @@ impl Cx {
         self.value_kind_of(ty, val, generated_ns, false)
     }
 
-    /// `getValueKind`; a parameter's default may also be the global `NaN`, which FFDec rejects.
+    /// A value's constant kind; a parameter default may also be the global `NaN`.
     pub fn value_kind_of(&mut self, ty: Option<&Node>, val: Option<&Node>, generated_ns: bool, param: bool) -> Option<(usize, u8)> {
         let val = val?;
         let is_ns = ty.is_some_and(|t| matches!(&*t.borrow(), Item::Name(n) if n.var == "namespace") || is_type_named(t, &["Namespace"]));

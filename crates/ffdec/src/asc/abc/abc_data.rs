@@ -142,12 +142,12 @@ pub struct BinaryMN {
 pub struct Namespace {
     name_offset: i32,
     pub ns_kind: i8,
-    name: String,
+    name: Option<String>,
 }
 
 impl Namespace {
     pub fn get_name(&self) -> String {
-        self.name.clone()
+        self.name.clone().expect("ArrayIndexOutOfBoundsException")
     }
 }
 
@@ -168,7 +168,7 @@ pub struct Method {
     flags: i32,
     optional_param_types: Vec<i32>,
     optional_param_kinds: Vec<i32>,
-    param_names: Vec<String>,
+    param_names: Vec<Option<String>>,
 }
 
 impl Method {
@@ -191,7 +191,7 @@ impl Method {
         &self.optional_param_kinds
     }
     pub fn get_param_names(&self) -> Vec<String> {
-        self.param_names.clone()
+        self.param_names.iter().map(|n| n.clone().expect("ArrayIndexOutOfBoundsException")).collect()
     }
     pub fn get_needs_rest(&self) -> bool {
         (self.flags & METHOD_Needrest) != 0 || (self.flags & METHOD_IgnoreRest) != 0
@@ -469,11 +469,8 @@ impl AbcData {
         }
 
         let size = buf.read_u32() as usize;
-        self.strings = vec![String::new(); size.max(1)];
-        self.strings.truncate(size);
-        if size > 0 {
-            self.strings[0] = String::new();
-        }
+        self.strings = vec![String::new(); size];
+        self.strings[0] = String::new();
         for i in 1..size {
             let length = buf.read_u32();
             self.strings[i] = buf.read_string(length).unwrap_or_default();
@@ -485,7 +482,7 @@ impl AbcData {
         for i in 1..size {
             let ns_kind = buf.read_u8();
             let name_offset = buf.read_u32();
-            let name = self.strings[name_offset as usize].clone();
+            let name = self.strings.get(name_offset as usize).cloned();
             self.namespaces[i] = Some(Namespace { name_offset, ns_kind: ns_kind as i8, name });
         }
 
@@ -548,7 +545,7 @@ impl AbcData {
                 optional_param_kinds.push(buf.read_u8());
             }
             let param_name_count = if (flags & METHOD_HasParamNames) != 0 { param_count } else { 0 };
-            let param_names: Vec<String> = (0..param_name_count).map(|_| self.strings[buf.read_u32() as usize].clone()).collect();
+            let param_names: Vec<Option<String>> = (0..param_name_count).map(|_| self.strings.get(buf.read_u32() as usize).cloned()).collect();
             self.methods.push(Method { return_type, param_types, name_index, flags, optional_param_types, optional_param_kinds, param_names });
         }
     }

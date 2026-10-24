@@ -57,7 +57,7 @@ impl Swf {
         })
     }
 
-    /// A new uncompressed movie; `frame_rate` is stored as UFIXED8 like FFDec's `writeUFIXED8`.
+    /// A new uncompressed movie; `frame_rate` is stored as UFIXED8.
     pub fn new(version: u8, frame_rect: Rect, frame_rate: f32, frame_count: u16, tags: Vec<Tag>) -> Swf {
         let header = Header { signature: "FWS".into(), compression: Compression::None, gfx: false, encrypted: false, version, file_size: 0, lzma_props: None };
         let mut w = Writer::new();
@@ -228,7 +228,7 @@ impl Swf {
         Ok(removed)
     }
 
-    /// One more than the highest character id defined or imported, as FFDec picks new ids.
+    /// One more than the highest character id defined or imported.
     pub fn next_character_id(&self) -> u16 {
         let mut max = 0;
         self.walk(|_, t| {

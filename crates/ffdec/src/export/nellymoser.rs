@@ -1,4 +1,4 @@
-//! Nellymoser decoder, ported from the JPEXS copy of lt.dkd.nellymoser.
+//! Nellymoser decoder, ported from lt.dkd.nellymoser.
 #![allow(clippy::excessive_precision)]
 
 const BLOCK_LEN: usize = 64;

@@ -1,4 +1,4 @@
-//! AS1/2 script sources of a SWF and their tree, as FFDec's `getFirstLevelASMNodes`/`getASMs`.
+//! AS1/2 script sources of a SWF and their tree.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -29,9 +29,9 @@ pub struct Source {
     pub index: usize,
     pub start: usize,
     pub end: usize,
-    /// FFDec's `toString`.
+    /// Tree label.
     pub label: String,
-    /// FFDec's `getExportFileName`.
+    /// Export file name.
     pub export_name: String,
     /// `on(...)`/`onClipEvent(...)` around the decompiled body.
     pub header: Option<String>,
@@ -616,7 +616,7 @@ impl Package {
     }
 }
 
-/// The AS1/2 script tree of a SWF, in FFDec's order. Empty for SWFs without AS1/2 code.
+/// The AS1/2 script tree of a SWF. Empty for SWFs without AS1/2 code.
 pub fn tree(swf: &Swf) -> Vec<Node> {
     let ctx = Ctx { swf, names: Names::new(swf), labels: crate::info::character_names(swf) };
     let tl = &swf.timeline;
@@ -677,7 +677,7 @@ pub fn tree(swf: &Swf) -> Vec<Node> {
     out
 }
 
-/// Every source with its export path (`dir/name`, no extension), deduplicated like FFDec.
+/// Every source with its unique export path (`dir/name`, no extension).
 pub fn export_paths(nodes: &[Node]) -> Vec<(String, Source)> {
     fn go(nodes: &[Node], dir: &str, used: &mut HashMap<String, Vec<String>>, out: &mut Vec<(String, Source)>) {
         for n in nodes {

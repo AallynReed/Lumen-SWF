@@ -1,5 +1,4 @@
-//! FFDec's `AbcIndexing` as the compiler uses it: classes and traits of every ABC in the SWF,
-//! over the player's global library.
+//! Classes and traits of every ABC in the SWF, over the player's global library.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};

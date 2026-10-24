@@ -1,4 +1,4 @@
-//! Action serialization, as FFDec's `Action.getBytes`.
+//! Action serialization.
 
 use crate::io::Writer;
 

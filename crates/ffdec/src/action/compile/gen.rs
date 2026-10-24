@@ -1176,7 +1176,7 @@ impl Gen {
         Ok(ret)
     }
 
-    /// `toSourceMerge` over a command list: values are kept, as FFDec's catch bodies do.
+    /// `toSourceMerge` over a command list: values are kept, as in catch bodies.
     fn generate_src_merge(&mut self, ld: &mut Ld, cmds: &[It]) -> R<L> {
         let mut out = Vec::new();
         for c in cmds {

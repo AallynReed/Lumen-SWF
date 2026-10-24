@@ -1,4 +1,4 @@
-//! AS3 compiler: FFDec's `ActionScript3Parser`, `AVM2SourceGenerator` and `AbcIndexing`.
+//! AS3 compiler: parser, code generator and ABC index.
 
 pub mod assign;
 pub mod ast;

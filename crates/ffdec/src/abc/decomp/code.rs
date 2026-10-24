@@ -1,5 +1,4 @@
-//! A method body's instruction list prepared for decompilation: FFDec's `AVM2Code` plus
-//! the `GraphSource` view the graph works on.
+//! A method body's instruction list prepared for decompilation, and its graph view.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -145,7 +144,7 @@ impl Ins {
         Ins { addr: i.offset as i64, len: i.len as i64, code: i.code, name: i.name, kinds: i.kinds, ops: i.operands, ignored: false, line: 0, file: None, bodies: vec![], container_end: None, define_function: false, id: next_id(), lit: None }
     }
 
-    /// A new instruction; `name` overrides the opcode's name (FFDec's `ffdec_deobfuscatepop`).
+    /// A new instruction; `name` overrides the opcode's name.
     pub fn make(code: u8, name: Option<&'static str>, ops: Vec<i64>, lit: Option<Lit>) -> Ins {
         let d = crate::abc::opcodes::def(code).expect("opcode");
         let i = Instruction { offset: 0, len: 0, code, name: d.name, kinds: d.operands, operands: ops };

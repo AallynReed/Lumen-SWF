@@ -1,6 +1,6 @@
-//! The decompiler's expression and statement tree: FFDec's `GraphTargetItem` hierarchy.
+//! The decompiler's expression and statement tree.
 //!
-//! Items are shared and mutated in place, as in FFDec, so they live behind `Rc<RefCell<..>>` and
+//! Items are shared and mutated in place, so they live behind `Rc<RefCell<..>>` and
 //! identity (`Rc::ptr_eq`) stands in for Java's `==`.
 
 use std::cell::RefCell;

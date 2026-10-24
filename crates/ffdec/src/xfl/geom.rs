@@ -1,4 +1,4 @@
-//! FFDec's `math` package (BezierEdge, BezierUtils, Intersections, Polynomial) and the parts of
+//! Bezier edges, intersections and polynomials, and the parts of
 //! Java2D's `Path2D` and `FlatteningPathIterator` the shape fixers use.
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -1,4 +1,4 @@
-//! JPEXS's `ActionScript3DeobfuscatorTest` p-code cases: remove traps, then decompile.
+//! `ActionScript3DeobfuscatorTest` p-code cases: remove traps, then decompile.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -39,9 +39,9 @@ fn test_abc(pcode: &str) -> Abc {
 
 #[test]
 fn as3_deobfuscator_cases() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib");
     let Ok(data) = std::fs::read(root.join("testdata/as3/as3.swf")) else {
-        eprintln!("JPEXS test corpus not found; skipping");
+        eprintln!("test corpus not found; skipping");
         return;
     };
     let swf = ffdec::Swf::parse(&data).unwrap();
@@ -83,7 +83,7 @@ fn as3_deobfuscator_cases() {
 /// `recompile`: compiles a `Test.test()` body next to as3.swf's classes and decompiles it with
 /// automatic deobfuscation.
 fn recompile(body: &str) -> Option<String> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib");
     let swf = ffdec::Swf::parse(&std::fs::read(root.join("testdata/as3/as3.swf")).ok()?).unwrap();
     let mut abcs = Vec::new();
     swf.walk(|_, t| {

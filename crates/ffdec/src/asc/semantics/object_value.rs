@@ -457,11 +457,19 @@ impl ObjectValue {
         if let Disp::Wrapper(w) = self.disp() {
             return w.remove_name(cx, kind, name, qualifier);
         }
-        let mut d = self.0.borrow_mut();
-        if let Some(names) = &mut d.names {
-            names.put(name, qualifier, Names::get_type_from_kind(kind), -1);
+        if self.0.borrow().names.is_some() {
+            self.with_names_taken(|names| names.put(name, qualifier, Names::get_type_from_kind(kind), -1));
         }
         true
+    }
+
+    /// Runs `f` on the names table with this object unborrowed: a qualifier can be this very object (an interface is
+    /// its own default namespace), and `Names` reads the qualifier's name.
+    fn with_names_taken<R>(&self, f: impl FnOnce(&mut Names) -> R) -> R {
+        let mut names = self.0.borrow_mut().names.take().unwrap_or_default();
+        let r = f(&mut names);
+        self.0.borrow_mut().names = Some(names);
+        r
     }
 
     pub fn has_name(&self, cx: &Context, kind: i32, name: &str, qualifier: &ObjectValue) -> bool {
@@ -668,7 +676,7 @@ impl ObjectValue {
         if self.has_name(cx, kind, name, qualifier) {
             0
         } else {
-            self.0.borrow_mut().names.as_mut().unwrap().put(name, qualifier, Names::get_type_from_kind(kind), slot_index);
+            self.with_names_taken(|names| names.put(name, qualifier, Names::get_type_from_kind(kind), slot_index));
             1
         }
     }
@@ -678,8 +686,7 @@ impl ObjectValue {
         if let Disp::Wrapper(w) = self.disp() {
             return w.with_names_and_create(f);
         }
-        let mut d = self.0.borrow_mut();
-        f(d.names.get_or_insert_with(Names::new))
+        self.with_names_taken(f)
     }
 
     pub fn define_names(&self, cx: &Context, kind: i32, name: &str, namespaces: &Namespaces, slot_index: i32) -> bool {
@@ -687,11 +694,11 @@ impl ObjectValue {
             return w.define_names(cx, kind, name, namespaces, slot_index);
         }
         let nss = namespaces.to_vec();
-        let mut d = self.0.borrow_mut();
-        let names = d.names.get_or_insert_with(Names::new);
-        for it in &nss {
-            names.put(name, it, Names::get_type_from_kind(kind), slot_index);
-        }
+        self.with_names_taken(|names| {
+            for it in &nss {
+                names.put(name, it, Names::get_type_from_kind(kind), slot_index);
+            }
+        });
         true
     }
 

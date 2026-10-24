@@ -12,15 +12,15 @@ pub struct Config {
     pub register_name_format: String,
     pub local_names_from_debug: bool,
     pub param_names: bool,
-    /// FFDec's `autoDeobfuscate`.
+    /// Automatic deobfuscation.
     pub deobfuscate: bool,
     /// `ScriptExportMode.PCODE`: method bodies are printed as p-code.
     pub pcode: bool,
-    /// Wrap lines as FFDec's file export does (`StreamTextWriter`), not as its editor does.
+    /// Wrap lines as the file export does, not as the editor does.
     pub file_writer: bool,
 }
 
-/// FFDec's global `autoDeobfuscate` setting, which new configs start from.
+/// The global automatic deobfuscation setting new configs start from.
 pub static AUTO_DEOBFUSCATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl Default for Config {
@@ -30,7 +30,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// The settings FFDec's decompiler tests run with.
+    /// The settings the decompiler tests run with.
     pub fn testing() -> Config {
         Config { display_dup_instructions: true, qname_obfuscated_in_brackets: true, ..Config::default() }
     }
@@ -52,7 +52,7 @@ pub struct Ctx<'a> {
     pub doc: Option<DocClass>,
     /// `[Embed(...)]` lines of classes bound to SWF characters, by raw class name.
     pub embeds: HashMap<String, Vec<String>>,
-    /// FFDec's FLA export mode: frame scripts and generated accessibility code are left out.
+    /// FLA export mode: frame scripts and generated accessibility code are left out.
     pub fla: bool,
 }
 
@@ -83,7 +83,6 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// FFDec's `LocalData` for AS3.
 pub struct LocalData<'c, 'a> {
     pub ctx: &'c Ctx<'a>,
     pub local_reg_names: HashMap<i32, String>,
@@ -91,7 +90,7 @@ pub struct LocalData<'c, 'a> {
     pub seen_methods: HashSet<usize>,
     pub class_index: i32,
     pub call_stack: Vec<usize>,
-    /// Printing AS1/2 (`localData.abc == null` in FFDec).
+    /// Printing AS1/2.
     pub as2: bool,
     /// `localData.as2ClassMemberScope`.
     pub as2_scope: std::cell::RefCell<Option<std::rc::Rc<crate::action::decomp::print::Scope>>>,

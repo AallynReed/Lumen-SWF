@@ -49,12 +49,12 @@ fn lexes_sources() {
 }
 
 /// Compiling what the decompiler printed for compiled code gives the same code back: for
-/// every class of FFDec's AS3 test movie, the second compile decompiles like the first.
+/// every class of the AS3 test movie, the second compile decompiles like the first.
 #[test]
 fn recompiling_is_stable() {
     use ffdec::abc::decomp::{entry_source, index::AbcIndex, SwfContext};
     use ffdec::abc::{scripts::entries, tag_abc, Abc};
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/as3_new/bin/as3_new.flex.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/as3_new/bin/as3_new.flex.swf");
     let Ok(data) = std::fs::read(f) else { return };
     let swf = ffdec::Swf::parse(&data).unwrap();
     let mut abcs = Vec::new();
@@ -107,15 +107,15 @@ fn recompiling_is_stable() {
 "));
 }
 
-/// JPEXS's own recompile of every script pack, from `FFDEC_AS3_RECOMPILE` (the As3Recompile
+/// Recompile of every script pack, from `FFDEC_AS3_RECOMPILE` (the As3Recompile
 /// driver's output directory), compared byte for byte.
 #[test]
-fn recompiles_like_ffdec() {
+fn recompiles_like_reference() {
     use ffdec::abc::{tag_abc, Abc};
     let Ok(root) = std::env::var("FFDEC_AS3_RECOMPILE") else { return };
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(&root).unwrap().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
     dirs.sort();
-    let (mut same, mut differ, mut failed, mut ffdec_failed, mut skipped, mut multi, mut ours_where_ffdec_failed) = (0, 0, 0, 0, 0, 0, 0);
+    let (mut same, mut differ, mut failed, mut ref_failed, mut skipped, mut multi, mut ours_where_ref_failed) = (0, 0, 0, 0, 0, 0, 0);
     let mut report = Vec::new();
     let only = std::env::var("FFDEC_AS3_ONLY").ok();
     for d in &dirs {
@@ -146,7 +146,7 @@ fn recompiles_like_ffdec() {
             let expected = std::fs::read(d.join(format!("{i}.abc")));
             let tag: Option<usize> = std::fs::read_to_string(d.join(format!("{i}.tag"))).ok().and_then(|s| s.trim().parse().ok());
             let Ok(expected) = expected else {
-                ffdec_failed += 1;
+                ref_failed += 1;
                 let jerr = std::fs::read_to_string(d.join(format!("{i}.err"))).unwrap_or_default();
                 let sel = tag.and_then(|t| tag_pos.iter().position(|&p| p == t)).unwrap_or(0);
                 let found: Vec<_> = ffdec::abc::scripts::entries(&abcs[sel]).into_iter().filter(|e| e.full_name() == path && e.trait_index.is_some()).collect();
@@ -154,10 +154,10 @@ fn recompiles_like_ffdec() {
                     let r = ffdec::abc::compile::replace_script(&abcs, sel, e.script, e.trait_index, &text, doc.as_deref());
                     match r {
                         Ok(_) => {
-                            ours_where_ffdec_failed += 1;
-                            report.push(format!("OURS {}/{i} {path}: compiles; FFDec: {}", d.file_name().unwrap().to_string_lossy(), jerr.trim()));
+                            ours_where_ref_failed += 1;
+                            report.push(format!("OURS {}/{i} {path}: compiles; reference: {}", d.file_name().unwrap().to_string_lossy(), jerr.trim()));
                         }
-                        Err(e) => report.push(format!("BOTH {}/{i} {path}: {e}; FFDec: {}", d.file_name().unwrap().to_string_lossy(), jerr.trim())),
+                        Err(e) => report.push(format!("BOTH {}/{i} {path}: {e}; reference: {}", d.file_name().unwrap().to_string_lossy(), jerr.trim())),
                     }
                 }
                 continue;
@@ -182,7 +182,7 @@ fn recompiles_like_ffdec() {
             };
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ffdec::abc::compile::replace_script_renamed(&abcs, sel, script, trait_index, &text, doc.as_deref(), &renames))) {
                 Ok(Ok(out)) if simple == "false" => {
-                    // FFDec appends these as the entry script, so only check ours is whole.
+                    // The reference appends these as the entry script, so only check ours is whole.
                     let bytes = out.to_bytes();
                     let names = |a: &Abc| {
                         let mut v: Vec<String> = ffdec::abc::scripts::entries(a).into_iter().filter(|e| e.trait_index.is_some()).map(|e| e.full_name()).collect();
@@ -216,7 +216,7 @@ fn recompiles_like_ffdec() {
                             let ours = dump(&out);
                             let theirs = Abc::parse(&expected).map(|a| dump(&a)).unwrap_or_default();
                             let _ = std::fs::write(Path::new(&dir).join(format!("{name}.ours.txt")), ours);
-                            let _ = std::fs::write(Path::new(&dir).join(format!("{name}.ffdec.txt")), theirs);
+                            let _ = std::fs::write(Path::new(&dir).join(format!("{name}.ref.txt")), theirs);
                         }
                     }
                 }
@@ -241,7 +241,7 @@ fn recompiles_like_ffdec() {
     for r in report.iter().take(40) {
         eprintln!("{r}");
     }
-    eprintln!("same {same}, differ {differ}, multi-definition scripts compiled {multi}, failed {failed}, ffdec failed {ffdec_failed} (we compile {ours_where_ffdec_failed}), skipped {skipped}");
+    eprintln!("same {same}, differ {differ}, multi-definition scripts compiled {multi}, failed {failed}, reference failed {ref_failed} (we compile {ours_where_ref_failed}), skipped {skipped}");
 }
 
 fn dump(abc: &ffdec::abc::Abc) -> String {

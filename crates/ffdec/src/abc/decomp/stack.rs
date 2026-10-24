@@ -1,4 +1,4 @@
-//! FFDec's `TranslateStack`: the expression stack plus deferred output of a translated block.
+//! The expression stack plus deferred output of a translated block.
 
 use std::cell::Cell;
 use std::collections::HashMap;

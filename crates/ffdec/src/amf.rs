@@ -1,10 +1,4 @@
-//! AMF0 and AMF3 values, ported from FFDec's `amf` package: reading, writing, FFDec's text
-//! form (`Amf0Exporter`/`Amf3Exporter` and their importers) and local shared object (.sol) files.
-//!
-//! Objects live in an arena so references and cycles survive a round trip. Unlike FFDec, AMF3
-//! doubles with integral values print as `5.0` so they stay doubles when read back, AMF0 numbers
-//! written as integers are accepted, dates print in UTC, and AMF3 values inside AMF0 are written
-//! back with the AVM+ marker.
+//! AMF0 and AMF3 values, their text form, and local shared object (.sol) files.
 
 use std::collections::HashMap;
 
@@ -15,7 +9,7 @@ use crate::error::{Error, Result};
 pub enum Value {
     Undefined,
     Null,
-    /// A value FFDec could not read; written as nothing.
+    /// A value that could not be read; written as nothing.
     Unknown,
     Bool(bool),
     /// AMF3 integer.
@@ -820,12 +814,12 @@ impl Sol {
         Ok(out)
     }
 
-    /// The variables as FFDec's text (`amfMapToString`).
+    /// The variables as AMF text.
     pub fn to_text(&self) -> String {
         map_to_string(&self.amf, &self.vars, self.amf_version == 0)
     }
 
-    /// Replaces the variables with ones parsed from FFDec's text.
+    /// Replaces the variables with ones parsed from AMF text.
     pub fn set_text(&mut self, text: &str) -> std::result::Result<(), ParseError> {
         let (amf, vars) = parse_map(text, self.amf_version == 0)?;
         self.amf = amf;
@@ -1119,7 +1113,7 @@ fn to_string0(amf: &Amf, v: &Value, level: usize, nl: &str, r: &mut Refs, visite
     s
 }
 
-/// One AMF3 value as FFDec's text.
+/// One AMF3 value as AMF text.
 pub fn to_text(amf: &Amf, v: &Value) -> String {
     let mut r = Refs::new(amf, std::iter::once(v), false);
     to_string3(amf, v, 0, "\n", &mut r)
@@ -1347,7 +1341,7 @@ fn lex(src: &str) -> Vec<(Tok, usize)> {
     out
 }
 
-/// The JSON-like structure of FFDec's AMF text, before typed objects are built.
+/// The JSON-like structure of AMF text, before typed objects are built.
 #[derive(Debug, Clone)]
 enum Js {
     Obj(Vec<(Js, Js)>, usize),

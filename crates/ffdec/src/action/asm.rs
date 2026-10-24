@@ -1,4 +1,4 @@
-//! AS1/2 p-code assembler: FFDec's `FlasmLexer` and `ASMParser`.
+//! AS1/2 p-code assembler.
 
 use std::sync::Arc;
 

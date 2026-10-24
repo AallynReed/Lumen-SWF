@@ -12,9 +12,9 @@ fn inflate_lossless(code: u16, b: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Imports `svg` into the root shape at `at` and compares the result with JPEXS's `stem.tags`
+/// Imports `svg` into the root shape at `at` and compares the result with `stem.tags`
 /// (the tags it added: code, length, body) and `stem.shape` in `d`. Shapes are compared as
-/// decoded records, since FFDec writes matrices with scale and rotation fields even when they
+/// decoded records, since the reference writes matrices with scale and rotation fields even when they
 /// are identity. Ok(true) when the shape is byte-identical.
 fn compare(orig: &ffdec::Swf, at: usize, svg: &str, fill: bool, d: &Path, stem: &str) -> Result<bool, String> {
     let mut swf = orig.clone();
@@ -60,10 +60,10 @@ fn compare(orig: &ffdec::Swf, at: usize, svg: &str, fill: bool, d: &Path, stem: 
     }
 }
 
-/// JPEXS 26.4's SVG export of each root corpus shape, imported back by JPEXS, read from
+/// The reference SVG export of each root corpus shape, imported back, read from
 /// `FFDEC_SVG_REF` (the SvgDump driver's output), filled and at its own size.
 #[test]
-fn svgs_import_like_jpexs() {
+fn svgs_import_like_reference() {
     let Ok(dir) = std::env::var("FFDEC_SVG_REF") else { return };
     let (mut total, mut same_bytes, mut bad) = (0, 0, Vec::new());
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
@@ -96,10 +96,10 @@ fn svgs_import_like_jpexs() {
 }
 
 /// Hand-written SVGs covering basic shapes, arcs, cubics, CSS, transforms, units, switch and
-/// gradient inheritance, imported by JPEXS into one shape of each version (`FFDEC_SVG_CASES`,
+/// gradient inheritance, imported by the reference into one shape of each version (`FFDEC_SVG_CASES`,
 /// the SvgCases driver's output, with the SVGs in `FFDEC_SVG_CASES_SRC`).
 #[test]
-fn svg_cases_import_like_jpexs() {
+fn svg_cases_import_like_reference() {
     let (Ok(dir), Ok(src)) = (std::env::var("FFDEC_SVG_CASES"), std::env::var("FFDEC_SVG_CASES_SRC")) else { return };
     let dir = PathBuf::from(dir);
     let index = std::fs::read_to_string(dir.join("index.txt")).unwrap();
@@ -131,7 +131,7 @@ fn svg_cases_import_like_jpexs() {
 
 #[test]
 fn media_rules_apply() {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/as2/as2.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/as2/as2.swf");
     let Ok(data) = std::fs::read(f) else { return };
     let mut swf = ffdec::Swf::parse(&data).unwrap();
     let at = swf.timeline.tags.iter().position(|t| ffdec::shape::is_shape(t.code)).unwrap();

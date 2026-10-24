@@ -4,7 +4,7 @@ use ffdec::edit::{header, set_header};
 use ffdec::swf::SaveOptions;
 
 fn sample() -> Option<ffdec::Swf> {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/debug_game/as2_scoring.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/debug_game/as2_scoring.swf");
     ffdec::Swf::parse(&std::fs::read(f).ok()?).ok()
 }
 
@@ -39,7 +39,7 @@ fn bad_header_values_are_refused() {
 
 #[test]
 fn removing_a_show_frame_keeps_frame_counts() {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../jpexs-decompiler/libsrc/ffdec_lib/testdata/as2/as2.swf");
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/as2/as2.swf");
     let Some(mut swf) = std::fs::read(f).ok().and_then(|d| ffdec::Swf::parse(&d).ok()) else { return };
     let (sprite, show) = swf
         .timeline

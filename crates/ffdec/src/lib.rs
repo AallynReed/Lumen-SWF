@@ -1,4 +1,4 @@
-//! Rust port of the JPEXS Free Flash Decompiler core library.
+//! Rust port of the Free Flash Decompiler core library.
 
 pub mod abc;
 pub mod amf;
@@ -33,7 +33,7 @@ pub use error::{Error, Result};
 pub use swf::{SaveOptions, Swf};
 pub use tags::Tag;
 
-/// Turns FFDec's automatic deobfuscation on or off for everything decompiled afterwards.
+/// Turns automatic deobfuscation on or off for everything decompiled afterwards.
 pub fn set_auto_deobfuscate(on: bool) {
     abc::decomp::ctx::AUTO_DEOBFUSCATE.store(on, std::sync::atomic::Ordering::Relaxed);
 }

@@ -392,7 +392,7 @@ function renderPreview(info, data) {
         previewUrl = URL.createObjectURL(new Blob([data], { type: info.mime }));
         el.innerHTML = `<audio controls preload="metadata" src="${previewUrl}"></audio>`;
     } else if (info.kind === 'font') {
-        const family = `ffdec-preview-${Date.now()}`;
+        const family = `lumen-preview-${Date.now()}`;
         const face = new FontFace(family, data);
         previewFont = face;
         face.load().then((f) => {

@@ -1,4 +1,4 @@
-//! The tag fields the XFL converter reads, parsed the way FFDec's tag classes expose them.
+//! The tag fields the XFL converter reads.
 
 use std::collections::HashMap;
 
@@ -8,7 +8,7 @@ use crate::tags::{code::*, Tag, Timeline};
 use crate::types::{Rect, Rgba};
 use crate::Swf;
 
-/// FFDec's `MATRIX`: float scale and skew, integer translation, and whether scale and skew
+/// A MATRIX: float scale and skew, integer translation, and whether scale and skew
 /// were present.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct JMatrix {
@@ -50,7 +50,7 @@ impl JMatrix {
     }
 }
 
-/// FFDec's `commonshape.Matrix`, in doubles.
+/// A matrix in doubles.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DMatrix {
     pub scale_x: f64,
@@ -558,7 +558,7 @@ pub fn stream_ranges(container: i32, tags: &[Tag], scene_offsets: &[u32], out: &
 /// Character ids of every DefineX tag, with the path to the tag.
 pub struct Chars {
     pub by_id: HashMap<u16, Vec<usize>>,
-    /// Ids in the order FFDec's `getCharacters` HashMap iterates them.
+    /// Ids in the order a Java `HashMap` iterates them.
     pub order: Vec<u16>,
 }
 

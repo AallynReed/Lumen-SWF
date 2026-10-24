@@ -1,4 +1,4 @@
-//! Namespace and multiname text, as FFDec prints them in p-code and AS3.
+//! Namespace and multiname text, as printed in p-code and AS3.
 
 use super::{Abc, Multiname};
 
@@ -16,7 +16,7 @@ pub fn ns_kind_name(kind: u8) -> &'static str {
     NS_KINDS.iter().find(|k| k.0 == kind).map_or("?", |k| k.1)
 }
 
-/// FFDec's `escapePCodeString`, including the `\{n}` run-length form for long runs.
+/// Escapes a p-code string, including the `\{n}` run-length form for long runs.
 pub fn escape_pcode(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
@@ -47,7 +47,7 @@ pub fn escape_pcode(s: &str) -> String {
     out
 }
 
-/// FFDec's `escapeActionScriptString`.
+/// Escapes an ActionScript string literal.
 pub fn escape_as(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -191,7 +191,7 @@ fn kind_name(m: &Multiname) -> &'static str {
     }
 }
 
-/// ECMAScript `Number.prototype.toString()` for doubles, as FFDec's `EcmaScript.toString`.
+/// ECMAScript `Number.prototype.toString()` for doubles.
 pub fn ecma_number(v: f64) -> String {
     if v.is_nan() {
         return "NaN".into();

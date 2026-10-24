@@ -452,7 +452,7 @@ impl Cx {
         Some(Proto { name, ns, prop_ns, prop_ns_kind: kind, prop_ns_index, prop_type: sp.ret.clone(), value: sp.value, abc: sp.abc, tr: sp.tr.clone(), is_type })
     }
 
-    /// `searchPrototypeChain` with the namespace order FFDec tries.
+    /// Searches the prototype chain in a fixed namespace order.
     #[allow(clippy::too_many_arguments)]
     fn search_prototype_chain(&mut self, ns_keyword: Option<&str>, suffix: Option<i64>, other_ns: &[i64], ld: &Ld, instance_only: bool, pkg: &Dotted, obj: &str, prop: &str) -> Option<Proto> {
         let public_ns = pool::namespace_id(&mut self.abc, ns_kind::PACKAGE, "", 0, false);

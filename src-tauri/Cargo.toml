@@ -1,13 +1,13 @@
 [package]
 name = "rust-ffdec"
 version = "0.6.0"
-description = "Rust-FFDec"
+description = "Lumen-SWF"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "Rust-FFDec"
+name = "Lumen-SWF"
 path = "src/main.rs"
 
 [build-dependencies]

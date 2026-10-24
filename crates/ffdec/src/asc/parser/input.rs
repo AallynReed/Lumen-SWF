@@ -335,7 +335,7 @@ impl InputBuffer {
             buf.push(c);
             i += 1;
         }
-        String::from_utf16_lossy(&buf)
+        java_string(&buf)
     }
 
     fn escape_string(src: &[u16], from: i32, to: i32) -> String {
@@ -439,7 +439,7 @@ impl InputBuffer {
             buf.push(c);
             i += 1;
         }
-        String::from_utf16_lossy(&buf)
+        java_string(&buf)
     }
 
     pub fn copy(&self) -> String {
@@ -521,7 +521,12 @@ fn substring(src: &[u16], begin: i32, end: i32) -> String {
     if begin < 0 || end > src.len() as i32 || begin > end {
         panic!("String index out of range: begin {}, end {}, length {}", begin, end, src.len());
     }
-    String::from_utf16_lossy(&src[begin as usize..end as usize])
+    java_string(&src[begin as usize..end as usize])
+}
+
+/// Rust strings cannot hold lone surrogates; use '?', which is what Java's `getBytes("UTF8")` later writes for them.
+fn java_string(units: &[u16]) -> String {
+    char::decode_utf16(units.iter().copied()).map(|r| r.unwrap_or('?')).collect()
 }
 
 /// `Charset.forName(encoding).decode(bb)` for the common charsets; anything else decodes as UTF-8.
@@ -533,50 +538,146 @@ fn decode(encoding: &str, bb: &[u8]) -> Vec<u16> {
         "UTF-16LE" | "UNICODELITTLEUNMARKED" => decode_utf16(bb, Some(false)),
         "ISO-8859-1" | "ISO8859-1" | "LATIN1" | "8859-1" | "CP819" => bb.iter().map(|&b| b as u16).collect(),
         "US-ASCII" | "ASCII" | "ASCII7" => bb.iter().map(|&b| if b < 0x80 { b as u16 } else { 0xfffd }).collect(),
-        _ => String::from_utf8_lossy(bb).encode_utf16().collect(),
+        _ => decode_utf8(bb),
     }
 }
 
 fn decode_utf16(bb: &[u8], big_endian: Option<bool>) -> Vec<u16> {
-    let mut start = 0;
-    let be = match big_endian {
-        Some(be) => be,
-        None => {
-            if bb.len() >= 2 && bb[0] == 0xfe && bb[1] == 0xff {
-                start = 2;
-                true
-            } else if bb.len() >= 2 && bb[0] == 0xff && bb[1] == 0xfe {
-                start = 2;
-                false
-            } else {
-                true
-            }
-        }
-    };
-    let units: Vec<u16> = bb[start..]
-        .chunks(2)
-        .map(|p| {
-            if p.len() < 2 {
-                0xfffd
-            } else if be {
-                u16::from_be_bytes([p[0], p[1]])
-            } else {
-                u16::from_le_bytes([p[0], p[1]])
-            }
-        })
-        .collect();
-    let mut out = Vec::with_capacity(units.len());
+    // sun.nio.cs.UnicodeDecoder (JDK 17) with REPLACE: each malformed unit or trailing remainder becomes one U+FFFD
+    let mut order = big_endian;
+    let mut out = Vec::with_capacity(bb.len() / 2);
     let mut i = 0;
-    while i < units.len() {
-        let u = units[i];
-        if (0xd800..0xdc00).contains(&u) && i + 1 < units.len() && (0xdc00..0xe000).contains(&units[i + 1]) {
-            out.push(u);
-            out.push(units[i + 1]);
-            i += 2;
+    let unit = |be: bool, b1: u8, b2: u8| if be { u16::from_be_bytes([b1, b2]) } else { u16::from_le_bytes([b1, b2]) };
+    while bb.len() - i > 1 {
+        let (b1, b2) = (bb[i], bb[i + 1]);
+        i += 2;
+        if order.is_none() {
+            let c = u16::from_be_bytes([b1, b2]);
+            if c == 0xfeff {
+                order = Some(true);
+                continue;
+            } else if c == 0xfffe {
+                order = Some(false);
+                continue;
+            }
+            order = Some(true);
+        }
+        let be = order.unwrap();
+        let c = unit(be, b1, b2);
+        if c == 0xfffe {
+            out.push(0xfffd);
             continue;
         }
-        out.push(if (0xd800..0xe000).contains(&u) { 0xfffd } else { u });
-        i += 1;
+        if (0xd800..0xe000).contains(&c) {
+            if c < 0xdc00 {
+                if bb.len() - i < 2 {
+                    i -= 2;
+                    break;
+                }
+                let c2 = unit(be, bb[i], bb[i + 1]);
+                i += 2;
+                if !(0xdc00..0xe000).contains(&c2) {
+                    out.push(0xfffd);
+                    continue;
+                }
+                out.push(c);
+                out.push(c2);
+                continue;
+            }
+            out.push(0xfffd);
+            continue;
+        }
+        out.push(c);
+    }
+    if i < bb.len() {
+        out.push(0xfffd);
+    }
+    out
+}
+
+/// sun.nio.cs.UTF_8.Decoder (JDK 17) with REPLACE.
+fn decode_utf8(sa: &[u8]) -> Vec<u16> {
+    let not_cont = |b: u8| (b & 0xc0) != 0x80;
+    let mut out = Vec::with_capacity(sa.len());
+    let sl = sa.len();
+    let mut sp = 0;
+    while sp < sl {
+        let b1 = sa[sp];
+        if b1 < 0x80 {
+            out.push(b1 as u16);
+            sp += 1;
+        } else if (b1 >> 5) == 0b110 && (b1 & 0x1e) != 0 {
+            if sl - sp < 2 {
+                break;
+            }
+            let b2 = sa[sp + 1];
+            if not_cont(b2) {
+                out.push(0xfffd);
+                sp += 1;
+                continue;
+            }
+            out.push((((b1 as u16) & 0x1f) << 6) | ((b2 as u16) & 0x3f));
+            sp += 2;
+        } else if (b1 >> 4) == 0b1110 {
+            let rem = sl - sp;
+            let mal3_2 = |b2: u8| (b1 == 0xe0 && (b2 & 0xe0) == 0x80) || not_cont(b2);
+            if rem < 3 {
+                if rem > 1 && mal3_2(sa[sp + 1]) {
+                    out.push(0xfffd);
+                    sp += 1;
+                    continue;
+                }
+                break;
+            }
+            let (b2, b3) = (sa[sp + 1], sa[sp + 2]);
+            if mal3_2(b2) || not_cont(b3) {
+                out.push(0xfffd);
+                sp += if mal3_2(b2) { 1 } else { 2 };
+                continue;
+            }
+            let c = (((b1 as u16) & 0x0f) << 12) | (((b2 as u16) & 0x3f) << 6) | ((b3 as u16) & 0x3f);
+            out.push(if (0xd800..0xe000).contains(&c) { 0xfffd } else { c });
+            sp += 3;
+        } else if (b1 >> 3) == 0b11110 {
+            let rem = sl - sp;
+            let mal4_2 = |b2: u8| (b1 == 0xf0 && !(0x90..=0xbf).contains(&b2)) || (b1 == 0xf4 && (b2 & 0xf0) != 0x80) || not_cont(b2);
+            if rem < 4 {
+                if b1 > 0xf4 || (rem > 1 && mal4_2(sa[sp + 1])) {
+                    out.push(0xfffd);
+                    sp += 1;
+                    continue;
+                }
+                if rem > 2 && not_cont(sa[sp + 2]) {
+                    out.push(0xfffd);
+                    sp += 2;
+                    continue;
+                }
+                break;
+            }
+            let (b2, b3, b4) = (sa[sp + 1], sa[sp + 2], sa[sp + 3]);
+            let uc = (((b1 as u32) & 0x07) << 18) | (((b2 as u32) & 0x3f) << 12) | (((b3 as u32) & 0x3f) << 6) | ((b4 as u32) & 0x3f);
+            if not_cont(b2) || not_cont(b3) || not_cont(b4) || !(0x10000..0x110000).contains(&uc) {
+                out.push(0xfffd);
+                sp += if b1 > 0xf4 || mal4_2(b2) {
+                    1
+                } else if not_cont(b3) {
+                    2
+                } else {
+                    3
+                };
+                continue;
+            }
+            let v = uc - 0x10000;
+            out.push(0xd800 | (v >> 10) as u16);
+            out.push(0xdc00 | (v & 0x3ff) as u16);
+            sp += 4;
+        } else {
+            out.push(0xfffd);
+            sp += 1;
+        }
+    }
+    if sp < sl {
+        out.push(0xfffd);
     }
     out
 }

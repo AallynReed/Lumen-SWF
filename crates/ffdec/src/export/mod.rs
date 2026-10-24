@@ -56,7 +56,7 @@ impl Kind {
         Kind::Scripts,
     ];
 
-    /// Folder name, matching FFDec's export layout.
+    /// Folder name in the export layout.
     pub fn dir(self) -> &'static str {
         match self {
             Kind::Images => "images",
@@ -385,7 +385,7 @@ impl<'a> Exporter<'a> {
         out
     }
 
-    /// FFDec's script export: one file per script pack, named after its public definition,
+    /// Script export: one file per script pack, named after its public definition,
     /// with `[Embed]` headers; `fla` is the mode the FLA export runs it in. Returns the
     /// sources and, in FLA mode, the `_assets` files they embed. With `pcode`, method bodies are
     /// p-code and the files are `.pcode`.
@@ -485,7 +485,7 @@ impl<'a> Exporter<'a> {
         Ok(crate::abc::decomp::entry_source(&self.as3().index, abc, e, &self.as3().swf))
     }
 
-    /// FFDec's p-code export: the class outline with each method body as p-code.
+    /// P-code export: the class outline with each method body as p-code.
     pub fn script_pcode(&self, path: &[usize], e: &crate::abc::scripts::Entry) -> Result<String> {
         let abc = self.abc_at(path)?;
         let cfg = crate::abc::decomp::ctx::Config { pcode: true, ..Default::default() };
@@ -507,7 +507,7 @@ impl<'a> Exporter<'a> {
         make_file_name(&format!("{}.{ext}", self.stem(tag, path)))
     }
 
-    /// FFDec's folder name for a timeline character: `DefineSprite_12_ExportName`.
+    /// Folder name for a timeline character: `DefineSprite_12_ExportName`.
     fn folder_name(&self, tag: &Tag) -> String {
         let id = tag.character_id().unwrap_or(0);
         let mut s = format!("{}_{id}", tag.name());
@@ -548,7 +548,7 @@ impl<'a> Exporter<'a> {
         }
     }
 
-    /// Exports one tag in its FFDec format: usually one file, several for sprites,
+    /// Exports one tag in its native format: usually one file, several for sprites,
     /// buttons and PNG morph shapes; none when the tag is not an asset.
     pub fn export(&self, path: &[usize], opts: Options) -> Result<Vec<File>> {
         let tag = self.swf.tag(path).ok_or_else(|| Error::Other("no such tag".into()))?;
@@ -580,7 +580,7 @@ impl<'a> Exporter<'a> {
                     ("otf", "font/otf", font::font4_data(tag)?.to_vec(), font::font4_name(tag))
                 } else {
                     let f = r.fonts().get(&id).ok_or_else(|| Error::Other("font could not be read".into()))?;
-                    // FFDec writes nothing for fonts without glyphs (device fonts).
+                    // Fonts without glyphs (device fonts) export nothing.
                     if f.glyphs.iter().all(|g| g.shape.is_empty()) {
                         return Ok(Vec::new());
                     }
@@ -804,7 +804,7 @@ impl<'a> Exporter<'a> {
         out
     }
 
-    /// AS1/2 scripts as `.as` (or `.pcode`) files laid out like FFDec's script export.
+    /// AS1/2 scripts as `.as` (or `.pcode`) files laid out like the AS3 script export.
     pub fn export_as2_scripts(&self, pcode: bool) -> Vec<(Vec<usize>, File)> {
         let tree = crate::action::scripts::tree(self.swf);
         crate::action::scripts::export_paths(&tree)

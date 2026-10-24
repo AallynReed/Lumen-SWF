@@ -1,5 +1,5 @@
 /target/
-/jpexs-decompiler/
+/corpus/
 node_modules/
 /web/ruffle/
 src-tauri/gen/

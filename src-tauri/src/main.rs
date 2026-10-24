@@ -731,7 +731,7 @@ fn startup_files() -> Vec<String> {
 fn discard_dialog(app: &tauri::AppHandle, names: &str) -> tauri_plugin_dialog::MessageDialogBuilder<tauri::Wry> {
     app.dialog()
         .message(format!("Discard unsaved changes to {names}?"))
-        .title("Rust-FFDec")
+        .title("Lumen-SWF")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Discard".into(), "Cancel".into()))
 }
@@ -805,5 +805,5 @@ fn main() {
             startup_files
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Rust-FFDec");
+        .expect("error while running Lumen-SWF");
 }

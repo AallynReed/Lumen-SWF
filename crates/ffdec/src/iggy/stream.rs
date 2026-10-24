@@ -1,4 +1,4 @@
-//! FFDec's Iggy streams: a growable little-endian buffer that can record the relocation
+//! Iggy streams: a growable little-endian buffer that can record the relocation
 //! program of what is written (`IggyIndexBuilder`), and the program parser and encoder
 //! (`IggyFixup`).
 
