@@ -150,12 +150,12 @@ impl Cx {
     /// `generateMetadata`.
     pub fn generate_metadata(&mut self, metadata: &Metadata_) -> Vec<usize> {
         let mut out = Vec::new();
-        for (i, (name, values)) in metadata.iter().enumerate() {
+        for (name, values) in metadata {
             if name == "API" && self.is_api_versioned() {
                 continue;
             }
-            // The decompiler prints the stage settings as [SWF] on the document class; keep one.
-            if name == "SWF" && metadata[i + 1..].iter().any(|(n, _)| n == "SWF") {
+            // Like mxmlc, [SWF] (stage settings, which the decompiler prints) is not kept.
+            if name == "SWF" {
                 continue;
             }
             let keys: Vec<String> = values.iter().map(|(k, _)| k.clone()).collect();
