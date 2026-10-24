@@ -2,4 +2,5 @@
 //! `modules/asc/src/java`). Module layout follows the Java packages.
 
 pub mod parser;
+pub mod semantics;
 pub mod util;
