@@ -2,7 +2,8 @@
 
 #![allow(non_upper_case_globals)]
 
-use std::cell::{Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
+use std::rc::{Rc, Weak};
 use std::collections::{BTreeMap, HashSet};
 
 use crate::asc::parser::node::*;
@@ -43,9 +44,8 @@ fn same_type_info(a: &Option<TypeInfo>, b: &Option<TypeInfo>) -> bool {
     }
 }
 
-/// Java methods that read the factory's (or their own) `Context` take `cx`; a Java `Context` parameter that the
-/// new node stores arrives as `node_cx`.
 pub struct NodeFactory {
+    cx: Weak<RefCell<Context>>,
     pub compound_names: HashSet<String>,
     pub has_arguments: bool,
     pub has_rest: bool,
@@ -63,15 +63,10 @@ pub struct NodeFactory {
     namespace_names: BTreeMap<String, i32>,
 }
 
-impl Default for NodeFactory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl NodeFactory {
-    pub fn new() -> NodeFactory {
+    pub fn new(cx: &ContextRef) -> NodeFactory {
         NodeFactory {
+            cx: Rc::downgrade(cx),
             compound_names: HashSet::new(),
             has_arguments: false,
             has_rest: false,
@@ -88,6 +83,14 @@ impl NodeFactory {
             pkg_defs: Vec::new(),
             namespace_names: BTreeMap::new(),
         }
+    }
+
+    pub fn get_context(&self) -> ContextRef {
+        self.cx.upgrade().expect("NullPointerException")
+    }
+
+    pub fn set_context(&mut self, cx: &ContextRef) {
+        self.cx = Rc::downgrade(cx);
     }
 
     pub fn init(&mut self, names: &[String]) {
@@ -118,13 +121,12 @@ impl NodeFactory {
         }
     }
 
-    pub fn assignment_expression(&mut self, cx: &mut Context, lhs: Option<NodeRef>, op: i32, rhs: Option<NodeRef>) -> NodeRef {
-        self.assignment_expression_pos(cx, lhs, op, rhs, -1)
+    pub fn assignment_expression(&mut self, lhs: Option<NodeRef>, op: i32, rhs: Option<NodeRef>) -> NodeRef {
+        self.assignment_expression_pos(lhs, op, rhs, -1)
     }
 
     pub fn assignment_expression_pos(
         &mut self,
-        cx: &mut Context,
         mut lhs: Option<NodeRef>,
         mut op: i32,
         mut rhs: Option<NodeRef>,
@@ -195,12 +197,12 @@ impl NodeFactory {
                 let get = selector;
                 if is_indexed {
                     let args = self.argument_list(None, rhs.clone());
-                    let set = self.set_expression_get(cx, get, Some(args), is_constinit);
+                    let set = self.set_expression_get(get, Some(args), is_constinit);
                     node = self.indexed_member_expression(base, Some(set));
                 } else {
                     let args = self.argument_list(None, rhs.clone());
                     let rhs_pos = rb(&rhs).pos();
-                    let set = self.set_expression_get_pos(cx, get, Some(args), is_constinit, rhs_pos);
+                    let set = self.set_expression_get_pos(get, Some(args), is_constinit, rhs_pos);
                     node = self.member_expression(base, Some(set));
                 }
             } else {
@@ -212,7 +214,7 @@ impl NodeFactory {
             node = self.member_expression(None, Some(set));
         }
 
-        if cx.script_assist_parsing() {
+        if self.get_context().borrow().script_assist_parsing {
             let mut n = node.borrow_mut();
             let expr_node = n.as_member_expression_mut().expect("ClassCastException");
             if prev_op != op {
@@ -401,31 +403,31 @@ impl NodeFactory {
 
     pub fn class_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         inheritance: Option<NodeRef>,
         block: Option<NodeRef>,
     ) -> NodeRef {
-        self.class_definition_non_nullable(node_cx, attrs, identifier, inheritance, block, false)
+        self.class_definition_non_nullable(cx, attrs, identifier, inheritance, block, false)
     }
 
     pub fn class_definition_non_nullable(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         inheritance: Option<NodeRef>,
         block: Option<NodeRef>,
         non_nullable: bool,
     ) -> NodeRef {
-        self.class_definition_pos(node_cx, attrs, identifier, inheritance, block, non_nullable, -1)
+        self.class_definition_pos(cx, attrs, identifier, inheritance, block, non_nullable, -1)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn class_definition_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         inheritance: Option<NodeRef>,
@@ -436,7 +438,7 @@ impl NodeFactory {
         let identifier = Some(self.qualify_identifier(&attrs, &identifier));
         let (baseclass, interfaces) = Self::inheritance_parts(&inheritance);
         let node =
-            ClassDefinitionNode::new(node_cx, self.current_package.clone(), attrs, identifier.clone(), baseclass, interfaces, block);
+            ClassDefinitionNode::new(Some(cx.clone()), self.current_package.clone(), attrs, identifier.clone(), baseclass, interfaces, block);
         {
             let mut n = node.borrow_mut();
             n.as_class_definition_mut().unwrap().is_default_nullable = !non_nullable;
@@ -452,18 +454,18 @@ impl NodeFactory {
 
     pub fn binary_class_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         inheritance: Option<NodeRef>,
         block: Option<NodeRef>,
     ) -> NodeRef {
-        self.binary_class_definition_pos(node_cx, attrs, identifier, inheritance, block, -1)
+        self.binary_class_definition_pos(cx, attrs, identifier, inheritance, block, -1)
     }
 
     pub fn binary_class_definition_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         inheritance: Option<NodeRef>,
@@ -473,25 +475,25 @@ impl NodeFactory {
         let identifier = Some(self.qualify_identifier(&attrs, &identifier));
         let (baseclass, interfaces) = Self::inheritance_parts(&inheritance);
         let node =
-            BinaryClassDefNode::new(node_cx, self.current_package.clone(), attrs, identifier.clone(), baseclass, interfaces, block);
+            BinaryClassDefNode::new(Some(cx.clone()), self.current_package.clone(), attrs, identifier.clone(), baseclass, interfaces, block);
         node.borrow_mut().set_position_nonterminal(identifier.as_ref(), pos);
         node
     }
 
     pub fn interface_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         interfaces: Option<NodeRef>,
         block: Option<NodeRef>,
     ) -> NodeRef {
-        self.interface_definition_pos(node_cx, attrs, identifier, interfaces, block, -1)
+        self.interface_definition_pos(cx, attrs, identifier, interfaces, block, -1)
     }
 
     pub fn interface_definition_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         interfaces: Option<NodeRef>,
@@ -499,7 +501,7 @@ impl NodeFactory {
         pos: i32,
     ) -> NodeRef {
         let identifier = Some(self.qualify_identifier(&attrs, &identifier));
-        let node = InterfaceDefinitionNode::new(node_cx, self.current_package.clone(), attrs, identifier.clone(), interfaces, block);
+        let node = InterfaceDefinitionNode::new(Some(cx.clone()), self.current_package.clone(), attrs, identifier.clone(), interfaces, block);
         {
             let mut n = node.borrow_mut();
             n.set_position_nonterminal(identifier.as_ref(), pos);
@@ -513,18 +515,18 @@ impl NodeFactory {
 
     pub fn binary_interface_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         interfaces: Option<NodeRef>,
         block: Option<NodeRef>,
     ) -> NodeRef {
-        self.binary_interface_definition_pos(node_cx, attrs, identifier, interfaces, block, -1)
+        self.binary_interface_definition_pos(cx, attrs, identifier, interfaces, block, -1)
     }
 
     pub fn binary_interface_definition_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         identifier: Option<NodeRef>,
         interfaces: Option<NodeRef>,
@@ -533,7 +535,7 @@ impl NodeFactory {
     ) -> NodeRef {
         let identifier = Some(self.qualify_identifier(&attrs, &identifier));
         let node =
-            BinaryInterfaceDefinitionNode::new(node_cx, self.current_package.clone(), attrs, identifier.clone(), interfaces, block);
+            BinaryInterfaceDefinitionNode::new(Some(cx.clone()), self.current_package.clone(), attrs, identifier.clone(), interfaces, block);
         node.borrow_mut().set_position_nonterminal(identifier.as_ref(), pos);
         node
     }
@@ -576,19 +578,19 @@ impl NodeFactory {
     }
 
     /// Wraps `stmt` in a statement list unless it already is one, as several statement factories do.
-    fn ensure_statement_list(&mut self, cx: &mut Context, stmt: Option<NodeRef>) -> Option<NodeRef> {
+    fn ensure_statement_list(&mut self, stmt: Option<NodeRef>) -> Option<NodeRef> {
         if stmt.is_some() && rb(&stmt).as_statement_list().is_none() {
-            return Some(self.statement_list(cx, None, stmt));
+            return Some(self.statement_list(None, stmt));
         }
         stmt
     }
 
-    pub fn do_statement(&mut self, cx: &mut Context, stmt: Option<NodeRef>, expr: Option<NodeRef>) -> NodeRef {
-        self.do_statement_pos(cx, stmt, expr, -1)
+    pub fn do_statement(&mut self, stmt: Option<NodeRef>, expr: Option<NodeRef>) -> NodeRef {
+        self.do_statement_pos(stmt, expr, -1)
     }
 
-    pub fn do_statement_pos(&mut self, cx: &mut Context, stmt: Option<NodeRef>, expr: Option<NodeRef>, pos: i32) -> NodeRef {
-        let stmt = self.ensure_statement_list(cx, stmt);
+    pub fn do_statement_pos(&mut self, stmt: Option<NodeRef>, expr: Option<NodeRef>, pos: i32) -> NodeRef {
+        let stmt = self.ensure_statement_list(stmt);
         let node = DoStatementNode::new(stmt.clone(), expr);
         node.borrow_mut().set_position_nonterminal(stmt.as_ref(), pos);
         node
@@ -620,27 +622,25 @@ impl NodeFactory {
 
     pub fn for_in_statement(
         &mut self,
-        cx: &mut Context,
         is_each: bool,
         expr1: Option<NodeRef>,
         expr2: Option<NodeRef>,
         stmt: Option<NodeRef>,
     ) -> NodeRef {
-        self.for_in_statement_pos(cx, is_each, expr1, expr2, stmt, -1)
+        self.for_in_statement_pos(is_each, expr1, expr2, stmt, -1)
     }
 
     pub fn for_in_statement_pos(
         &mut self,
-        cx: &mut Context,
         is_each: bool,
         mut expr1: Option<NodeRef>,
         expr2: Option<NodeRef>,
         mut stmt: Option<NodeRef>,
         mut pos: i32,
     ) -> NodeRef {
-        if !cx.script_assist_parsing() {
+        if !self.get_context().borrow().script_assist_parsing {
             if stmt.is_some() && !rb(&stmt).is_statement_list() {
-                stmt = Some(self.statement_list(cx, None, stmt));
+                stmt = Some(self.statement_list(None, stmt));
             }
 
             let mut vard: Option<NodeRef> = None;
@@ -664,47 +664,47 @@ impl NodeFactory {
             let ndx_reg = self.register(pos);
             let obj_reg = self.register(pos);
 
-            let untyped_expr = self.coerce_pos(expr2, None, Some(cx.no_type().get_default_type_info()), true, pos);
+            let untyped_expr = self.coerce_pos(expr2, None, Some(self.get_context().borrow().no_type().get_default_type_info()), true, pos);
             let zero = self.literal_number_pos("0", pos);
-            let store_ndx = self.store_register(Some(ndx_reg.clone()), Some(zero), Some(cx.int_type()), pos);
+            let store_ndx = self.store_register(Some(ndx_reg.clone()), Some(zero), Some(self.get_context().borrow().int_type()), pos);
             let init0 = self.list(None, Some(store_ndx));
-            let store_obj = self.store_register(Some(obj_reg.clone()), Some(untyped_expr), Some(cx.no_type()), pos);
+            let store_obj = self.store_register(Some(obj_reg.clone()), Some(untyped_expr), Some(self.get_context().borrow().no_type()), pos);
             let init = self.list(Some(init0), Some(store_obj));
             let test = self.has_next(Some(obj_reg.clone()), Some(ndx_reg.clone()), pos);
 
             let incr = if is_each {
-                let load_obj = self.load_register(Some(obj_reg.clone()), Some(cx.no_type()), pos);
-                let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(cx.int_type()), pos);
+                let load_obj = self.load_register(Some(obj_reg.clone()), Some(self.get_context().borrow().no_type()), pos);
+                let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(self.get_context().borrow().int_type()), pos);
                 let args = self.argument_list(None, Some(load_ndx));
                 let invoke = self.invoke("[[NextValue]]", Some(args), pos);
                 let member = self.member_expression(Some(load_obj), Some(invoke));
-                let assign = self.assignment_expression(cx, expr1.clone(), ASSIGN_TOKEN, Some(member));
+                let assign = self.assignment_expression(expr1.clone(), ASSIGN_TOKEN, Some(member));
                 self.expression_statement(Some(assign))
             } else {
-                let load_obj = self.load_register(Some(obj_reg.clone()), Some(cx.no_type()), pos);
-                let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(cx.int_type()), pos);
+                let load_obj = self.load_register(Some(obj_reg.clone()), Some(self.get_context().borrow().no_type()), pos);
+                let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(self.get_context().borrow().int_type()), pos);
                 let args = self.argument_list(None, Some(load_ndx));
                 let expr1_pos = rb(&expr1).pos();
                 let invoke = self.invoke("[[NextName]]", Some(args), expr1_pos);
                 let member = self.member_expression(Some(load_obj), Some(invoke));
-                let assign = self.assignment_expression(cx, expr1.clone(), ASSIGN_TOKEN, Some(member));
+                let assign = self.assignment_expression(expr1.clone(), ASSIGN_TOKEN, Some(member));
                 self.expression_statement(Some(assign))
             };
 
-            let incr_list = self.statement_list(cx, None, Some(incr));
-            stmt = Some(self.statement_list(cx, Some(incr_list), stmt));
+            let incr_list = self.statement_list(None, Some(incr));
+            stmt = Some(self.statement_list(Some(incr_list), stmt));
             let for_pos = if pos == -1 { rb(&expr1).pos() } else { pos };
-            let mut node = self.for_statement_pos(cx, Some(init), Some(test), None, stmt, true, for_pos);
+            let mut node = self.for_statement_pos(Some(init), Some(test), None, stmt, true, for_pos);
             if vard.is_some() {
-                let vard_list = self.statement_list(cx, None, vard);
-                let stmtlist = self.statement_list(cx, Some(vard_list), Some(node));
+                let vard_list = self.statement_list(None, vard);
+                let stmtlist = self.statement_list(Some(vard_list), Some(node));
                 stmtlist.borrow_mut().as_statement_list_mut().unwrap().is_loop = true;
                 node = stmtlist;
             }
             node
         } else {
             if stmt.is_some() && !rb(&stmt).is_statement_list() {
-                stmt = Some(self.statement_list(cx, None, stmt));
+                stmt = Some(self.statement_list(None, stmt));
             }
 
             let mut vard: Option<NodeRef> = None;
@@ -723,8 +723,8 @@ impl NodeFactory {
             let mut node = ForStatementNode::new(expr1.clone(), expr2, None, stmt.clone(), true);
             node.borrow_mut().set_position_nonterminal(expr1.as_ref(), pos);
             if vard.is_some() {
-                let vard_list = self.statement_list(cx, None, vard);
-                let stmtlist = self.statement_list(cx, Some(vard_list), Some(node));
+                let vard_list = self.statement_list(None, vard);
+                let stmtlist = self.statement_list(Some(vard_list), Some(node));
                 node = stmtlist.clone();
                 stmtlist.borrow_mut().as_statement_list_mut().unwrap().is_loop = true;
             } else if let Some(stmt) = &stmt {
@@ -738,19 +738,17 @@ impl NodeFactory {
 
     pub fn for_statement(
         &mut self,
-        cx: &mut Context,
         expr1: Option<NodeRef>,
         expr2: Option<NodeRef>,
         expr3: Option<NodeRef>,
         stmt: Option<NodeRef>,
     ) -> NodeRef {
-        self.for_statement_pos(cx, expr1, expr2, expr3, stmt, false, -1)
+        self.for_statement_pos(expr1, expr2, expr3, stmt, false, -1)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn for_statement_pos(
         &mut self,
-        cx: &mut Context,
         mut expr1: Option<NodeRef>,
         expr2: Option<NodeRef>,
         expr3: Option<NodeRef>,
@@ -759,7 +757,7 @@ impl NodeFactory {
         pos: i32,
     ) -> NodeRef {
         if stmt.is_some() && !rb(&stmt).is_statement_list() {
-            stmt = Some(self.statement_list(cx, None, stmt));
+            stmt = Some(self.statement_list(None, stmt));
         }
 
         let mut vard: Option<NodeRef> = None;
@@ -772,8 +770,8 @@ impl NodeFactory {
         let mut node = ForStatementNode::new(expr1.clone(), expr2, expr3, stmt.clone(), is_forin);
         node.borrow_mut().set_position_nonterminal(expr1.as_ref(), pos);
         if vard.is_some() {
-            let vard_list = self.statement_list(cx, None, vard);
-            let stmtlist = self.statement_list(cx, Some(vard_list), Some(node));
+            let vard_list = self.statement_list(None, vard);
+            let stmtlist = self.statement_list(Some(vard_list), Some(node));
             node = stmtlist.clone();
             stmtlist.borrow_mut().as_statement_list_mut().unwrap().is_loop = true;
         } else if let Some(stmt) = &stmt {
@@ -786,12 +784,12 @@ impl NodeFactory {
 
     pub fn function_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         name: Option<NodeRef>,
         fexpr: Option<NodeRef>,
     ) -> NodeRef {
-        self.function_definition_pos(node_cx, attrs, name, fexpr, -1)
+        self.function_definition_pos(cx, attrs, name, fexpr, -1)
     }
 
     fn fix_up_function_name(&mut self, attrs: &Option<NodeRef>, name: &Option<NodeRef>, fexpr: &Option<NodeRef>) {
@@ -806,54 +804,52 @@ impl NodeFactory {
 
     pub fn function_definition_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         name: Option<NodeRef>,
         fexpr: Option<NodeRef>,
         pos: i32,
     ) -> NodeRef {
         self.fix_up_function_name(&attrs, &name, &fexpr);
-        let node = FunctionDefinitionNode::new(node_cx, self.current_package.clone(), attrs, name.clone(), fexpr);
+        let node = FunctionDefinitionNode::new(Some(cx.clone()), self.current_package.clone(), attrs, name.clone(), fexpr);
         node.borrow_mut().set_position_nonterminal(name.as_ref(), pos);
         node
     }
 
     pub fn binary_function_definition(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         name: Option<NodeRef>,
         fexpr: Option<NodeRef>,
         pos: i32,
     ) -> NodeRef {
         self.fix_up_function_name(&attrs, &name, &fexpr);
-        let node = BinaryFunctionDefinitionNode::new(node_cx, self.current_package.clone(), attrs, name.clone(), fexpr);
+        let node = BinaryFunctionDefinitionNode::new(Some(cx.clone()), self.current_package.clone(), attrs, name.clone(), fexpr);
         node.borrow_mut().set_position_nonterminal(name.as_ref(), pos);
         node
     }
 
     pub fn function_common(
         &mut self,
-        cx: &mut Context,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         identifier: Option<NodeRef>,
         signature: Option<NodeRef>,
         body: Option<NodeRef>,
     ) -> NodeRef {
-        self.function_common_pos(cx, node_cx, identifier, signature, body, -1)
+        self.function_common_pos(cx, identifier, signature, body, -1)
     }
 
     pub fn function_common_pos(
         &mut self,
-        cx: &mut Context,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         mut identifier: Option<NodeRef>,
         signature: Option<NodeRef>,
         mut body: Option<NodeRef>,
         pos: i32,
     ) -> NodeRef {
         if identifier.is_none() {
-            if cx.script_assist_parsing() {
+            if cx.borrow().script_assist_parsing {
                 identifier = Some(self.identifier_pos("", pos));
             } else {
                 identifier = Some(self.identifier_pos("anonymous", pos));
@@ -887,22 +883,22 @@ impl NodeFactory {
         }
 
         let mut user_body = false;
-        if cx.input.is_some() {
+        if cx.borrow().input.is_some() {
             let rtn;
-            if cx.script_assist_parsing() {
+            if cx.borrow().script_assist_parsing {
                 let zero = self.literal_number_pos("0", 0);
-                let void0 = self.unary_expression_pos(cx, VOID_TOKEN, Some(zero), 0);
+                let void0 = self.unary_expression_pos(VOID_TOKEN, Some(zero), 0);
                 rtn = self.return_statement_pos(Some(void0), 0);
                 rtn.borrow_mut().set_is_synthetic();
             } else {
                 rtn = self.return_statement_pos(None, 0);
                 rtn.borrow_mut().set_is_synthetic();
-                let mark = cx.input.as_ref().unwrap().borrow().position_of_mark();
+                let mark = cx.borrow().input.as_ref().unwrap().borrow().position_of_mark();
                 rtn.borrow_mut().set_position_terminal(mark);
             }
 
             if body.is_none() {
-                body = Some(self.statement_list(cx, None, Some(rtn)));
+                body = Some(self.statement_list(None, Some(rtn)));
                 user_body = false;
             } else {
                 rbm(&body).as_statement_list_mut().expect("ClassCastException").items.push(Some(rtn));
@@ -910,7 +906,7 @@ impl NodeFactory {
             }
         }
 
-        let fexpr = FunctionCommonNode::new(node_cx, None, internal_name, identifier, signature.clone(), body, user_body);
+        let fexpr = FunctionCommonNode::new(Some(cx.clone()), None, internal_name, identifier, signature.clone(), body, user_body);
         {
             let mut f = fexpr.borrow_mut();
             f.as_function_common_mut().unwrap().needs_arguments = if self.has_rest {
@@ -1055,13 +1051,12 @@ impl NodeFactory {
         node
     }
 
-    pub fn if_statement(&mut self, cx: &mut Context, test: Option<NodeRef>, tblock: Option<NodeRef>, eblock: Option<NodeRef>) -> NodeRef {
-        self.if_statement_pos(cx, test, tblock, eblock, -1)
+    pub fn if_statement(&mut self, test: Option<NodeRef>, tblock: Option<NodeRef>, eblock: Option<NodeRef>) -> NodeRef {
+        self.if_statement_pos(test, tblock, eblock, -1)
     }
 
     pub fn if_statement_pos(
         &mut self,
-        cx: &mut Context,
         test: Option<NodeRef>,
         tblock: Option<NodeRef>,
         eblock: Option<NodeRef>,
@@ -1070,8 +1065,8 @@ impl NodeFactory {
         let mut node: Option<NodeRef> = None;
         if COMPILE_TIME_IF {}
 
-        let tblock = self.ensure_statement_list(cx, tblock);
-        let eblock = self.ensure_statement_list(cx, eblock);
+        let tblock = self.ensure_statement_list(tblock);
+        let eblock = self.ensure_statement_list(eblock);
 
         if node.is_none() {
             let n = IfStatementNode::new(test.clone(), tblock, eblock);
@@ -1086,9 +1081,9 @@ impl NodeFactory {
         attrs: Option<NodeRef>,
         name: Option<NodeRef>,
         init: Option<NodeRef>,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
     ) -> NodeRef {
-        self.import_directive_pos(attrs, name, init, -1, node_cx)
+        self.import_directive_pos(attrs, name, init, -1, cx)
     }
 
     pub fn import_directive_pos(
@@ -1097,7 +1092,7 @@ impl NodeFactory {
         name: Option<NodeRef>,
         _init: Option<NodeRef>,
         pos: i32,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
     ) -> NodeRef {
         let mut pkg_node = None;
         let id_node = rb(&name).as_package_name().expect("ClassCastException").id.clone();
@@ -1105,23 +1100,23 @@ impl NodeFactory {
         if self.pkg_names.contains_key(&id) {
             pkg_node = self.pkg_names.get(&id).cloned();
         }
-        let node = ImportDirectiveNode::new(self.current_package.clone(), attrs, name.clone(), pkg_node, node_cx);
+        let node = ImportDirectiveNode::new(self.current_package.clone(), attrs, name.clone(), pkg_node, Some(cx.clone()));
         node.borrow_mut().set_position_nonterminal(name.as_ref(), pos);
         node
     }
 
-    pub fn include_directive(&mut self, node_cx: Option<ContextRef>, filespec: Option<NodeRef>, program: Option<NodeRef>) -> NodeRef {
-        self.include_directive_pos(node_cx, filespec, program, -1)
+    pub fn include_directive(&mut self, cx: &ContextRef, filespec: Option<NodeRef>, program: Option<NodeRef>) -> NodeRef {
+        self.include_directive_pos(cx, filespec, program, -1)
     }
 
     pub fn include_directive_pos(
         &mut self,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         filespec: Option<NodeRef>,
         program: Option<NodeRef>,
         pos: i32,
     ) -> NodeRef {
-        let node = IncludeDirectiveNode::new(node_cx, filespec.clone(), program);
+        let node = IncludeDirectiveNode::new(Some(cx.clone()), filespec.clone(), program);
         node.borrow_mut().set_position_nonterminal(filespec.as_ref(), pos);
         node
     }
@@ -1157,13 +1152,12 @@ impl NodeFactory {
         node
     }
 
-    pub fn labeled_statement(&mut self, cx: &mut Context, label: Option<NodeRef>, statement: Option<NodeRef>) -> NodeRef {
-        self.labeled_statement_pos(cx, label, statement, -1)
+    pub fn labeled_statement(&mut self, label: Option<NodeRef>, statement: Option<NodeRef>) -> NodeRef {
+        self.labeled_statement_pos(label, statement, -1)
     }
 
     pub fn labeled_statement_pos(
         &mut self,
-        cx: &mut Context,
         label: Option<NodeRef>,
         statement: Option<NodeRef>,
         pos: i32,
@@ -1175,10 +1169,10 @@ impl NodeFactory {
                 || s.as_statement_list().map_or(false, |l| l.is_loop)
         });
         let is_statement_list = is_kind(&statement, |s| s.as_statement_list().is_some());
-        let node = if !cx.script_assist_parsing() && is_statement_list {
+        let node = if !self.get_context().borrow().script_assist_parsing && is_statement_list {
             let t = self.literal_boolean(true);
             let test = self.list(None, Some(t));
-            let if_stmt = self.if_statement(cx, Some(test), statement, None);
+            let if_stmt = self.if_statement(Some(test), statement, None);
             LabeledStatementNode::new(label.clone(), stmt_is_loop, Some(if_stmt))
         } else {
             let statement = if statement.is_some() { statement } else { Some(self.empty_statement()) };
@@ -1491,19 +1485,18 @@ impl NodeFactory {
         node
     }
 
-    pub fn start_package(&mut self, cx: &mut Context, node_cx: Option<ContextRef>, attrs: Option<NodeRef>, name: Option<NodeRef>) -> NodeRef {
-        if cx.script_assist_parsing() {
-            let pos = cx.input.as_ref().expect("NullPointerException").borrow().position_of_next();
-            self.start_package_pos(cx, node_cx, attrs, name, pos)
+    pub fn start_package(&mut self, cx: &ContextRef, attrs: Option<NodeRef>, name: Option<NodeRef>) -> NodeRef {
+        if cx.borrow().script_assist_parsing {
+            let pos = cx.borrow().input.as_ref().expect("NullPointerException").borrow().position_of_next();
+            self.start_package_pos(cx, attrs, name, pos)
         } else {
-            self.start_package_pos(cx, node_cx, attrs, name, -1)
+            self.start_package_pos(cx, attrs, name, -1)
         }
     }
 
     pub fn start_package_pos(
         &mut self,
-        cx: &mut Context,
-        node_cx: Option<ContextRef>,
+        cx: &ContextRef,
         attrs: Option<NodeRef>,
         mut name: Option<NodeRef>,
         pos: i32,
@@ -1515,25 +1508,25 @@ impl NodeFactory {
         }
         let id_node = rb(&name).as_package_name().expect("ClassCastException").id.clone();
         let id = rbm(&id_node).to_identifier_string().unwrap_or_default();
-        let node = PackageDefinitionNode::new(node_cx, attrs, name.clone(), None);
+        let node = PackageDefinitionNode::new(Some(cx.clone()), attrs, name.clone(), None);
         node.borrow_mut().set_position_nonterminal(name.as_ref(), pos);
         self.pkg_names.insert(id, node.clone());
         self.pkg_defs.push(node.clone());
 
         if self.current_package.is_some() {
-            cx.parser_error(kError_NestedPackage);
+            let parser = cx.borrow().parser.clone();
+            parser.expect("NullPointerException").error(kError_NestedPackage);
         }
 
         self.current_package = Some(node.clone());
         node
     }
 
-    /// `finishPackage(cx, block)`; the Java `cx` is unused.
-    pub fn finish_package(&mut self, block: Option<NodeRef>) -> Option<NodeRef> {
-        self.finish_package_pos(block, -1)
+    pub fn finish_package(&mut self, cx: &ContextRef, block: Option<NodeRef>) -> Option<NodeRef> {
+        self.finish_package_pos(cx, block, -1)
     }
 
-    pub fn finish_package_pos(&mut self, mut statements: Option<NodeRef>, _pos: i32) -> Option<NodeRef> {
+    pub fn finish_package_pos(&mut self, _cx: &ContextRef, mut statements: Option<NodeRef>, _pos: i32) -> Option<NodeRef> {
         self.current_package.as_ref()?;
         let node = self.current_package.take().unwrap();
 
@@ -1727,17 +1720,17 @@ impl NodeFactory {
         node
     }
 
-    pub fn program(&mut self, node_cx: Option<ContextRef>, statements: Option<NodeRef>) -> NodeRef {
-        self.program_pos(node_cx, statements, -1)
+    pub fn program(&mut self, cx: &ContextRef, statements: Option<NodeRef>) -> NodeRef {
+        self.program_pos(cx, statements, -1)
     }
 
-    pub fn program_pos(&mut self, node_cx: Option<ContextRef>, mut statements: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn program_pos(&mut self, cx: &ContextRef, mut statements: Option<NodeRef>, pos: i32) -> NodeRef {
         if statements.is_none() {
             let s = self.statement_list_concat(None, None);
             s.borrow_mut().as_statement_list_mut().unwrap().was_empty = true;
             statements = Some(s);
         }
-        let node = ProgramNode::new(node_cx, statements.clone());
+        let node = ProgramNode::new(Some(cx.clone()), statements.clone());
         {
             let mut n = node.borrow_mut();
             n.set_position_nonterminal(statements.as_ref(), pos);
@@ -1749,17 +1742,17 @@ impl NodeFactory {
         node
     }
 
-    pub fn binary_program(&mut self, node_cx: Option<ContextRef>, statements: Option<NodeRef>) -> NodeRef {
-        self.binary_program_pos(node_cx, statements, -1)
+    pub fn binary_program(&mut self, cx: &ContextRef, statements: Option<NodeRef>) -> NodeRef {
+        self.binary_program_pos(cx, statements, -1)
     }
 
-    pub fn binary_program_pos(&mut self, node_cx: Option<ContextRef>, mut statements: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn binary_program_pos(&mut self, cx: &ContextRef, mut statements: Option<NodeRef>, pos: i32) -> NodeRef {
         if statements.is_none() {
             let s = self.statement_list_concat(None, None);
             s.borrow_mut().as_statement_list_mut().unwrap().was_empty = true;
             statements = Some(s);
         }
-        let node = BinaryProgramNode::new(node_cx, statements.clone());
+        let node = BinaryProgramNode::new(Some(cx.clone()), statements.clone());
         {
             let mut n = node.borrow_mut();
             n.set_position_nonterminal(statements.as_ref(), pos);
@@ -1790,15 +1783,15 @@ impl NodeFactory {
         node
     }
 
-    pub fn rest_parameter(&mut self, cx: &mut Context, expr: Option<NodeRef>) -> Option<NodeRef> {
-        self.rest_parameter_pos(cx, expr, -1)
+    pub fn rest_parameter(&mut self, expr: Option<NodeRef>) -> Option<NodeRef> {
+        self.rest_parameter_pos(expr, -1)
     }
 
-    pub fn rest_parameter_pos(&mut self, cx: &mut Context, expr: Option<NodeRef>, pos: i32) -> Option<NodeRef> {
+    pub fn rest_parameter_pos(&mut self, expr: Option<NodeRef>, pos: i32) -> Option<NodeRef> {
         self.has_rest = true;
         let mut node = None;
         match &expr {
-            None => cx.error(pos - 1, kError_RestParameterNotNamed),
+            None => self.get_context().borrow().error(pos - 1, kError_RestParameterNotNamed),
             Some(e) => {
                 let n = RestParameterNode::new(e.clone());
                 n.borrow_mut().set_position_nonterminal(Some(e), pos);
@@ -1844,13 +1837,12 @@ impl NodeFactory {
     }
 
     /// `setExpression(GetExpressionNode get, ...)`.
-    pub fn set_expression_get(&mut self, cx: &mut Context, get: Option<NodeRef>, args: Option<NodeRef>, is_constinit: bool) -> NodeRef {
-        self.set_expression_get_pos(cx, get, args, is_constinit, -1)
+    pub fn set_expression_get(&mut self, get: Option<NodeRef>, args: Option<NodeRef>, is_constinit: bool) -> NodeRef {
+        self.set_expression_get_pos(get, args, is_constinit, -1)
     }
 
     pub fn set_expression_get_pos(
         &mut self,
-        cx: &mut Context,
         get: Option<NodeRef>,
         args: Option<NodeRef>,
         is_constinit: bool,
@@ -1865,11 +1857,11 @@ impl NodeFactory {
             self.set_expression_pos(get_expr, args, is_constinit, pos)
         } else if rb(&get_expr).has_side_effect() {
             let reg = self.register(-1);
-            let store = self.store_register(Some(reg.clone()), get_expr, Some(cx.no_type()), -1);
+            let store = self.store_register(Some(reg.clone()), get_expr, Some(self.get_context().borrow().no_type()), -1);
             let first = self.list(None, Some(store));
-            let load = self.load_register(Some(reg.clone()), Some(cx.no_type()), -1);
+            let load = self.load_register(Some(reg.clone()), Some(self.get_context().borrow().no_type()), -1);
             let expr = self.list(Some(first), Some(load));
-            let load = self.load_register(Some(reg), Some(cx.no_type()), -1);
+            let load = self.load_register(Some(reg), Some(self.get_context().borrow().no_type()), -1);
             rbm(&get).selector_mut().unwrap().expr = Some(load);
             self.set_expression_pos(Some(expr), args, is_constinit, pos)
         } else {
@@ -1877,11 +1869,11 @@ impl NodeFactory {
         }
     }
 
-    pub fn statement_list(&mut self, cx: &mut Context, list: Option<NodeRef>, item: Option<NodeRef>) -> NodeRef {
-        self.statement_list_pos(cx, list, item, -1)
+    pub fn statement_list(&mut self, list: Option<NodeRef>, item: Option<NodeRef>) -> NodeRef {
+        self.statement_list_pos(list, item, -1)
     }
 
-    pub fn statement_list_pos(&mut self, cx: &mut Context, list: Option<NodeRef>, item: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn statement_list_pos(&mut self, list: Option<NodeRef>, item: Option<NodeRef>, pos: i32) -> NodeRef {
         let item_is = |f: fn(&Node) -> bool| is_kind(&item, f);
         let node: NodeRef;
         if let Some(list) = list {
@@ -1939,7 +1931,7 @@ impl NodeFactory {
                 }
             }
 
-            if !cx.script_assist_parsing() && item_is(|n| n.as_include_directive().is_some()) {
+            if !self.get_context().borrow().script_assist_parsing && item_is(|n| n.as_include_directive().is_some()) {
                 let included = Self::included_statements(&item);
                 let mut l = list.borrow_mut();
                 let l = l.as_statement_list_mut().unwrap();
@@ -1971,7 +1963,7 @@ impl NodeFactory {
                 node.borrow_mut().set_position_nonterminal(item.as_ref(), item_pos);
             }
 
-            if !cx.script_assist_parsing() && item_is(|n| n.as_include_directive().is_some()) {
+            if !self.get_context().borrow().script_assist_parsing && item_is(|n| n.as_include_directive().is_some()) {
                 let included = Self::included_statements(&item);
                 let mut n = node.borrow_mut();
                 let n = n.as_statement_list_mut().unwrap();
@@ -2047,17 +2039,15 @@ impl NodeFactory {
 
     pub fn try_statement(
         &mut self,
-        cx: &mut Context,
         tryblock: Option<NodeRef>,
         catchlist: Option<NodeRef>,
         finallyblock: Option<NodeRef>,
     ) -> NodeRef {
-        self.try_statement_pos(cx, tryblock, catchlist, finallyblock, -1)
+        self.try_statement_pos(tryblock, catchlist, finallyblock, -1)
     }
 
     pub fn try_statement_pos(
         &mut self,
-        cx: &mut Context,
         mut tryblock: Option<NodeRef>,
         catchlist: Option<NodeRef>,
         finallyblock: Option<NodeRef>,
@@ -2065,24 +2055,24 @@ impl NodeFactory {
     ) -> NodeRef {
         if tryblock.is_none() {
             let empty = self.empty_statement();
-            tryblock = Some(self.statement_list(cx, None, Some(empty)));
+            tryblock = Some(self.statement_list(None, Some(empty)));
         }
         let node = TryStatementNode::new(tryblock.clone(), catchlist, finallyblock);
         node.borrow_mut().set_position_nonterminal(tryblock.as_ref(), pos);
         node
     }
 
-    pub fn finally_clause(&mut self, cx: &mut Context, block: Option<NodeRef>) -> NodeRef {
-        self.finally_clause_pos(cx, block, -1)
+    pub fn finally_clause(&mut self, block: Option<NodeRef>) -> NodeRef {
+        self.finally_clause_pos(block, -1)
     }
 
-    pub fn finally_clause_pos(&mut self, cx: &mut Context, mut block: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn finally_clause_pos(&mut self, mut block: Option<NodeRef>, pos: i32) -> NodeRef {
         if block.is_none() {
             let empty = self.empty_statement();
-            block = Some(self.statement_list(cx, None, Some(empty)));
+            block = Some(self.statement_list(None, Some(empty)));
         }
         let throw = self.throw_statement(None, 0);
-        let throw_list = self.statement_list(cx, None, Some(throw));
+        let throw_list = self.statement_list(None, Some(throw));
         let catch_clause = self.catch_clause(None, Some(throw_list));
         let node = FinallyClauseNode::new(block.clone(), Some(catch_clause));
         node.borrow_mut().set_position_nonterminal(block.as_ref(), pos);
@@ -2100,11 +2090,11 @@ impl NodeFactory {
         node
     }
 
-    pub fn unary_expression(&mut self, cx: &mut Context, op: i32, expr: Option<NodeRef>) -> NodeRef {
-        self.unary_expression_pos(cx, op, expr, -1)
+    pub fn unary_expression(&mut self, op: i32, expr: Option<NodeRef>) -> NodeRef {
+        self.unary_expression_pos(op, expr, -1)
     }
 
-    pub fn unary_expression_pos(&mut self, cx: &mut Context, op: i32, mut expr: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn unary_expression_pos(&mut self, op: i32, mut expr: Option<NodeRef>, pos: i32) -> NodeRef {
         let node: NodeRef;
         if op == DELETE_TOKEN {
             let mut member: Option<NodeRef> = None;
@@ -2206,7 +2196,7 @@ impl NodeFactory {
                 let n = n.as_literal_number_mut().unwrap();
                 if op == MINUS_TOKEN {
                     n.negate();
-                } else if cx.script_assist_parsing() {
+                } else if self.get_context().borrow().script_assist_parsing {
                     n.value = format!("+{}", n.value);
                 }
             }
@@ -2218,25 +2208,25 @@ impl NodeFactory {
         node
     }
 
-    pub fn use_directive(&mut self, cx: &mut Context, attrs: Option<NodeRef>, expr: Option<NodeRef>) -> NodeRef {
-        self.use_directive_pos(cx, attrs, expr, -1)
+    pub fn use_directive(&mut self, attrs: Option<NodeRef>, expr: Option<NodeRef>) -> NodeRef {
+        self.use_directive_pos(attrs, expr, -1)
     }
 
-    pub fn use_directive_pos(&mut self, cx: &mut Context, attrs: Option<NodeRef>, expr: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn use_directive_pos(&mut self, attrs: Option<NodeRef>, expr: Option<NodeRef>, pos: i32) -> NodeRef {
         let node = UseDirectiveNode::new(self.current_package.clone(), attrs, expr.clone());
         node.borrow_mut().set_position_nonterminal(expr.as_ref(), pos);
         let use_stmts = self.use_stmts.take();
-        self.use_stmts = Some(self.statement_list(cx, use_stmts, Some(node.clone())));
+        self.use_stmts = Some(self.statement_list(use_stmts, Some(node.clone())));
         node
     }
 
-    pub fn use_pragma(&mut self, cx: &mut Context, id: Option<NodeRef>, argument: Option<NodeRef>) -> NodeRef {
-        self.use_pragma_pos(cx, id, argument, -1)
+    pub fn use_pragma(&mut self, id: Option<NodeRef>, argument: Option<NodeRef>) -> NodeRef {
+        self.use_pragma_pos(id, argument, -1)
     }
 
-    pub fn use_pragma_pos(&mut self, cx: &mut Context, id: Option<NodeRef>, argument: Option<NodeRef>, pos: i32) -> NodeRef {
+    pub fn use_pragma_pos(&mut self, id: Option<NodeRef>, argument: Option<NodeRef>, pos: i32) -> NodeRef {
         let mut node: Option<NodeRef> = None;
-        if is_kind(&id, Node::is_identifier) && cx.statics.borrow().es4_numerics {
+        if is_kind(&id, Node::is_identifier) && self.get_context().borrow().statics.borrow().es4_numerics {
             let idval = rbm(&id).to_identifier_string().unwrap_or_default();
             if idval == "precision" {
                 node = Some(UsePrecisionNode::new(id.clone(), argument.clone()));
@@ -2299,23 +2289,23 @@ impl NodeFactory {
         node
     }
 
-    pub fn with_statement(&mut self, cx: &mut Context, expr: Option<NodeRef>, stmt: Option<NodeRef>) -> NodeRef {
-        self.with_statement_pos(cx, expr, stmt, -1)
+    pub fn with_statement(&mut self, expr: Option<NodeRef>, stmt: Option<NodeRef>) -> NodeRef {
+        self.with_statement_pos(expr, stmt, -1)
     }
 
-    pub fn with_statement_pos(&mut self, cx: &mut Context, expr: Option<NodeRef>, stmt: Option<NodeRef>, pos: i32) -> NodeRef {
-        let stmt = self.ensure_statement_list(cx, stmt);
+    pub fn with_statement_pos(&mut self, expr: Option<NodeRef>, stmt: Option<NodeRef>, pos: i32) -> NodeRef {
+        let stmt = self.ensure_statement_list(stmt);
         let node = WithStatementNode::new(expr.clone(), stmt);
         node.borrow_mut().set_position_nonterminal(expr.as_ref(), pos);
         node
     }
 
-    pub fn while_statement(&mut self, cx: &mut Context, expr: Option<NodeRef>, stmt: Option<NodeRef>) -> NodeRef {
-        self.while_statement_pos(cx, expr, stmt, -1)
+    pub fn while_statement(&mut self, expr: Option<NodeRef>, stmt: Option<NodeRef>) -> NodeRef {
+        self.while_statement_pos(expr, stmt, -1)
     }
 
-    pub fn while_statement_pos(&mut self, cx: &mut Context, expr: Option<NodeRef>, stmt: Option<NodeRef>, pos: i32) -> NodeRef {
-        let stmt = self.ensure_statement_list(cx, stmt);
+    pub fn while_statement_pos(&mut self, expr: Option<NodeRef>, stmt: Option<NodeRef>, pos: i32) -> NodeRef {
+        let stmt = self.ensure_statement_list(stmt);
         let node = WhileStatementNode::new(expr.clone(), stmt);
         node.borrow_mut().set_position_nonterminal(expr.as_ref(), pos);
         node
@@ -2442,8 +2432,8 @@ impl NodeFactory {
         node
     }
 
-    pub fn filter_operator(&mut self, cx: &mut Context, expr1: Option<NodeRef>, expr2: Option<NodeRef>, pos: i32) -> NodeRef {
-        if cx.script_assist_parsing() {
+    pub fn filter_operator(&mut self, expr1: Option<NodeRef>, expr2: Option<NodeRef>, pos: i32) -> NodeRef {
+        if self.get_context().borrow().script_assist_parsing {
             let get = self.get_expression(expr2);
             return self.member_expression(expr1, Some(get));
         }
@@ -2455,52 +2445,52 @@ impl NodeFactory {
 
         let check_args = self.argument_list(None, expr1);
         let check_filter = self.invoke("[[CheckFilterOperand]]", Some(check_args), pos);
-        let untyped_expr = self.coerce_pos(Some(check_filter), None, Some(cx.no_type().get_default_type_info()), true, pos);
+        let untyped_expr = self.coerce_pos(Some(check_filter), None, Some(self.get_context().borrow().no_type().get_default_type_info()), true, pos);
 
         let zero = self.literal_number_pos("0", pos);
-        let store_ndx = self.store_register(Some(ndx_reg.clone()), Some(zero), Some(cx.int_type()), pos);
+        let store_ndx = self.store_register(Some(ndx_reg.clone()), Some(zero), Some(self.get_context().borrow().int_type()), pos);
         let init0 = self.list(None, Some(store_ndx));
-        let store_obj = self.store_register(Some(obj_reg.clone()), Some(untyped_expr), Some(cx.no_type()), pos);
+        let store_obj = self.store_register(Some(obj_reg.clone()), Some(untyped_expr), Some(self.get_context().borrow().no_type()), pos);
         let init1 = self.list(Some(init0), Some(store_obj));
         let empty = self.literal_string_pos("", pos);
         let xml_list = self.list(None, Some(empty));
         let xml = self.literal_xml(Some(xml_list), true, pos);
-        let store_tmp = self.store_register(Some(tmp_reg.clone()), Some(xml), Some(cx.no_type()), pos);
+        let store_tmp = self.store_register(Some(tmp_reg.clone()), Some(xml), Some(self.get_context().borrow().no_type()), pos);
         let init = self.list(Some(init1), Some(store_tmp));
 
         let test = self.has_next(Some(obj_reg.clone()), Some(ndx_reg.clone()), pos);
 
-        let load_obj = self.load_register(Some(obj_reg), Some(cx.no_type()), pos);
-        let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(cx.int_type()), pos);
+        let load_obj = self.load_register(Some(obj_reg), Some(self.get_context().borrow().no_type()), pos);
+        let load_ndx = self.load_register(Some(ndx_reg.clone()), Some(self.get_context().borrow().int_type()), pos);
         let next_args = self.argument_list(None, Some(load_ndx));
         let next_value = self.invoke("[[NextValue]]", Some(next_args), pos);
         let member = self.member_expression(Some(load_obj), Some(next_value));
-        let store_var = self.store_register(Some(var_reg.clone()), Some(member), Some(cx.no_type()), pos);
+        let store_var = self.store_register(Some(var_reg.clone()), Some(member), Some(self.get_context().borrow().no_type()), pos);
         let incr = self.expression_statement(Some(store_var));
         incr.borrow_mut().as_expression_statement_mut().unwrap().set_is_var_statement(true);
 
-        let load_ndx = self.load_register(Some(ndx_reg), Some(cx.int_type()), pos);
-        let load_var = self.load_register(Some(var_reg.clone()), Some(cx.no_type()), pos);
+        let load_ndx = self.load_register(Some(ndx_reg), Some(self.get_context().borrow().int_type()), pos);
+        let load_var = self.load_register(Some(var_reg.clone()), Some(self.get_context().borrow().no_type()), pos);
         let set_args = self.argument_list(None, Some(load_var));
         let setx = self.set_expression(Some(load_ndx), Some(set_args), false);
         setx.borrow_mut().selector_mut().unwrap().set_mode(EMPTY_TOKEN);
 
-        let load_tmp = self.load_register(Some(tmp_reg.clone()), Some(cx.no_type()), pos);
+        let load_tmp = self.load_register(Some(tmp_reg.clone()), Some(self.get_context().borrow().no_type()), pos);
         let tmp_member = self.member_expression_pos(Some(load_tmp), Some(setx), pos);
         let tmp_stmt = self.expression_statement_pos(Some(tmp_member), pos);
-        let stmt2 = self.statement_list_pos(cx, None, Some(tmp_stmt), pos);
+        let stmt2 = self.statement_list_pos(None, Some(tmp_stmt), pos);
 
-        let mut stmt = self.statement_list(cx, None, Some(incr));
-        let load_var = self.load_register(Some(var_reg), Some(cx.no_type()), pos);
+        let mut stmt = self.statement_list(None, Some(incr));
+        let load_var = self.load_register(Some(var_reg), Some(self.get_context().borrow().no_type()), pos);
         let filter_test = self.list(None, expr2);
-        let if_stmt = self.if_statement(cx, Some(filter_test), Some(stmt2), None);
-        let with_stmt = self.with_statement(cx, Some(load_var), Some(if_stmt));
-        stmt = self.statement_list(cx, Some(stmt), Some(with_stmt));
+        let if_stmt = self.if_statement(Some(filter_test), Some(stmt2), None);
+        let with_stmt = self.with_statement(Some(load_var), Some(if_stmt));
+        stmt = self.statement_list(Some(stmt), Some(with_stmt));
 
-        let node = self.for_statement_pos(cx, Some(init), Some(test), None, Some(stmt), false, pos);
-        let tmp_alloc = self.statement_list_pos(cx, None, Some(tmp_reg.clone()), pos);
-        let with_loop = self.statement_list(cx, Some(tmp_alloc), Some(node));
-        let load_tmp = self.load_register(Some(tmp_reg), Some(cx.no_type()), pos);
-        self.statement_list(cx, Some(with_loop), Some(load_tmp))
+        let node = self.for_statement_pos(Some(init), Some(test), None, Some(stmt), false, pos);
+        let tmp_alloc = self.statement_list_pos(None, Some(tmp_reg.clone()), pos);
+        let with_loop = self.statement_list(Some(tmp_alloc), Some(node));
+        let load_tmp = self.load_register(Some(tmp_reg), Some(self.get_context().borrow().no_type()), pos);
+        self.statement_list(Some(with_loop), Some(load_tmp))
     }
 }

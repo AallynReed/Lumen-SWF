@@ -7,14 +7,12 @@ use std::collections::HashSet;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::asc::parser::factory::NodeFactory;
 use crate::asc::parser::tokens::*;
 use crate::asc::semantics::value::*;
+pub use crate::asc::util::context::ContextRef;
 use crate::asc::util::context::Context;
 
 pub type NodeRef = Rc<RefCell<Node>>;
-/// A Java `Context` reference held by a node.
-pub type ContextRef = Rc<RefCell<Context>>;
 /// An `ObjectList<...Node>` that Java shares between a node and an evaluator's stack.
 pub type NodeList = Rc<RefCell<Vec<NodeRef>>>;
 
@@ -227,11 +225,11 @@ impl Node {
         }
     }
 
-    pub fn get_ref(&mut self, cx: &mut Context) -> Option<ReferenceValue> {
+    pub fn get_ref(&mut self, cx: &ContextRef) -> Option<ReferenceValue> {
         match &mut self.kind {
             Kind::ExpressionStatement(n) => {
                 if n.ref_.is_none() {
-                    n.ref_ = Some(ReferenceValue::new(cx, None, "_cv", ObjectValue::internal_namespace()));
+                    n.ref_ = Some(ReferenceValue::new(&cx.borrow(), None, "_cv", Some(&ObjectValue::internal_namespace())));
                 }
                 n.ref_.clone()
             }
@@ -288,7 +286,7 @@ impl Node {
         }
     }
 
-    pub fn to_canonical_string(&self, cx: &mut Context, buf: &mut String) {
+    pub fn to_canonical_string(&self, cx: &ContextRef, buf: &mut String) {
         match &self.kind {
             Kind::FunctionSignature(n) => n.to_canonical_string(cx, buf),
             Kind::MemberExpression(n) => {
@@ -1226,8 +1224,8 @@ pub fn last(this: &NodeRef) -> Option<NodeRef> {
     last(statements.as_ref().expect("NullPointerException"))
 }
 
-/// `Node.initializerStatement(cx)`; `nf` is `cx.getNodeFactory()`.
-pub fn initializer_statement(this: &NodeRef, cx: &mut Context, nf: &mut NodeFactory) -> NodeRef {
+/// `Node.initializerStatement(cx)`.
+pub fn initializer_statement(this: &NodeRef, cx: &ContextRef) -> NodeRef {
     enum Which {
         This,
         Empty,
@@ -1246,14 +1244,14 @@ pub fn initializer_statement(this: &NodeRef, cx: &mut Context, nf: &mut NodeFact
     };
     match which {
         Which::This => this.clone(),
-        Which::Empty => nf.empty_statement(),
+        Which::Empty => Context::get_node_factory(cx).borrow_mut().empty_statement(),
         Which::NamespaceDefinition => {
             this.borrow_mut().namespace_definition_mut().unwrap().needs_init = true;
             this.clone()
         }
         Which::FunctionDefinition => {
-            let obj = cx.scope();
-            let bui = obj.builder();
+            let obj = cx.borrow().scope().expect("NullPointerException");
+            let bui = obj.builder().expect("NullPointerException");
             let (has_pkgdef, name_kind) = {
                 let node = this.borrow();
                 let fd = node.function_definition().unwrap();
@@ -1267,13 +1265,13 @@ pub fn initializer_statement(this: &NodeRef, cx: &mut Context, nf: &mut NodeFact
                     || name_kind == GET_TOKEN
                     || name_kind == SET_TOKEN)
             {
-                nf.empty_statement()
+                Context::get_node_factory(cx).borrow_mut().empty_statement()
             } else {
                 this.borrow_mut().function_definition_mut().unwrap().needs_init = true;
                 this.clone()
             }
         }
-        Which::VariableDefinition => VariableDefinitionNode::initializer_statement(this, cx, nf),
+        Which::VariableDefinition => VariableDefinitionNode::initializer_statement(this, cx),
     }
 }
 
@@ -1319,7 +1317,7 @@ impl ArgumentListNode {
         if self.decl_styles.is_none() {
             self.decl_styles = Some(ByteList::with_capacity(2));
         }
-        self.decl_styles.as_mut().unwrap().push_back(style as i8);
+        self.decl_styles.as_mut().unwrap().push(style as u8);
     }
 }
 
@@ -1954,7 +1952,7 @@ impl DocCommentNode {
         buf.push_str("</metadata>\n");
     }
 
-    pub fn emit(&self, cx: &mut Context, buf: &mut String) {
+    pub fn emit(&self, cx: &ContextRef, buf: &mut String) {
         let mut tagname = String::new();
         let mut debug_name = String::new();
         let def = self.meta.def.clone();
@@ -2021,7 +2019,7 @@ impl DocCommentNode {
                     buf.push_str("isStatic='false' ");
                 }
                 let vb_ref = vb.ref_.as_ref().expect("NullPointerException");
-                if let Some(s) = vb_ref.get_slot(cx) {
+                if let Some(s) = vb_ref.get_slot(&mut cx.borrow_mut()) {
                     buf.push_str("isConst='");
                     buf.push_str(if s.is_const() { "true" } else { "false" });
                     buf.push_str("' ");
@@ -2039,14 +2037,14 @@ impl DocCommentNode {
                         buf.push_str(if n.value { "true" } else { "false" });
                     } else if let Some(mb) = init.as_member_expression() {
                         let vs = match &mb.ref_ {
-                            Some(r) => r.get_slot_kind(cx, GET_TOKEN),
+                            Some(r) => r.get_slot_kind(&mut cx.borrow_mut(), GET_TOKEN),
                             None => None,
                         };
                         let v = vs.and_then(|vs| vs.get_value());
                         let ov = v.and_then(|v| v.as_object_value());
                         buf.push_str(&ov.map_or_else(|| "unknown".to_string(), |ov| ov.get_value()));
                     } else {
-                        let vs = vb_ref.get_slot_kind(cx, GET_TOKEN);
+                        let vs = vb_ref.get_slot_kind(&mut cx.borrow_mut(), GET_TOKEN);
                         let v = vs.and_then(|vs| vs.get_value());
                         let ov = v.and_then(|v| v.as_object_value());
                         buf.push_str(&ov.map_or_else(|| "unknown".to_string(), |ov| ov.get_value()));
@@ -2111,13 +2109,13 @@ impl DocCommentNode {
                         }
                     }
                 }
-                let ns = cd.cframe.as_ref().expect("NullPointerException").builder().classname().ns();
+                let ns = cd.cframe.as_ref().expect("NullPointerException").builder().expect("NullPointerException").classname().expect("NullPointerException").ns().expect("NullPointerException");
                 buf.push_str("' namespace='");
                 buf.push_str(&ns.name());
                 buf.push_str("' access='");
                 buf.push_str(Self::get_access_kind_from_ns(&ns));
 
-                let append_interfaces = |cx: &mut Context, buf: &mut String, interfaces: &Option<NodeRef>| {
+                let append_interfaces = |cx: &ContextRef, buf: &mut String, interfaces: &Option<NodeRef>| {
                     let interfaces = rb(interfaces);
                     let values = &interfaces.list().unwrap().values;
                     let first_v = values[0].clone();
@@ -2126,7 +2124,7 @@ impl DocCommentNode {
                         if !v.ptr_eq(&first_v) {
                             buf.push(';');
                         }
-                        let s = rv.get_slot_kind(cx, GET_TOKEN);
+                        let s = rv.get_slot_kind(&mut cx.borrow_mut(), GET_TOKEN);
                         match s {
                             Some(s) if !s.get_debug_name().is_empty() => buf.push_str(&s.get_debug_name()),
                             _ => buf.push_str(&rv.name()),
@@ -2145,7 +2143,7 @@ impl DocCommentNode {
                 } else {
                     buf.push_str("' baseclass='");
                     if let Some(baseref) = &cd.baseref {
-                        let s = baseref.get_slot_kind(cx, GET_TOKEN);
+                        let s = baseref.get_slot_kind(&mut cx.borrow_mut(), GET_TOKEN);
                         match s {
                             Some(s) if !s.get_debug_name().is_empty() => buf.push_str(&s.get_debug_name()),
                             _ => buf.push_str("Object"),
@@ -2268,8 +2266,8 @@ impl DocCommentNode {
         }
     }
 
-    pub fn get_ref_name(cx: &mut Context, ref_: &ReferenceValue) -> String {
-        let s = ref_.get_slot_kind(cx, GET_TOKEN);
+    pub fn get_ref_name(cx: &ContextRef, ref_: &ReferenceValue) -> String {
+        let s = ref_.get_slot_kind(&mut cx.borrow_mut(), GET_TOKEN);
         match s {
             Some(s) if !s.get_debug_name().is_empty() => s.get_debug_name(),
             s => {
@@ -2284,7 +2282,7 @@ impl DocCommentNode {
         }
     }
 
-    fn get_indexed_type_name(cx: &mut Context, t: Option<TypeValue>) -> String {
+    fn get_indexed_type_name(cx: &ContextRef, t: Option<TypeValue>) -> String {
         let t = t.expect("NullPointerException");
         let mut name = "$".to_string();
         if t.name().is_parameterized_name() {
@@ -2664,7 +2662,7 @@ impl FunctionSignatureNode {
         }
     }
 
-    pub fn to_canonical_string(&self, cx: &mut Context, buff: &mut String) {
+    pub fn to_canonical_string(&self, cx: &ContextRef, buff: &mut String) {
         if self.parameter.is_some() {
             rb(&self.parameter).to_canonical_string(cx, buff);
         }
@@ -2674,7 +2672,7 @@ impl FunctionSignatureNode {
         } else if self.void_anno {
             buff.push_str("void");
         } else {
-            buff.push_str(&cx.no_type().name().to_string());
+            buff.push_str(&cx.borrow().no_type().name().to_string());
         }
         buff.push('\'');
     }
@@ -3178,19 +3176,19 @@ impl MetaDataNode {
     }
 
     pub fn get_id(&self) -> Option<String> {
-        self.md.as_ref().and_then(|md| md.id.clone())
+        self.md.as_ref().and_then(|md| md.id())
     }
 
     pub fn set_id(&mut self, id: Option<String>) {
-        self.md.get_or_insert_with(MetaData::new).id = id;
+        self.md.get_or_insert_with(MetaData::new).set_id(id);
     }
 
     pub fn get_values(&self) -> Option<Vec<Value>> {
-        self.md.as_ref().and_then(|md| md.values.clone())
+        self.md.as_ref().and_then(|md| md.values())
     }
 
     pub fn set_values(&mut self, values: Option<Vec<Value>>) {
-        self.md.get_or_insert_with(MetaData::new).values = values;
+        self.md.get_or_insert_with(MetaData::new).set_values(values);
     }
 
     pub fn get_metadata(&self) -> Option<MetaData> {
@@ -3368,7 +3366,7 @@ impl ParameterListNode {
         self.count
     }
 
-    pub fn to_canonical_string(&self, cx: &mut Context, buf: &mut String) {
+    pub fn to_canonical_string(&self, cx: &ContextRef, buf: &mut String) {
         {
             buf.push_str(" param_names='");
             let first_item = self.items[0].clone();
@@ -4133,7 +4131,9 @@ impl VariableDefinitionNode {
         Node::new(pos, Kind::VariableDefinition(n)).into_ref()
     }
 
-    fn initializer_statement(this: &NodeRef, cx: &mut Context, node_factory: &mut NodeFactory) -> NodeRef {
+    fn initializer_statement(this: &NodeRef, cx: &ContextRef) -> NodeRef {
+        let node_factory = Context::get_node_factory(cx);
+        let mut node_factory = node_factory.borrow_mut();
         let (is_const, items) = {
             let node = this.borrow();
             let list = rb(&node.as_variable_definition().unwrap().list);
@@ -4163,7 +4163,6 @@ impl VariableDefinitionNode {
                 if initializer.is_some() {
                     let identifier = rb(&variable).as_typed_identifier().unwrap().identifier.clone();
                     let assign_node = node_factory.assignment_expression(
-                        cx,
                         identifier,
                         if kind == CONST_TOKEN { CONST_TOKEN } else { ASSIGN_TOKEN },
                         initializer,

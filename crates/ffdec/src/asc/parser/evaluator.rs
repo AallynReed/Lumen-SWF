@@ -4,7 +4,7 @@
 
 use crate::asc::parser::node::{Kind, NodeRef};
 use crate::asc::semantics::value::Value;
-use crate::asc::util::context::Context;
+use crate::asc::util::context::ContextRef;
 
 pub const global_this: i32 = 0;
 pub const instance_this: i32 = 1;
@@ -22,113 +22,113 @@ pub const super_error_es4: i32 = 4;
 /// One method per Java `evaluate` overload; the defaults return what `Node.evaluate` does.
 #[rustfmt::skip]
 pub trait Evaluator {
-    fn check_feature(&mut self, _cx: &mut Context, _node: &NodeRef) -> bool { true }
+    fn check_feature(&mut self, _cx: &ContextRef, _node: &NodeRef) -> bool { true }
 
-    fn evaluate_node(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_increment(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_delete_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_identifier(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_invoke(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_this_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_qualified_identifier(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_qualified_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_boolean(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_number(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_string(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_null(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_reg_exp(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_xml(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_function_common(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_paren_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_paren_list_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_object(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_field(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_array(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_literal_vector(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_super_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_super_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_member_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_call_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_get_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_set_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_apply_type_expr(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_unary_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_binary_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_conditional_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_argument_list(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_list(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_statement_list(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_empty_element(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_empty_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_expression_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_labeled_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_if_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_switch_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_case_label(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_do_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_while_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_for_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_with_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_continue_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_break_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_return_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_throw_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_try_statement(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_catch_clause(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_finally_clause(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_use_directive(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_include_directive(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_import(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_meta_data(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_doc_comment(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_import_directive(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_attribute_list(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_variable_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_variable_binding(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_untyped_variable_binding(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_typed_identifier(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_type_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_function_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_binary_function_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_function_name(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_function_signature(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_parameter(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_parameter_list(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_rest_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_rest_parameter(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_interface_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_class_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_binary_class_def(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_binary_interface_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_class_name(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_inheritance(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_namespace_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_config_namespace_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_package_definition(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_package_identifiers(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_package_name(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_program(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_binary_program(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_error(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_to_object(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_load_register(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_store_register(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_register(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_has_next(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_box(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_coerce(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_pragma(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_use_precision(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_use_numeric(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_use_rounding(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_pragma_expression(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
-    fn evaluate_default_xml_namespace(&mut self, _cx: &mut Context, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_node(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_increment(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_delete_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_identifier(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_invoke(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_this_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_qualified_identifier(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_qualified_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_boolean(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_number(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_string(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_null(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_reg_exp(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_xml(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_function_common(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_paren_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_paren_list_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_object(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_field(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_array(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_literal_vector(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_super_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_super_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_member_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_call_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_get_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_set_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_apply_type_expr(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_unary_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_binary_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_conditional_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_argument_list(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_list(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_statement_list(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_empty_element(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_empty_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_expression_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_labeled_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_if_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_switch_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_case_label(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_do_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_while_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_for_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_with_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_continue_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_break_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_return_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_throw_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_try_statement(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_catch_clause(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_finally_clause(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_use_directive(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_include_directive(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_import(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_meta_data(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_doc_comment(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_import_directive(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_attribute_list(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_variable_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_variable_binding(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_untyped_variable_binding(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_typed_identifier(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_type_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_function_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_binary_function_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_function_name(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_function_signature(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_parameter(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_parameter_list(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_rest_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_rest_parameter(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_interface_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_class_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_binary_class_def(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_binary_interface_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_class_name(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_inheritance(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_namespace_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_config_namespace_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_package_definition(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_package_identifiers(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_package_name(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_program(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_binary_program(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_error(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_to_object(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_load_register(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_store_register(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_register(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_has_next(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_box(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_coerce(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_pragma(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_use_precision(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_use_numeric(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_use_rounding(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_pragma_expression(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
+    fn evaluate_default_xml_namespace(&mut self, _cx: &ContextRef, _node: &NodeRef) -> Option<Value> { None }
 }
 
-type EvalFn<E> = fn(&mut E, &mut Context, &NodeRef) -> Option<Value>;
+type EvalFn<E> = fn(&mut E, &ContextRef, &NodeRef) -> Option<Value>;
 
 /// `node.evaluate(cx, evaluator)`: each class's override, resolved to the overload Java's static typing picks.
-pub fn evaluate<E: Evaluator + ?Sized>(node: &NodeRef, cx: &mut Context, evaluator: &mut E) -> Option<Value> {
+pub fn evaluate<E: Evaluator + ?Sized>(node: &NodeRef, cx: &ContextRef, evaluator: &mut E) -> Option<Value> {
     let f: EvalFn<E> = match &node.borrow().kind {
         Kind::ApplyTypeExpr(_) => E::evaluate_apply_type_expr,
         Kind::ArgumentList(_) => E::evaluate_argument_list,

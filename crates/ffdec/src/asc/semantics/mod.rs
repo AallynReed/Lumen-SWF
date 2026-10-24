@@ -1,3 +1,23 @@
-//! `macromedia.asc.semantics`.
+//! `macromedia.asc.semantics`: the object model the semantic passes work on.
 
+pub mod builder;
+pub mod configuration_builder;
+pub mod interface_walker;
+pub mod meta_data;
+pub mod method_slot;
+pub mod namespace_value;
+pub mod object_value;
+pub mod object_value_walker;
+pub mod object_value_wrapper;
+pub mod ordinary_builder;
+pub mod parameterized_name;
+pub mod prototype_walker;
+pub mod q_name;
+pub mod reference_value;
+pub mod slot;
+pub mod type_;
+pub mod type_info;
+pub mod type_value;
+pub mod unresolved_namespace;
 pub mod value;
+pub mod variable_slot;

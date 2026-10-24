@@ -416,3 +416,9 @@ pub static TOKEN_TO_STRING: [&str; 137] = [
     "",
     "",
 ];
+
+/// `Token.getTokenClassName(int)`.
+pub fn get_token_class_name(token_class: i32) -> &'static str {
+    let temp = -token_class;
+    TOKEN_CLASS_NAMES[temp as usize]
+}
