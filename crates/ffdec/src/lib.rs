@@ -2,6 +2,7 @@
 
 pub mod abc;
 pub mod amf;
+pub mod asc;
 pub mod bundle;
 pub mod action;
 pub mod container;
