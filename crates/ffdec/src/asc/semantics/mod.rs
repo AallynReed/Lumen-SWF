@@ -1,6 +1,7 @@
 //! `macromedia.asc.semantics`: the object model the semantic passes work on.
 
 pub mod builder;
+pub mod code_generator;
 pub mod configuration_builder;
 pub mod configuration_evaluator;
 pub mod constant_evaluator;
