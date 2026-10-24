@@ -269,7 +269,7 @@ emitter_methods! {
         fwd!(this.finally_clause_end());
     }
 
-    fn catch(&mut this, type_: Option<&TypeValue>, name: &QName) {
+    fn catch(&mut this, type_: Option<&TypeValue>, name: Option<&QName>) {
         fwd!(this.catch(type_, name));
     }
 

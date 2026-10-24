@@ -1057,6 +1057,11 @@ impl ObjectValue {
         }
     }
 
+    /// The `base_objs` field.
+    pub fn base_objs(&self) -> Option<Vec<ObjectValue>> {
+        self.0.borrow().base_objs.clone()
+    }
+
     pub fn set_protected_namespaces(&self, protected_ns: Option<ObjectValue>, base_protected: Option<ObjectValue>) {
         let mut d = self.0.borrow_mut();
         d.protected_ns = protected_ns;

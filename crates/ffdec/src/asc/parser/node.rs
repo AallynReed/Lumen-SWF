@@ -1291,7 +1291,7 @@ impl ApplyTypeExprNode {
 
 pub struct ArgumentListNode {
     pub items: Vec<Option<NodeRef>>,
-    pub expected_types: Option<Vec<TypeInfo>>,
+    pub expected_types: Option<Vec<Option<TypeInfo>>>,
     pub decl_styles: Option<ByteList>,
     pub is_bracket_selector: bool,
 }
@@ -1306,7 +1306,7 @@ impl ArgumentListNode {
         self.items.len() as i32
     }
 
-    pub fn add_type(&mut self, type_: TypeInfo) {
+    pub fn add_type(&mut self, type_: Option<TypeInfo>) {
         if self.expected_types.is_none() {
             self.expected_types = Some(Vec::with_capacity(2));
         }
@@ -2118,8 +2118,9 @@ impl DocCommentNode {
                 let append_interfaces = |cx: &ContextRef, buf: &mut String, interfaces: &Option<NodeRef>| {
                     let interfaces = rb(interfaces);
                     let values = &interfaces.list().unwrap().values;
-                    let first_v = values[0].clone();
+                    let first_v = values[0].clone().expect("NullPointerException");
                     for v in values {
+                        let v = v.as_ref().expect("NullPointerException");
                         let rv = v.as_reference_value().expect("ClassCastException");
                         if !v.ptr_eq(&first_v) {
                             buf.push(';');
@@ -2928,7 +2929,7 @@ impl ListErrorNode {
 
 pub struct ListNode {
     pub items: Vec<Option<NodeRef>>,
-    pub values: Vec<Value>,
+    pub values: Vec<Option<Value>>,
 }
 
 impl ListNode {

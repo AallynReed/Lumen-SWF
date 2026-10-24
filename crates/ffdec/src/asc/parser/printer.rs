@@ -44,6 +44,8 @@ pub struct NodePrinter<W: Write> {
     mode: i32,
     /// Not in Java: print each node's position as it is visited, for comparing parse trees.
     pub show_positions: bool,
+    /// Not in Java: text printed after each visited node's position, for comparing semantic annotations.
+    pub annotate: Option<fn(&ContextRef, &NodeRef) -> String>,
 }
 
 impl NodePrinter<std::io::Stdout> {
@@ -58,7 +60,7 @@ impl<W: Write> NodePrinter<W> {
     }
 
     pub fn new_mode(mode: i32, out: W) -> NodePrinter<W> {
-        NodePrinter { out, level: 0, mode, show_positions: false }
+        NodePrinter { out, level: 0, mode, show_positions: false, annotate: None }
     }
 
     pub fn into_inner(self) -> W {
@@ -131,10 +133,14 @@ macro_rules! fields {
 }
 
 impl<W: Write> Evaluator for NodePrinter<W> {
-    fn check_feature(&mut self, _cx: &ContextRef, node: &NodeRef) -> bool {
+    fn check_feature(&mut self, cx: &ContextRef, node: &NodeRef) -> bool {
         if self.show_positions {
             let pos = node.borrow().get_position();
             self.print(&format!("@{}", pos));
+        }
+        if let Some(f) = self.annotate {
+            let s = f(cx, node);
+            self.print(&s);
         }
         true
     }

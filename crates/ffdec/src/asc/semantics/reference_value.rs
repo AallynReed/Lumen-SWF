@@ -138,6 +138,16 @@ impl ReferenceValue {
         self.0.borrow_mut().slot = slot;
     }
 
+    /// The private `ud_bits` field, for inspection.
+    pub fn ud_bits(&self) -> Option<BitSet> {
+        self.0.borrow().ud_bits.clone()
+    }
+
+    /// The private `type` field (the cached `getType` result), for inspection.
+    pub fn type_field(&self) -> Option<TypeInfo> {
+        self.0.borrow().type_.clone()
+    }
+
     /// The `name` field.
     pub fn name(&self) -> String {
         self.0.borrow().name.clone()

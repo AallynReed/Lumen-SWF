@@ -647,7 +647,7 @@ impl AbcParser {
             let interface_node = nf.borrow_mut().member_expression(None, Some(get_node));
             rbm(&interface_node).as_member_expression_mut().unwrap().ref_ = Some(r.clone());
             let l = nf.borrow_mut().list(interface_nodes, Some(interface_node));
-            rbm(&l).as_list_mut().unwrap().values.push(Value::Reference(r));
+            rbm(&l).as_list_mut().unwrap().values.push(Some(Value::Reference(r)));
             interface_nodes = Some(l);
         }
 

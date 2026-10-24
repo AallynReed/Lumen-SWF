@@ -553,7 +553,7 @@ impl Emitter for FlowGraphEmitter {
         }
     }
 
-    fn catch(&mut self, _type_: Option<&TypeValue>, _name: &QName) {
+    fn catch(&mut self, _type_: Option<&TypeValue>, _name: Option<&QName>) {
         self.enter_block();
 
         let cur = self.cur_block;
@@ -870,8 +870,8 @@ mod tests {
         e.try_(false);
         e.throw();
         e.return_(0);
-        e.catch(None, &q);
-        e.catch(None, &q);
+        e.catch(None, Some(&q));
+        e.catch(None, Some(&q));
         e.catch_clauses_end();
         e.finally_clause_end();
         e.label_statement_begin();
