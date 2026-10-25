@@ -35,8 +35,9 @@ Every feature is regression-tested on a corpus of 332 SWFs.
 ### ActionScript
 
 - AS3 and AS1/2 p-code from path-following readers, so obfuscated code survives.
-- AS3 and AS1/2 decompilers, passing 366 of 369 AS3 method cases, every AS3 class case and all 84 AS1/2 cases of the reference test suite.
-- AS3 and AS1/2 compilers, verified byte for byte on 192 AS1/2 and 1,207 single-definition AS3 corpus scripts.
+- AS3 and AS1/2 decompilers, passing all 369 AS3 method cases, every AS3 class case and all 84 AS1/2 cases of the reference test suite. Decompiled AS3 compiles back with mxmlc to the same code.
+- An AS3 compiler ported from Adobe's mxmlc (Flex SDK 4.8), byte-identical to mxmlc.jar on 53 real projects, used to compile edited AS3 classes. CSS and `[Embed]` of images, sounds, SWF symbols and data are ported too; MXML, font and SVG embedding, and data binding are not yet.
+- An AS1/2 compiler, verified byte for byte on 192 corpus scripts.
 - P-code editing per AS1/2 script or AS3 method, with errors reported by line.
 - Automatic deobfuscation for AS1/2 and AS3, and permanent AS3 rewrites: remove traps, remove dead code, and GroupParts, which moves blocks reached by a single jump to where they are jumped to.
 
