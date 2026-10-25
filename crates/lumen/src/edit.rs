@@ -137,7 +137,7 @@ fn pack_source_named(swf: &Swf, path: &[usize], script: usize, name: &str) -> Op
     Some(crate::abc::decomp::entry_source(&index, &abc, &e, &crate::abc::decomp::SwfContext::of(swf)))
 }
 
-/// Compiles an AS3 script pack, with every ABC of the SWF in scope.
+/// Compiles an AS3 script pack with mxmlc's compiler, with every ABC of the SWF in scope.
 fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Result<(), ParseError> {
     let (s, t) = parse_id(script).ok_or_else(|| fail("bad script id"))?;
     let mut abcs = Vec::new();
@@ -151,12 +151,17 @@ fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Re
         }
     });
     let sel = paths.iter().position(|p| p == path).ok_or_else(|| fail("not an ABC tag"))?;
-    let doc = crate::names::Names::new(swf).classes.get(&0).and_then(|v| v.first().cloned());
-    let entry = entries(&abcs[sel]).into_iter().find(|e| e.script == s && e.trait_index == t).ok_or_else(|| fail("script not found"))?;
-    let index = crate::abc::decomp::index::AbcIndex::for_abcs(&abcs.iter().collect::<Vec<_>>());
-    let renames = crate::abc::decomp::entry_renames(&index, &abcs[sel], &entry, &crate::abc::decomp::SwfContext::of(swf));
-    let abc = crate::abc::decomp::with_big_stack(|| crate::abc::compile::replace_script_renamed(&abcs, sel, s, t, text, doc.as_deref(), &renames)).map_err(|e| ParseError { line: e.line, message: e.message })?;
-    swf.set_abc(path, &abc).map_err(|e| fail(e.to_string()))
+    let entry = entries(&abcs[sel]).into_iter().find(|e| e.script == s && e.trait_index == t);
+    let renames = match &entry {
+        Some(e) => {
+            let index = crate::abc::decomp::index::AbcIndex::for_abcs(&abcs.iter().collect::<Vec<_>>());
+            crate::abc::decomp::entry_renames(&index, &abcs[sel], e, &crate::abc::decomp::SwfContext::of(swf))
+        }
+        None if t.is_none() && s < abcs[sel].scripts.len() => Vec::new(),
+        None => return Err(fail("script not found")),
+    };
+    let abc = crate::as3_replace::replace_script(&abcs, sel, s, t, text, &renames)?;
+    swf.set_abc_bytes(path, &abc).map_err(|e| fail(e.to_string()))
 }
 
 /// The editable text of a text tag: formatted text for DefineText/2, the initial text

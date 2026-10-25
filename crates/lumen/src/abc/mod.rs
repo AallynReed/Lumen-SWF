@@ -40,13 +40,13 @@ pub mod mn_kind {
     pub const TYPENAME: u8 = 0x1d;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Namespace {
     pub kind: u8,
     pub name: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Multiname {
     QName { attr: bool, ns: usize, name: usize },
     RtqName { attr: bool, name: usize },

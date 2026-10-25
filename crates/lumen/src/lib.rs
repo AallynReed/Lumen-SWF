@@ -1,6 +1,7 @@
 //! Rust port of the Free Flash Decompiler core library.
 
 pub mod abc;
+pub mod as3_replace;
 pub mod amf;
 pub mod asc;
 pub mod bundle;

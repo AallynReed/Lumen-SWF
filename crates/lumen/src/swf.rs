@@ -264,10 +264,15 @@ impl Swf {
 
     /// Stores an ABC in its DoABC/DoABC2 tag, keeping a DoABC2's flags and name.
     pub fn set_abc(&mut self, path: &[usize], abc: &crate::abc::Abc) -> Result<()> {
+        self.set_abc_bytes(path, &abc.to_bytes())
+    }
+
+    /// Replaces the ABC of a DoABC tag, keeping a DoABC2's flags and name.
+    pub fn set_abc_bytes(&mut self, path: &[usize], abc: &[u8]) -> Result<()> {
         let tag = self.tag(path).ok_or_else(|| crate::error::Error::Other(format!("no tag at {path:?}")))?;
         let (data, _) = crate::abc::tag_abc(tag).ok_or_else(|| crate::error::Error::Other("not an ABC tag".into()))?;
         let mut body = tag.body[..tag.body.len() - data.len()].to_vec();
-        body.extend(abc.to_bytes());
+        body.extend_from_slice(abc);
         self.set_tag_body(path, body)
     }
 
