@@ -90,10 +90,6 @@ fn declared_by_is(slot: &Slot, obj: &ObjectValue) -> bool {
 }
 
 /// `Character.digit(c, 16)`.
-fn un_hex(c: char) -> i32 {
-    c.to_digit(16).map_or(-1, |d| d as i32)
-}
-
 fn parse_double(s: &str) -> f64 {
     java_parse_double(s).unwrap_or_else(|| panic!("NumberFormatException: For input string: \"{}\"", s))
 }
@@ -954,7 +950,7 @@ impl ActionBlockEmitter {
             return NumberConstant::Decimal(Decimal128::neginfinity());
         }
 
-        let s: Vec<char> = str.chars().collect();
+        let s: Vec<u16> = crate::asc::util::jstr::to_utf16(str);
         let mut dval;
         let mut is_int = false;
         if (str.contains('.') || str.contains('e') || str.contains('E') || s.len() > 10) && !(str.contains('x') || str.contains('X')) {
@@ -967,32 +963,32 @@ impl ActionBlockEmitter {
             let mut negative = false;
             if len > 1 {
                 let c0 = s[start_index];
-                if c0 == '-' || c0 == '+' {
+                if c0 == '-' as u16 || c0 == '+' as u16 {
                     start_index += 1;
-                    if c0 == '-' {
+                    if c0 == '-' as u16 {
                         negative = true;
                     }
                 }
             }
-            if len > 2 && s[start_index] == '0' {
+            if len > 2 && s[start_index] == '0' as u16 {
                 start_index += 1;
                 let c0 = s[start_index];
-                if c0 == 'x' || c0 == 'X' {
+                if c0 == 'x' as u16 || c0 == 'X' as u16 {
                     base = 16;
                     start_index += 1;
                 }
             }
-            while (start_index as i64) < len as i64 - 1 && s[start_index] == '0' {
+            while (start_index as i64) < len as i64 - 1 && s[start_index] == '0' as u16 {
                 start_index += 1;
             }
             if base == 10 {
-                let str2: String = s[start_index..len].iter().collect();
+                let str2 = crate::asc::util::jstr::from_utf16(&s[start_index..len]);
                 dval = parse_decimal(&str2);
             } else {
                 let sixteen = Decimal128::from_i32(16);
                 dval = Decimal128::zero();
                 for &c in &s[start_index..len] {
-                    let new_digit = un_hex(c);
+                    let new_digit = java_digit16(c);
                     if new_digit < 0 {
                         panic!("ArrayIndexOutOfBoundsException: {}", new_digit);
                     }
@@ -1022,7 +1018,7 @@ impl ActionBlockEmitter {
         if dval.is_nan() {
             dval = Decimal128::nan();
         } else if !dval.is_finite() {
-            dval = if s[0] == '-' { Decimal128::neginfinity() } else { Decimal128::infinity() };
+            dval = if s[0] == '-' as u16 { Decimal128::neginfinity() } else { Decimal128::infinity() };
         }
         NumberConstant::Decimal(dval)
     }
@@ -1040,7 +1036,7 @@ impl ActionBlockEmitter {
             return NumberConstant::Double(f64::NEG_INFINITY);
         }
 
-        let s: Vec<u16> = str.encode_utf16().collect();
+        let s: Vec<u16> = crate::asc::util::jstr::units(&str).collect();
         let mut is_int = false;
         if (str.contains('.') || str.contains('e') || str.contains('E') || s.len() > 10) && !(str.contains('x') || str.contains('X')) {
             sum = parse_double(str);
@@ -1085,7 +1081,7 @@ impl ActionBlockEmitter {
                         end += 1;
                     }
                     if sum > 2147483647.0 {
-                        let t = String::from_utf16_lossy(&str2);
+                        let t = crate::asc::util::jstr::from_utf16(&str2);
                         sum = parse_double(&t);
                     }
                 }
@@ -1185,8 +1181,8 @@ impl ActionBlockEmitter {
         }
 
         let mut str = str.to_string();
-        let last = str.chars().last().unwrap_or_else(|| panic!("StringIndexOutOfBoundsException"));
-        let suffixed = match last {
+        let last = crate::asc::util::jstr::char_at(&str, crate::asc::util::jstr::utf16_len(&str) - 1);
+        let suffixed = match char::from_u32(last as u32).unwrap_or('\0') {
             'i' => {
                 ftype = int_t.clone();
                 true
@@ -1273,7 +1269,7 @@ impl ActionBlockEmitter {
     }
 
     pub fn string_to_double(str: &str) -> f64 {
-        let c = str.chars().next().unwrap_or_else(|| panic!("StringIndexOutOfBoundsException"));
+        let c = char::from_u32(crate::asc::util::jstr::char_at(str, 0) as u32).unwrap_or('\0');
         let sign = if c == '-' { -1.0 } else { 1.0 };
         let start_index = if c == '+' || c == '-' { 1 } else { 0 };
         let rest = &str[start_index..];
@@ -1814,11 +1810,11 @@ impl ActionBlockEmitter {
                 NS_STATIC_PROTECTED => ns_name.push_str("(static-protected)"),
                 _ => {}
             }
-            namespace_set.insert(ns_name);
+            namespace_set.insert(crate::asc::util::jhash::JStr(ns_name));
         }
         self.code_out.push_str(&format!("{} {{", namespace_set.len()));
         for s in &namespace_set {
-            self.code_out.push_str(&format!(" {}", s));
+            self.code_out.push_str(&format!(" {}", s.0));
         }
         self.code_out.push_str(" }");
     }
@@ -2020,7 +2016,7 @@ impl ActionBlockEmitter {
         for i in 0..self.package_infos.len() {
             let name = self.package_infos[i].clone();
             let package_info = i as i32;
-            if name.chars().count() > 1 {
+            if crate::asc::util::jstr::utf16_len(&name) > 1 {
                 let line = format!("const int abcpackage_{} = {};", const_name(&name), package_info);
                 self.header_println(&line);
                 if package_info >= self.native_package_count {

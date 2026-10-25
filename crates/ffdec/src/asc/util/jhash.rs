@@ -10,11 +10,7 @@ pub trait JavaHash {
 
 /// Java `String.hashCode()` over the UTF-16 code units.
 pub fn string_hash(s: &str) -> i32 {
-    let mut h: i32 = 0;
-    for u in s.encode_utf16() {
-        h = h.wrapping_mul(31).wrapping_add(u as i32);
-    }
-    h
+    crate::asc::util::jstr::java_hash_code(s)
 }
 
 impl JavaHash for str {
@@ -386,28 +382,12 @@ impl<K: JavaHash + Eq> JHashSet<K> {
 
 /// Java `String.compareTo`: lexicographic over UTF-16 code units.
 pub fn java_compare(a: &str, b: &str) -> Ordering {
-    a.encode_utf16().cmp(b.encode_utf16())
+    crate::asc::util::jstr::compare(a, b)
 }
 
 /// Java `String.compareTo` as a difference, as Java returns it.
 pub fn java_compare_to(a: &str, b: &str) -> i32 {
-    let mut ia = a.encode_utf16();
-    let mut ib = b.encode_utf16();
-    let (mut la, mut lb) = (0i32, 0i32);
-    loop {
-        match (ia.next(), ib.next()) {
-            (Some(x), Some(y)) => {
-                if x != y {
-                    return x as i32 - y as i32;
-                }
-                la += 1;
-                lb += 1;
-            }
-            (Some(_), None) => return (la + 1 + ia.count() as i32) - lb,
-            (None, Some(_)) => return la - (lb + 1 + ib.count() as i32),
-            (None, None) => return la - lb,
-        }
-    }
+    crate::asc::util::jstr::compare_to(a, b)
 }
 
 /// A `String` key ordered like Java's `String.compareTo`, for `TreeMap<String, _>` ports.
@@ -423,12 +403,6 @@ impl PartialOrd for JStr {
 impl Ord for JStr {
     fn cmp(&self, other: &Self) -> Ordering {
         java_compare(&self.0, &other.0)
-    }
-}
-
-impl Borrow<str> for JStr {
-    fn borrow(&self) -> &str {
-        &self.0
     }
 }
 

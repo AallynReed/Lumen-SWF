@@ -8,7 +8,7 @@ pub struct QName {
 
 /// `String.hashCode()`.
 pub(crate) fn java_string_hash(s: &str) -> i32 {
-    s.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
+    crate::asc::util::jstr::units(&s).fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
 impl QName {

@@ -75,11 +75,11 @@ pub fn new_bytecode_emitter_full(
 }
 
 fn utf16(s: &str) -> Vec<u16> {
-    s.encode_utf16().collect()
+    crate::asc::util::jstr::units(&s).collect()
 }
 
 fn from_utf16(s: &[u16]) -> String {
-    String::from_utf16_lossy(s)
+    crate::asc::util::jstr::from_utf16(s)
 }
 
 /// `String.lastIndexOf(str, fromIndex)` in UTF-16 units.

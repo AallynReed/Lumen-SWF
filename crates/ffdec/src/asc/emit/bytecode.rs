@@ -245,11 +245,11 @@ impl ByteCodeFactory {
             return b.clone();
         }
 
-        let utf8_bytes = text.as_bytes();
+        let utf8_bytes = crate::asc::util::jstr::to_java_utf8_bytes(text);
         let text_length = utf8_bytes.len();
         let mut bytes = Vec::with_capacity(text_length + 3);
         int(&mut bytes, text_length as i64);
-        bytes.extend_from_slice(utf8_bytes);
+        bytes.extend_from_slice(&utf8_bytes);
 
         self.utf_constants.insert(text.to_string(), bytes.clone());
         bytes

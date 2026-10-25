@@ -672,7 +672,7 @@ impl Evaluator for ConfigurationEvaluator {
                             } else if same_type(&lt, &string_type) || same_type(&rt, &string_type) {
                                 let ls = self.to_string(cx, &lhs_ov).unwrap_or_else(|| "null".to_string());
                                 let rs = self.to_string(cx, &rhs_ov).unwrap_or_else(|| "null".to_string());
-                                val = Some(Value::Object(ObjectValue::with_value(&(ls + &rs), Some(&string_type))));
+                                val = Some(Value::Object(ObjectValue::with_value(&crate::asc::util::jstr::concat(&ls, &rs), Some(&string_type))));
                             }
                         }
                         MINUS_TOKEN | MULT_TOKEN | DIV_TOKEN | MODULUS_TOKEN => {

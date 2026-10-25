@@ -901,7 +901,7 @@ impl AbcParser {
             if ns_set.size() > 1 {
                 let mut ns: Option<ObjectValue> = None;
                 for t in ns_set.to_vec() {
-                    if ns.as_ref().map_or(true, |n| t.name_ref().encode_utf16().count() < n.name_ref().encode_utf16().count()) {
+                    if ns.as_ref().map_or(true, |n| crate::asc::util::jstr::units(&t.name_ref()).count() < crate::asc::util::jstr::units(&n.name_ref()).count()) {
                         ns = Some(t);
                     }
                 }

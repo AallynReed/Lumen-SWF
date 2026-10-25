@@ -3016,7 +3016,7 @@ impl LiteralNumberNode {
     }
 
     pub fn negate(&mut self) {
-        if self.value.chars().next().expect("StringIndexOutOfBoundsException") == '-' {
+        if crate::asc::util::jstr::char_at(&self.value, 0) == b'-' as u16 {
             self.value = self.value[1..].to_string();
         } else {
             self.value = format!("-{}", self.value);

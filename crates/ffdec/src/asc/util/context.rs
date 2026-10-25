@@ -41,7 +41,7 @@ pub trait CompilerHandler {
     }
 
     fn error_no_code(&mut self, filename: &str, ln: i32, col: i32, msg: &str, source: &str) {
-        let source16: Vec<u16> = source.encode_utf16().collect();
+        let source16: Vec<u16> = crate::asc::util::jstr::units(&source).collect();
         let size: i32 = if col > 70 {
             col + 10
         } else if source16.len() > 70 {
@@ -52,9 +52,10 @@ pub trait CompilerHandler {
 
         let mut source = source.to_string();
         if size < source16.len() as i32 {
-            source = String::from_utf16_lossy(&source16[..size as usize]) + "...";
+            source = crate::asc::util::jstr::from_utf16(&source16[..size as usize]) + "...";
         }
 
+        let (msg, source) = (crate::asc::util::jstr::to_display(msg), crate::asc::util::jstr::to_display(&source));
         eprintln!();
         eprintln!("{}", msg);
 
@@ -196,7 +197,7 @@ impl Context {
             return -1;
         }
 
-        let template: Vec<u16> = template_str.encode_utf16().collect();
+        let template: Vec<u16> = crate::asc::util::jstr::units(&template_str).collect();
         let mut next_loc = -1;
         let template_len = template.len() as i32;
         let subst_loc = index_of(&template, b'%' as u16, start_loc);
@@ -499,12 +500,12 @@ impl Context {
 
 /// Java `String.length()`.
 pub fn java_length(s: &str) -> i32 {
-    s.encode_utf16().count() as i32
+    crate::asc::util::jstr::units(&s).count() as i32
 }
 
 /// Java `String.substring(begin, end)`; out-of-range bounds panic like Java throws.
 pub fn java_substring(s: &str, begin: i32, end: i32) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
+    let units: Vec<u16> = crate::asc::util::jstr::units(&s).collect();
     substring_utf16(&units, begin, end)
 }
 
@@ -512,7 +513,7 @@ fn substring_utf16(units: &[u16], begin: i32, end: i32) -> String {
     if begin < 0 || end > units.len() as i32 || begin > end {
         panic!("String index out of range: begin {}, end {}, length {}", begin, end, units.len());
     }
-    String::from_utf16_lossy(&units[begin as usize..end as usize])
+    crate::asc::util::jstr::from_utf16(&units[begin as usize..end as usize])
 }
 
 fn index_of(units: &[u16], ch: u16, from: i32) -> i32 {
@@ -1329,7 +1330,7 @@ impl Context {
 
     /// The API version a namespace URI carries in its last character, or -1.
     pub fn get_version(uri: &str) -> i32 {
-        match uri.encode_utf16().last() {
+        match crate::asc::util::jstr::units(&uri).last() {
             None => -1,
             Some(last) => {
                 let last = last as i32;
@@ -1344,8 +1345,8 @@ impl Context {
 
     pub fn strip_version(uri: &str) -> String {
         if Self::get_version(uri) >= 0 {
-            let units: Vec<u16> = uri.encode_utf16().collect();
-            return String::from_utf16_lossy(&units[..units.len() - 1]);
+            let units: Vec<u16> = crate::asc::util::jstr::units(&uri).collect();
+            return crate::asc::util::jstr::from_utf16(&units[..units.len() - 1]);
         }
         uri.to_string()
     }
@@ -1515,7 +1516,7 @@ impl Context {
         } else {
             ""
         };
-        let mut namespace_part: Vec<u16> = region_part.encode_utf16().collect();
+        let mut namespace_part: Vec<u16> = crate::asc::util::jstr::units(&region_part).collect();
         let mut region_part_length = namespace_part.len();
         if region_part_length > 0 {
             namespace_part.push(b'/' as u16);
@@ -1530,17 +1531,16 @@ impl Context {
                 } else {
                     namespace_part.push(b'|' as u16);
                 }
-                namespace_part.extend(id.encode_utf16());
+                namespace_part.extend(crate::asc::util::jstr::units(&id));
                 n -= 1;
             }
         }
         if namespace_part.len() > region_part_length {
             namespace_part.push(b':' as u16);
         }
-        let mut s = String::from_utf16_lossy(&namespace_part);
-        s.push_str(name);
-        s.push_str(kind_part);
-        s
+        namespace_part.extend(crate::asc::util::jstr::units(name));
+        namespace_part.extend(kind_part.encode_utf16());
+        crate::asc::util::jstr::from_utf16(&namespace_part)
     }
 
     pub fn compute_qualified_name(&self, region_part: &str, name: &str, qualifier: &ObjectValue, kind: i32) -> QName {
@@ -1553,7 +1553,7 @@ impl Context {
         };
         let namespace_part = qualifier.name();
         let ns_kind = qualifier.get_namespace_kind();
-        let ns_name = if !region_part.is_empty() { format!("{}{}", region_part, namespace_part) } else { namespace_part };
+        let ns_name = if !region_part.is_empty() { crate::asc::util::jstr::concat(region_part, &namespace_part) } else { namespace_part };
         let n = if !kind_part.is_empty() { format!("{}{}", name, kind_part) } else { name.to_string() };
         QName::new(Some(self.get_namespace_kind(&ns_name, ns_kind)), &n)
     }

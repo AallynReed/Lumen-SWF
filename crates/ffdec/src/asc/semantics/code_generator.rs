@@ -203,17 +203,17 @@ fn node_list(l: &Option<NodeList>) -> Vec<NodeRef> {
 }
 
 fn java_last_index_of_slash(s: &str) -> i32 {
-    let u: Vec<u16> = s.encode_utf16().collect();
+    let u: Vec<u16> = crate::asc::util::jstr::units(&s).collect();
     u.iter().rposition(|&c| c == '/' as u16).map_or(-1, |i| i as i32)
 }
 
 fn java_sub(s: &str, begin: i32, end: i32) -> String {
-    let u: Vec<u16> = s.encode_utf16().collect();
-    String::from_utf16_lossy(&u[begin as usize..end as usize])
+    let u: Vec<u16> = crate::asc::util::jstr::units(&s).collect();
+    crate::asc::util::jstr::from_utf16(&u[begin as usize..end as usize])
 }
 
 fn java_len(s: &str) -> i32 {
-    s.encode_utf16().count() as i32
+    crate::asc::util::jstr::units(&s).count() as i32
 }
 
 impl CodeGenerator {

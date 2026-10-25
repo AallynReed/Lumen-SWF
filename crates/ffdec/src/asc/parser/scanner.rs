@@ -143,7 +143,7 @@ fn is_digit(c: u16) -> bool {
 }
 
 fn push_str(buf: &mut Vec<u16>, s: &str) {
-    buf.extend(s.encode_utf16());
+    buf.extend(crate::asc::util::jstr::units(&s));
 }
 
 impl Scanner {
@@ -366,7 +366,7 @@ impl Scanner {
     }
 
     pub fn nexttoken(&mut self, reset_state: bool) -> i32 {
-        let mut doctagname: Vec<u16> = "description".encode_utf16().collect();
+        let mut doctagname: Vec<u16> = crate::asc::util::jstr::units("description").collect();
         let mut doctextbuf: Option<Vec<u16>> = None;
         let startofxml = self.pos();
         let mut blockcommentbuf: Option<Vec<u16>> = None;
@@ -1352,7 +1352,7 @@ impl Scanner {
                                 buf.extend_from_slice(&doctagname);
                                 push_str(buf, ">");
                             }
-                            let doctext = String::from_utf16_lossy(buf);
+                            let doctext = crate::asc::util::jstr::from_utf16(buf);
                             self.state = start_state;
                             return self.make_comment_token(DOCCOMMENT_TOKEN, Some(doctext));
                         }
@@ -1447,7 +1447,7 @@ impl Scanner {
                                 self.state = start_state;
                                 let buf = blockcommentbuf.as_mut().unwrap();
                                 buf.push(c);
-                                let blocktext = String::from_utf16_lossy(buf);
+                                let blocktext = crate::asc::util::jstr::from_utf16(buf);
                                 return self.make_comment_token(BLOCKCOMMENT_TOKEN, Some(blocktext));
                             }
                             self.retract();

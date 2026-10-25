@@ -31,15 +31,15 @@ impl Multinames {
     }
 
     pub fn remove(&mut self, name: &str) -> Option<Namespaces> {
-        self.map.remove(name)
+        self.map.remove(&JStr(name.to_string()))
     }
 
     pub fn contains_key(&self, name: &str) -> bool {
-        self.map.contains_key(name)
+        self.map.contains_key(&JStr(name.to_string()))
     }
 
     pub fn get(&self, name: &str) -> Option<Namespaces> {
-        self.map.get(name).cloned()
+        self.map.get(&JStr(name.to_string())).cloned()
     }
 
     pub fn size(&self) -> usize {

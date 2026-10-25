@@ -1032,7 +1032,7 @@ impl Parser {
         }
 
         if is_kind(&tmp_left, |n| n.as_literal_string().is_some()) && is_kind(&right, |n| n.as_literal_string().is_some()) {
-            let value = rb(&tmp_left).as_literal_string().unwrap().value.clone() + &rb(&right).as_literal_string().unwrap().value;
+            let value = crate::asc::util::jstr::concat(&rb(&tmp_left).as_literal_string().unwrap().value, &rb(&right).as_literal_string().unwrap().value);
             let pos = rb(&left).pos();
             return Some(self.nf().literal_string_pos(&value, pos));
         }
@@ -1044,7 +1044,7 @@ impl Parser {
                 (b.op, b.lhs.clone(), b.rhs.clone(), l.pos())
             };
             if op == PLUS_TOKEN && is_kind(&rhs, |n| n.as_literal_string().is_some()) {
-                let value = rb(&rhs).as_literal_string().unwrap().value.clone() + &rb(&right).as_literal_string().unwrap().value;
+                let value = crate::asc::util::jstr::concat(&rb(&rhs).as_literal_string().unwrap().value, &rb(&right).as_literal_string().unwrap().value);
                 let s = self.nf().literal_string(&value);
                 return Some(self.nf().binary_expression_pos(PLUS_TOKEN, lhs, Some(s), left_pos));
             }

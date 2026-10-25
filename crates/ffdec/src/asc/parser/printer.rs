@@ -68,7 +68,7 @@ impl<W: Write> NodePrinter<W> {
     }
 
     fn print(&mut self, s: &str) {
-        let _ = self.out.write_all(s.as_bytes());
+        let _ = self.out.write_all(&crate::asc::util::jstr::to_java_utf8_bytes(s));
     }
 
     fn println(&mut self) {

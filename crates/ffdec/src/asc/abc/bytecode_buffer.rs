@@ -252,7 +252,7 @@ impl BytecodeBuffer {
     /// Does not move the cursor.
     pub fn read_string(&self, length: i32) -> Option<String> {
         let p = self.pos.get() as usize;
-        Some(String::from_utf8_lossy(&self.bytecodes[p..p + length as usize]).into_owned())
+        Some(crate::asc::util::jstr::from_java_utf8_bytes(&self.bytecodes[p..p + length as usize]))
     }
 
     pub fn close(&self) {

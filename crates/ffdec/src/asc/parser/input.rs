@@ -25,11 +25,11 @@ impl InputBuffer {
     }
 
     pub fn new(in_: &str, origin: Option<String>) -> InputBuffer {
-        Self::init(in_.encode_utf16().collect(), origin, 0, 0)
+        Self::init(crate::asc::util::jstr::units(&in_).collect(), origin, 0, 0)
     }
 
     pub fn new_at(in_: &str, origin: Option<String>, start_pos: i32, start_line: i32) -> InputBuffer {
-        let mut b = Self::init(in_.encode_utf16().collect(), origin, start_pos, start_line);
+        let mut b = Self::init(crate::asc::util::jstr::units(&in_).collect(), origin, start_pos, start_line);
         b.start_source_pos = start_pos;
         b.start_line_number = start_line;
         b
@@ -524,9 +524,8 @@ fn substring(src: &[u16], begin: i32, end: i32) -> String {
     java_string(&src[begin as usize..end as usize])
 }
 
-/// Rust strings cannot hold lone surrogates; use '?', which is what Java's `getBytes("UTF8")` later writes for them.
 fn java_string(units: &[u16]) -> String {
-    char::decode_utf16(units.iter().copied()).map(|r| r.unwrap_or('?')).collect()
+    crate::asc::util::jstr::from_utf16(units)
 }
 
 /// `Charset.forName(encoding).decode(bb)` for the common charsets; anything else decodes as UTF-8.
@@ -595,89 +594,6 @@ fn decode_utf16(bb: &[u8], big_endian: Option<bool>) -> Vec<u16> {
     out
 }
 
-/// sun.nio.cs.UTF_8.Decoder (JDK 17) with REPLACE.
 fn decode_utf8(sa: &[u8]) -> Vec<u16> {
-    let not_cont = |b: u8| (b & 0xc0) != 0x80;
-    let mut out = Vec::with_capacity(sa.len());
-    let sl = sa.len();
-    let mut sp = 0;
-    while sp < sl {
-        let b1 = sa[sp];
-        if b1 < 0x80 {
-            out.push(b1 as u16);
-            sp += 1;
-        } else if (b1 >> 5) == 0b110 && (b1 & 0x1e) != 0 {
-            if sl - sp < 2 {
-                break;
-            }
-            let b2 = sa[sp + 1];
-            if not_cont(b2) {
-                out.push(0xfffd);
-                sp += 1;
-                continue;
-            }
-            out.push((((b1 as u16) & 0x1f) << 6) | ((b2 as u16) & 0x3f));
-            sp += 2;
-        } else if (b1 >> 4) == 0b1110 {
-            let rem = sl - sp;
-            let mal3_2 = |b2: u8| (b1 == 0xe0 && (b2 & 0xe0) == 0x80) || not_cont(b2);
-            if rem < 3 {
-                if rem > 1 && mal3_2(sa[sp + 1]) {
-                    out.push(0xfffd);
-                    sp += 1;
-                    continue;
-                }
-                break;
-            }
-            let (b2, b3) = (sa[sp + 1], sa[sp + 2]);
-            if mal3_2(b2) || not_cont(b3) {
-                out.push(0xfffd);
-                sp += if mal3_2(b2) { 1 } else { 2 };
-                continue;
-            }
-            let c = (((b1 as u16) & 0x0f) << 12) | (((b2 as u16) & 0x3f) << 6) | ((b3 as u16) & 0x3f);
-            out.push(if (0xd800..0xe000).contains(&c) { 0xfffd } else { c });
-            sp += 3;
-        } else if (b1 >> 3) == 0b11110 {
-            let rem = sl - sp;
-            let mal4_2 = |b2: u8| (b1 == 0xf0 && !(0x90..=0xbf).contains(&b2)) || (b1 == 0xf4 && (b2 & 0xf0) != 0x80) || not_cont(b2);
-            if rem < 4 {
-                if b1 > 0xf4 || (rem > 1 && mal4_2(sa[sp + 1])) {
-                    out.push(0xfffd);
-                    sp += 1;
-                    continue;
-                }
-                if rem > 2 && not_cont(sa[sp + 2]) {
-                    out.push(0xfffd);
-                    sp += 2;
-                    continue;
-                }
-                break;
-            }
-            let (b2, b3, b4) = (sa[sp + 1], sa[sp + 2], sa[sp + 3]);
-            let uc = (((b1 as u32) & 0x07) << 18) | (((b2 as u32) & 0x3f) << 12) | (((b3 as u32) & 0x3f) << 6) | ((b4 as u32) & 0x3f);
-            if not_cont(b2) || not_cont(b3) || not_cont(b4) || !(0x10000..0x110000).contains(&uc) {
-                out.push(0xfffd);
-                sp += if b1 > 0xf4 || mal4_2(b2) {
-                    1
-                } else if not_cont(b3) {
-                    2
-                } else {
-                    3
-                };
-                continue;
-            }
-            let v = uc - 0x10000;
-            out.push(0xd800 | (v >> 10) as u16);
-            out.push(0xdc00 | (v & 0x3ff) as u16);
-            sp += 4;
-        } else {
-            out.push(0xfffd);
-            sp += 1;
-        }
-    }
-    if sp < sl {
-        out.push(0xfffd);
-    }
-    out
+    crate::asc::util::jstr::decode_java_utf8(sa)
 }

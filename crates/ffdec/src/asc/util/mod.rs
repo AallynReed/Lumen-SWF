@@ -12,6 +12,7 @@ pub mod block;
 pub mod byte_list;
 pub mod int_list;
 pub mod jhash;
+pub mod jstr;
 pub mod multinames;
 pub mod names;
 pub mod namespaces;

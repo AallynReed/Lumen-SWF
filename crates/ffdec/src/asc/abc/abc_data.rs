@@ -115,7 +115,7 @@ impl NameData {
     }
 
     fn get_version(uri: &str) -> Option<Vec<i32>> {
-        let last = uri.encode_utf16().last()? as i32;
+        let last = crate::asc::util::jstr::units(&uri).last()? as i32;
         if (0xE000..=0xF000).contains(&last) {
             Some(vec![last - 0xE000])
         } else {
