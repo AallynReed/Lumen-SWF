@@ -81,6 +81,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         abcs: context(abcs, selected, plan.script_blocks(), &names),
         same_build: true,
         keep_embedded,
+        several_definitions: true,
         app: ApplicationOptions { playerglobal: true, omit_trace_statements: !keeps_traces(abc), ..Default::default() },
         ..Default::default()
     };

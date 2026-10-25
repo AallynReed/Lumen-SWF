@@ -181,6 +181,8 @@ pub struct UnitOptions {
     pub same_build: bool,
     /// Classes (`pkg.Name`) whose class-level `[Embed]` keeps the symbol the target SWF already binds them to.
     pub keep_embedded: Vec<String>,
+    /// The source may define several public definitions, as one script of an existing SWF may.
+    pub several_definitions: bool,
     pub source_path: Vec<PathBuf>,
     pub library_path: Vec<PathBuf>,
     pub external_library_path: Vec<PathBuf>,
@@ -229,8 +231,10 @@ pub fn compile_unit(opts: &UnitOptions) -> Result<CompiledUnit, Vec<Diagnostic>>
             libraries.insert(0, (compiler::abc_library::playerglobal(), true));
         }
         compiler::as3::embed_evaluator::KEEP_EMBEDDED.with(|k| *k.borrow_mut() = opts.keep_embedded.iter().cloned().collect());
+        compiler::compiler_api::SEVERAL_DEFINITIONS.with(|d| d.set(opts.several_definitions));
         let compiled = tools::mxmlc::compile_unit(configuration.clone(), root.clone(), libraries, &depends_on);
         compiler::as3::embed_evaluator::KEEP_EMBEDDED.with(|k| k.borrow_mut().clear());
+        compiler::compiler_api::SEVERAL_DEFINITIONS.with(|d| d.set(false));
         let diagnostics = compiler::toolkit::take_diagnostics();
         if diagnostics.iter().any(|d| d.level == Level::Error) {
             return Err(diagnostics);

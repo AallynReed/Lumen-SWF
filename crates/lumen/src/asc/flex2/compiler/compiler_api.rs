@@ -16,6 +16,11 @@ use super::toolkit::{self, CompilerMessage, LocalLogger};
 use super::util::{MultiName, Name, QName};
 use crate::asc::util::jhash::JHashSet;
 
+thread_local! {
+    /// Allows a source to define several public definitions, as one script of an existing SWF may.
+    pub static SEVERAL_DEFINITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 const PREPROCESS: i32 = 1 << 1;
 const PARSE1: i32 = 1 << 2;
 const PARSE2: i32 = 1 << 3;
@@ -676,7 +681,9 @@ impl CompilerApi {
         }
     }
 
-    /// The source-path checks `analyze(u, compilers, symbolTable, 1)` makes after `analyze1`.
+    /// The source-path checks `analyze(u, compilers, symbolTable, 1)` makes after `analyze1`. With
+    /// `SEVERAL_DEFINITIONS` set, as when replacing one script of a SWF, a file may define several public definitions
+    /// and the one named like the file is checked.
     fn check_definitions(s: &SourceRef, u: &UnitRef) {
         let (sp_owner, sl_owner, name, short_name, relative_path) = {
             let s = s.borrow();
@@ -685,7 +692,12 @@ impl CompilerApi {
         if !(sp_owner || sl_owner) {
             return;
         }
-        let defs = u.borrow().top_level_definitions.clone();
+        let mut defs = u.borrow().top_level_definitions.clone();
+        if defs.len() > 1 && SEVERAL_DEFINITIONS.with(|d| d.get()) {
+            if let Some(named) = defs.0.iter().find(|d| d.get_local_part() == short_name).cloned() {
+                defs.0 = vec![named];
+            }
+        }
         if defs.len() > 1 {
             toolkit::log_for(
                 CompilerMessage::error(format!("A file found in a source-path can not have more than one externally visible definition. {defs}")),

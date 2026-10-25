@@ -138,3 +138,15 @@ fn symbol_embed_on_a_replaced_class_is_kept() {
     assert!(lumen::asc::flex2::compile_unit(&opts(Vec::new())).is_err());
     assert!(lumen::asc::flex2::compile_unit(&opts(vec!["crosshair".into()])).is_ok());
 }
+
+/// One script of a SWF may define several public classes, and replacing it is the only way to add one, so replace
+/// lifts mxmlc's one-public-definition-per-file rule.
+#[test]
+fn several_public_definitions_compile_for_replace() {
+    let root = std::env::temp_dir().join(format!("lumen_several_{}", std::process::id()));
+    let source = "package { import flash.display.MovieClip; public dynamic class crosshair extends MovieClip { public function crosshair() { super(); Extra.touch(); } } public class Extra { public static function touch():void {} } }".to_string();
+    let opts = |several: bool| lumen::asc::flex2::UnitOptions { source: source.clone(), path: root.join("crosshair.as"), root: root.clone(), several_definitions: several, app: lumen::asc::flex2::ApplicationOptions { playerglobal: true, ..Default::default() }, ..Default::default() };
+    assert!(lumen::asc::flex2::compile_unit(&opts(false)).is_err());
+    let unit = lumen::asc::flex2::compile_unit(&opts(true)).unwrap_or_else(|d| panic!("{}", d.iter().map(|d| d.text.clone()).collect::<Vec<_>>().join("\n")));
+    assert_eq!(unit.definitions.len(), 2, "{:?}", unit.definitions);
+}
