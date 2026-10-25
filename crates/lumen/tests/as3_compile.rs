@@ -58,14 +58,5 @@ fn recompiling_is_stable() {
     assert_eq!(failed, known, "{}", bad.join("\n"));
 }
 
-/// Classes mxmlc.jar and JPEXS themselves do not round-trip, in decompile order.
-const KNOWN: &[(&str, &str)] = &[
-    ("tests.TestXml", "ASC's scanner puts the whitespace before an XML comment or CDATA literal into it"),
-    ("tests.TestTryReturn2", "ASC stores a needs_init slot's default at entry and JPEXS prints that as the declaration"),
-    ("tests.TestForEachReturn", "JPEXS keeps a for-each's registers as locals when the body returns"),
-    ("tests.TestForInReturn", "JPEXS keeps a for-in's registers as locals when the body returns"),
-    ("tests.TestVarFqn", "ASC stores a needs_init slot's default at entry and JPEXS prints that as the declaration"),
-    ("tests.TestUndefined", "ASC stores a needs_init slot's default at entry and JPEXS prints that as the declaration"),
-    ("tests.TestConvert", "ASC hoists the default of the bare `var` JPEXS prints beside a chained assignment"),
-    ("tests.TestInlineFunctions", "ASC stores a needs_init slot's default at entry and JPEXS prints that as the declaration"),
-];
+/// Classes that do not round-trip yet, in decompile order.
+const KNOWN: &[(&str, &str)] = &[];

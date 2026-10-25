@@ -384,7 +384,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         if level == 0 {
             self.remove_self_assignments(list);
         }
-        self.for_in_from_ifs(list);
+        self.for_in_from_ifs(list, fd);
         let mut i = 0;
         while i < list.borrow().len() {
             let x = list.borrow()[i].clone();
@@ -662,7 +662,7 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
         }
     }
 
-    fn for_in_from_ifs(&self, list: &List) {
+    fn for_in_from_ifs(&self, list: &List, fd: &FinalData) {
         let mut i = 0;
         while i < list.borrow().len() {
             let x = list.borrow()[i].clone();
@@ -678,8 +678,8 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
             }
             let (t, f) = if_branches(&x);
             let hn = if negated { e.borrow().val() } else { e.clone() };
-            let hobj = match &hn.borrow().k {
-                K::HasNext { obj, .. } => obj.clone(),
+            let (hindex, hobj) = match &hn.borrow().k {
+                K::HasNext { index, obj } => (index.clone(), obj.clone()),
                 _ => unreachable!(),
             };
             let (body, next_body) = if negated {
@@ -699,7 +699,34 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                 let is_name = matches!(gti.borrow().k, K::NextName { .. });
                 if is_value || is_name {
                     body.borrow_mut().remove(0);
-                    let infor = mk(K::InFor { object: set_type_object(&first), collection: hobj }, None, None, prec::NOPRECEDENCE, None);
+                    let mut collection = hobj.clone();
+                    let hn_ip = hn.borrow().src.map_or(-1, |x| x as i32);
+                    let (ix, ob) = next_parts(&gti).unwrap();
+                    let mut j = i;
+                    while j > 0 && is::set_local(&list.borrow()[j - 1]) {
+                        j -= 1;
+                        let y = list.borrow()[j].clone();
+                        let r = set_local_reg(&y);
+                        let is_obj = r.is_some() && r == local_reg(&hobj);
+                        if !is_obj && (r.is_none() || r != local_reg(&hindex)) {
+                            continue;
+                        }
+                        let mut u = fd.usage(y.borrow().src.map_or(-1, |s| s as i32));
+                        u.remove(&hn_ip);
+                        for p in [&ix, &ob] {
+                            if local_reg(p) == r {
+                                u.remove(&p.borrow().src.map_or(-1, |s| s as i32));
+                            }
+                        }
+                        if u.is_empty() {
+                            list.borrow_mut().remove(j);
+                            i -= 1;
+                            if is_obj {
+                                collection = value(&y);
+                            }
+                        }
+                    }
+                    let infor = mk(K::InFor { object: set_type_object(&first), collection }, None, None, prec::NOPRECEDENCE, None);
                     let (src, ls) = (x.borrow().src, x.borrow().line_start);
                     let k = if is_value { K::ForEachIn { loop_id: 0, expr: infor, cmds: body.clone(), label_used: false } } else { K::ForIn { loop_id: 0, expr: infor, cmds: body.clone(), label_used: false } };
                     let repl = mk(k, src, ls, prec::NOPRECEDENCE, None);

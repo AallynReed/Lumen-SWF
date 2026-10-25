@@ -149,6 +149,19 @@ impl Writer {
         self.append(" ")
     }
 
+    /// Takes back the spaces written after the last token on this line.
+    pub fn trim_space(&mut self) -> &mut Self {
+        if self.nul || self.new_line {
+            return self;
+        }
+        let t = self.sb.trim_end_matches(' ').len();
+        if t > 0 && !self.sb[..t].ends_with('\n') {
+            self.line_length = self.line_length.saturating_sub(self.sb.len() - t);
+            self.sb.truncate(t);
+        }
+        self
+    }
+
     pub fn allow_wrap_here(&mut self) -> &mut Self {
         if self.line_length > MAX_LINE {
             self.new_line();

@@ -67,7 +67,7 @@
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testDupAssignment",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\nvar _loc2_:int = 10;\r\n_loc1_ = _loc2_;\r\nif(_loc1_)\r\n{\r\ntrace(_loc2_);\r\n}\r\n"
+  "expected": "var _loc1_:int;\r\nvar _loc2_:int = 10;\r\n_loc1_ = _loc2_;\r\nif(_loc1_)\r\n{\r\ntrace(_loc2_);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
@@ -172,7 +172,7 @@
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testSetSlotDup",
   "static": false,
-  "expected": "var myslot:int;\r\nvar _loc5_:int = 5;\r\nmyname.somemethod(\"okay\",myslot = _loc5_);\r\nmyname.start();\r\n"
+  "expected": "var _loc5_:int = 5;\r\nvar myslot:int;\r\nmyname.somemethod(\"okay\",myslot = _loc5_);\r\nmyname.start();\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
@@ -221,14 +221,14 @@
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testSwitchMostCommon",
   "static": false,
-  "expected": "var _loc2_:int = 0;\r\nvar _loc4_:* = undefined;\r\nif(something == null)\r\n{\r\nswitch(param1.keyCode)\r\n{\r\ncase 89:\r\n_loc2_ = 7;\r\nbreak;\r\ncase 112:\r\nreturn;\r\n}\r\nswitch(param1.charCode)\r\n{\r\ncase 49:\r\nreturn;\r\ncase 69:\r\nreturn;\r\ncase 113:\r\n_loc2_ = 1;\r\n}\r\n}\r\n"
+  "expected": "var _loc2_:int;\r\nif(something == null)\r\n{\r\nswitch(param1.keyCode)\r\n{\r\ncase 89:\r\n_loc2_ = 7;\r\nbreak;\r\ncase 112:\r\nreturn;\r\n}\r\nswitch(param1.charCode)\r\n{\r\ncase 49:\r\nreturn;\r\ncase 69:\r\nreturn;\r\ncase 113:\r\n_loc2_ = 1;\r\n}\r\n}\r\nvar _loc4_:*;\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testTryCatchLoopBreakLevel2",
   "static": false,
-  "expected": "var a:int = 0;\r\na = 0;\r\ntrace(\"before loop\");\r\nloop0:\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nwhile(a <= 5)\r\n{\r\nif(a > 5)\r\n{\r\nbreak loop0;\r\n}\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var a:int;\r\na = 0;\r\ntrace(\"before loop\");\r\nloop0:\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nwhile(a <= 5)\r\n{\r\nif(a > 5)\r\n{\r\nbreak loop0;\r\n}\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
@@ -242,14 +242,14 @@
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testTryDoWhile2",
   "static": false,
-  "expected": "var _loc5_:*;\r\ntrace(\"hello\");\r\n_loc5_ = Math.random();\r\ndo\r\n{\r\ntry\r\n{\r\ntrace(\"second\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n}\r\nwhile(_loc5_ <= 100);\r\ntrace(\"after\");\r\n"
+  "expected": "trace(\"hello\");\r\nvar _loc5_:* = Math.random();\r\ndo\r\n{\r\ntry\r\n{\r\ntrace(\"second\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n}\r\nwhile(_loc5_ <= 100);\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
   "swf": "testdata/as3_assembled/bin/as3_assembled.swf",
   "method": "testTryWhile",
   "static": false,
-  "expected": "var a:String;\r\nvar b:String;\r\nvar c:String;\r\ntry\r\n{\r\nc = \"aa\";\r\nwhile(c)\r\n{\r\nif(b)\r\n{\r\nbreak;\r\n}\r\nc = c.Object;\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\nbrowserMode = false;\r\nreturn;\r\n}\r\ntrace(\"finish\");\r\n"
+  "expected": "var a:String;\r\nvar b:String;\r\ntry\r\n{\r\nvar c:String = \"aa\";\r\nwhile(c)\r\n{\r\nif(b)\r\n{\r\nbreak;\r\n}\r\nc = c.Object;\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\nbrowserMode = false;\r\nreturn;\r\n}\r\ntrace(\"finish\");\r\n"
  },
  {
   "suite": "ActionScript3AssembledDecompileTest",
@@ -277,7 +277,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testAlwaysBreak",
   "static": false,
-  "expected": "var v:int = 0;\r\nv = 5;\r\ntrace(\"a\");\r\nwhile(true)\r\n{\r\nif(v > 4)\r\n{\r\ntrace(\"b\");\r\nif(v > 10)\r\n{\r\ntrace(\"c\");\r\nbreak;\r\n}\r\ntrace(\"d\");\r\n}\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n"
+  "expected": "var v:int;\r\nv = 5;\r\ntrace(\"a\");\r\nwhile(true)\r\n{\r\nif(v > 4)\r\n{\r\ntrace(\"b\");\r\nif(v > 10)\r\n{\r\ntrace(\"c\");\r\nbreak;\r\n}\r\ntrace(\"d\");\r\n}\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -333,7 +333,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testChain2",
   "static": false,
-  "expected": "var g:Array = null;\r\nvar h:Boolean = false;\r\nvar extraLine:Boolean = false;\r\nvar r:int = 7;\r\nvar t:int = 0;\r\nt = this.getInt();\r\nif(t + 1 < g.length)\r\n{\r\nt++;\r\nh = true;\r\n}\r\nif(t >= 0)\r\n{\r\ntrace(\"ch\");\r\n}\r\n"
+  "expected": "var r:int = 7;\r\nvar t:int = 0;\r\nt = this.getInt();\r\nvar g:Array;\r\nvar h:Boolean;\r\nif(t + 1 < g.length)\r\n{\r\nt++;\r\nh = true;\r\n}\r\nif(t >= 0)\r\n{\r\ntrace(\"ch\");\r\n}\r\nvar extraLine:Boolean;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -354,21 +354,21 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testChainedAssignments3",
   "static": false,
-  "expected": "var a:int = 0;\r\nvar b:int = 0;\r\nprop = a = b = 4;\r\nif(a == 2)\r\n{\r\ntrace(\"OK: \" + a);\r\n}\r\n"
+  "expected": "var a:int;\r\nvar b:int;\r\nprop = a = b = 4;\r\nif(a == 2)\r\n{\r\ntrace(\"OK: \" + a);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testChainedAssignments4",
   "static": false,
-  "expected": "var slota:int;\r\nvar slotb:int;\r\nvar slotc:int;\r\nvar f:Function;\r\ntrace(\"slotc = slotb = slota = 5;\");\r\nslota = 0;\r\nslotb = 0;\r\nslotc = 0;\r\nf = function(n1:int, n2:int):int\r\n{\r\nreturn n1 + n2;\r\n};\r\nslotc = slotb = slota = 5;\r\n"
+  "expected": "trace(\"slotc = slotb = slota = 5;\");\r\nvar slota:int = 0;\r\nvar slotb:int = 0;\r\nvar slotc:int = 0;\r\nvar f:Function = function(n1:int, n2:int):int\r\n{\r\nreturn n1 + n2;\r\n};\r\nslotc = slotb = slota = 5;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testCollidingTry",
   "static": false,
-  "expected": "var e:int = 0;\r\ntry\r\n{\r\ne = 0;\r\n}\r\ncatch(e:*)\r\n{\r\ntrace(e);\r\n}\r\ntry\r\n{\r\ntrace(\"x\");\r\n}\r\ncatch(e:*)\r\n{\r\ntrace(e);\r\n}\r\ntrace(\"y\");\r\n"
+  "expected": "var e:int;\r\ntry\r\n{\r\ne = 0;\r\n}\r\ncatch(e:*)\r\n{\r\ntrace(e);\r\n}\r\ntry\r\n{\r\ntrace(\"x\");\r\n}\r\ncatch(e:*)\r\n{\r\ntrace(e);\r\n}\r\ntrace(\"y\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -382,7 +382,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testComplexExpressions",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar j:int = 0;\r\nj = i += i += i++;\r\n"
+  "expected": "var i:int;\r\nvar j:int;\r\nj = i += i += i++;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -403,21 +403,21 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testConvert",
   "static": false,
-  "expected": "var s:String = null;\r\nvar i:int = 0;\r\nvar a:* = undefined;\r\nvar dict:Dictionary = new Dictionary();\r\ni = int(s = \"a\");\r\nvar j:int = n;\r\ns = String(j);\r\ns = ns;\r\ns = String(i == 4 ? \"\" : i);\r\ns = i == 4 ? \"\" : String(i);\r\ns = TestConvert.TEST;\r\ni = this.TEST;\r\ni = 4 * 5;\r\ni = a * 6;\r\ni = a;\r\nvar o:Object = {\r\n0:\"A\",\r\n1:\"B\",\r\n2:\"C\"\r\n};\r\ni = int(s.charAt(10));\r\nvar v:Vector.<String> = new Vector.<String>();\r\nv.push(\"A\");\r\nv.push(\"B\");\r\ni = int(v[0]);\r\ns = v[1];\r\ns = v.join(\"x\");\r\ni = int(v.join(\"x\"));\r\ni = prot;\r\ns = String(prot);\r\ni = sprot;\r\ns = String(sprot);\r\ns = String(getTimer());\r\nvar x:XML;\r\ns = x = <list>\r\n<item id=\"1\">1</item>\r\n<item id=\"2\">2</item>\r\n<item id=\"3\">3</item>\r\n</list>;\r\ntrace(\"a\");\r\nvar xlist:XMLList = x.item;\r\ntrace(\"b\");\r\ni = int(xlist[i].@id);\r\ntrace(\"c\");\r\ni = int(x.item[i].@id);\r\ndict[String(x.item[i].@id)] = \"Hello\";\r\nvar lc:LocalClass = new LocalClass();\r\ni = lc.attr;\r\ns = String(lc.attr);\r\nvar f:Function = this.f;\r\nif(Boolean(f))\r\n{\r\ntrace(\"OK\");\r\n}\r\nif(i)\r\n{\r\ntrace(i);\r\n}\r\nif(s)\r\n{\r\ntrace(s);\r\n}\r\nif(o)\r\n{\r\ntrace(\"obj\");\r\n}\r\ns = xlist;\r\nvar d:Number = 0;\r\nd = 1;\r\nd = 1.5;\r\ni = 1;\r\ni = 1.5;\r\no[int(d * 5)] = 1;\r\nthis.n = 1.5;\r\nsuper.prot = 1.5;\r\nsuper.prot = int(s);\r\ni = super.prot;\r\ns = String(super.prot);\r\nvar a2:* = \"5\";\r\nvar s2:String = \"s\";\r\nvar i2:int = a2;\r\na2 = Number(a2);\r\n"
+  "expected": "var s:String = null;\r\nvar i:int = 0;\r\nvar a:* = undefined;\r\nvar dict:Dictionary = new Dictionary();\r\ni = int(s = \"a\");\r\nvar j:int = n;\r\ns = String(j);\r\ns = ns;\r\ns = String(i == 4 ? \"\" : i);\r\ns = i == 4 ? \"\" : String(i);\r\ns = TestConvert.TEST;\r\ni = this.TEST;\r\ni = 4 * 5;\r\ni = a * 6;\r\ni = a;\r\nvar o:Object = {\r\n0:\"A\",\r\n1:\"B\",\r\n2:\"C\"\r\n};\r\ni = int(s.charAt(10));\r\nvar v:Vector.<String> = new Vector.<String>();\r\nv.push(\"A\");\r\nv.push(\"B\");\r\ni = int(v[0]);\r\ns = v[1];\r\ns = v.join(\"x\");\r\ni = int(v.join(\"x\"));\r\ni = prot;\r\ns = String(prot);\r\ni = sprot;\r\ns = String(sprot);\r\ns = String(getTimer());\r\nvar x:XML = <list>\r\n<item id=\"1\">1</item>\r\n<item id=\"2\">2</item>\r\n<item id=\"3\">3</item>\r\n</list>;\r\ns = x;\r\ntrace(\"a\");\r\nvar xlist:XMLList = x.item;\r\ntrace(\"b\");\r\ni = int(xlist[i].@id);\r\ntrace(\"c\");\r\ni = int(x.item[i].@id);\r\ndict[String(x.item[i].@id)] = \"Hello\";\r\nvar lc:LocalClass = new LocalClass();\r\ni = lc.attr;\r\ns = String(lc.attr);\r\nvar f:Function = this.f;\r\nif(Boolean(f))\r\n{\r\ntrace(\"OK\");\r\n}\r\nif(i)\r\n{\r\ntrace(i);\r\n}\r\nif(s)\r\n{\r\ntrace(s);\r\n}\r\nif(o)\r\n{\r\ntrace(\"obj\");\r\n}\r\ns = xlist;\r\nvar d:Number = 0;\r\nd = 1;\r\nd = 1.5;\r\ni = 1;\r\ni = 1.5;\r\no[int(d * 5)] = 1;\r\nthis.n = 1.5;\r\nsuper.prot = 1.5;\r\nsuper.prot = int(s);\r\ni = super.prot;\r\ns = String(super.prot);\r\nvar a2:* = \"5\";\r\nvar s2:String = \"s\";\r\nvar i2:int = a2;\r\na2 = Number(a2);\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testDecl2",
   "static": false,
-  "expected": "var k:int = 0;\r\nvar i:int = 5;\r\ni += 7;\r\nif(i == 5)\r\n{\r\nif(i < 8)\r\n{\r\nk = 6;\r\n}\r\n}\r\nk = 7;\r\n"
+  "expected": "var i:int = 5;\r\ni += 7;\r\nvar k:int;\r\nif(i == 5)\r\n{\r\nif(i < 8)\r\n{\r\nk = 6;\r\n}\r\n}\r\nk = 7;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testDeclarationInterface",
   "static": false,
-  "expected": "var i:MyIFace = null;\r\nvar n:int = 2;\r\nswitch(n)\r\n{\r\ncase 0:\r\ni = new MyClass();\r\nbreak;\r\ncase 1:\r\ni = new MyClass2();\r\n}\r\nreturn i;\r\n"
+  "expected": "var i:MyIFace;\r\nvar n:int = 2;\r\nswitch(n)\r\n{\r\ncase 0:\r\ni = new MyClass();\r\nbreak;\r\ncase 1:\r\ni = new MyClass2();\r\n}\r\nreturn i;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -494,7 +494,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testExpressions",
   "static": false,
-  "expected": "var arr:Array = null;\r\nvar i:int = 5;\r\nvar j:int = 5;\r\ni = i /= 2;\r\nif(i == 1 || i == 2)\r\n{\r\narguments.concat(i);\r\n}\r\nelse if(i == 0)\r\n{\r\ni = j++;\r\n}\r\nelse\r\n{\r\narr[0]();\r\n}\r\nreturn i == 0;\r\n"
+  "expected": "var arr:Array;\r\nvar i:int = 5;\r\nvar j:int = 5;\r\ni = i /= 2;\r\nif(i == 1 || i == 2)\r\n{\r\narguments.concat(i);\r\n}\r\nelse if(i == 0)\r\n{\r\ni = j++;\r\n}\r\nelse\r\n{\r\narr[0]();\r\n}\r\nreturn i == 0;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -515,7 +515,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForAnd",
   "static": false,
-  "expected": "var x:Boolean = false;\r\nvar i:* = 0;\r\nvar len:int = 5;\r\nvar a:int = 4;\r\nvar b:int = 7;\r\nvar c:int = 9;\r\nfor(i = 0; i < len; x = a > 4 && b < 2 || c > 10)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\nif(c == 7)\r\n{\r\ntrace(\"B\");\r\ncontinue;\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
+  "expected": "var x:Boolean;\r\nvar i:* = 0;\r\nvar len:int = 5;\r\nvar a:int = 4;\r\nvar b:int = 7;\r\nvar c:int = 9;\r\nfor(i = 0; i < len; x = a > 4 && b < 2 || c > 10)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\nif(c == 7)\r\n{\r\ntrace(\"B\");\r\ncontinue;\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -536,28 +536,28 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForEach",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar item:* = undefined;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\ntrace(\"item #\" + item);\r\n}\r\n"
+  "expected": "var item:* = undefined;\r\nvar list:Array;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\ntrace(\"item #\" + item);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForEachObjectArray",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar test:Array = null;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\ntest = [];\r\ntest[0] = 0;\r\nfor each(test[0] in list)\r\n{\r\ntrace(\"item #\" + test[0]);\r\n}\r\n"
+  "expected": "var list:Array;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nvar test:Array;\r\ntest = [];\r\ntest[0] = 0;\r\nfor each(test[0] in list)\r\n{\r\ntrace(\"item #\" + test[0]);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForEachObjectAttribute",
   "static": false,
-  "expected": "var list:Array = null;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(this.testPriv in list)\r\n{\r\ntrace(\"item #\" + this.testPriv);\r\n}\r\n"
+  "expected": "var list:Array;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(this.testPriv in list)\r\n{\r\ntrace(\"item #\" + this.testPriv);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForEachReturn",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar item:* = undefined;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nvar _loc4_:int = 0;\r\nvar _loc3_:Array = list;\r\nfor each(item in _loc3_)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
+  "expected": "var item:* = undefined;\r\nvar list:Array;\r\nlist = [];\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -585,14 +585,14 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForGoto",
   "static": false,
-  "expected": "var i:* = 0;\r\nvar c:int = 0;\r\nvar len:int = 5;\r\nfor(i = 0; i < len; i++)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"exit\");\r\n"
+  "expected": "var i:* = 0;\r\nvar c:int;\r\nvar len:int = 5;\r\nfor(i = 0; i < len; i++)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"exit\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForIn",
   "static": false,
-  "expected": "var dic:Dictionary = null;\r\nvar item:* = null;\r\nfor(item in dic)\r\n{\r\ntrace(item);\r\n}\r\nfor each(item in dic)\r\n{\r\ntrace(item);\r\n}\r\n"
+  "expected": "var item:* = null;\r\nvar dic:Dictionary;\r\nfor(item in dic)\r\n{\r\ntrace(item);\r\n}\r\nfor each(item in dic)\r\n{\r\ntrace(item);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -606,7 +606,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForInReturn",
   "static": false,
-  "expected": "var dic:Dictionary = null;\r\nvar item:* = null;\r\nvar _loc4_:int = 0;\r\nvar _loc3_:Dictionary = dic;\r\nfor(item in _loc3_)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
+  "expected": "var item:* = null;\r\nvar dic:Dictionary;\r\nfor(item in dic)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -620,7 +620,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testForXml",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar c:int = 0;\r\nvar name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = null;\r\nvar len:int = 5;\r\nvar a:int = 5;\r\nvar b:int = 6;\r\nfor(i = 0; i < len; k = myXML.book.(@isbn == \"12345\"))\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\n"
+  "expected": "var c:int;\r\nvar name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar i:int;\r\nvar k:* = null;\r\nvar len:int = 5;\r\nvar a:int = 5;\r\nvar b:int = 6;\r\nfor(i = 0; i < len; k = myXML.book.(@isbn == \"12345\"))\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -648,7 +648,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testGotos3",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar a:int = 5;\r\nif(a > 5)\r\n{\r\nfor(i = 0; i < 5; )\r\n{\r\nif(i > 3)\r\n{\r\ntrace(\"A\");\r\nif(i == 4)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"B\");\r\ni++;\r\n}\r\n}\r\nelse\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"return\");\r\n"
+  "expected": "var a:int = 5;\r\nvar i:int;\r\nif(a > 5)\r\n{\r\nfor(i = 0; i < 5; )\r\n{\r\nif(i > 3)\r\n{\r\ntrace(\"A\");\r\nif(i == 4)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"B\");\r\ni++;\r\n}\r\n}\r\nelse\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"return\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -662,7 +662,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testGotos5",
   "static": false,
-  "expected": "var j:int = 0;\r\nvar s:String = \"A\";\r\nvar i:int = 0;\r\nfor(; i < 10; i++)\r\n{\r\nif(s == \"B\")\r\n{\r\nif(s == \"C\")\r\n{\r\ncontinue;\r\n}\r\n}\r\ntrace(\"D\");\r\nj = 0;\r\nwhile(j < 29)\r\n{\r\ntrace(\"E\");\r\nj++;\r\n}\r\n}\r\n"
+  "expected": "var s:String = \"A\";\r\nvar i:int = 0;\r\nvar j:int;\r\nfor(; i < 10; i++)\r\n{\r\nif(s == \"B\")\r\n{\r\nif(s == \"C\")\r\n{\r\ncontinue;\r\n}\r\n}\r\ntrace(\"D\");\r\nj = 0;\r\nwhile(j < 29)\r\n{\r\ntrace(\"E\");\r\nj++;\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -676,7 +676,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testGotos7",
   "static": false,
-  "expected": "var i:int = 0;\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"zero\");\r\ncontinue;\r\ncase 1:\r\nif(i == 7)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"one\");\r\ndefault:\r\ntrace(\"def\");\r\nbreak;\r\ncase 5:\r\ntrace(\"five\");\r\nbreak;\r\ncase 10:\r\ntrace(\"ten\");\r\n}\r\ntrace(\"before loop end\");\r\n}\r\n"
+  "expected": "var i:int;\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"zero\");\r\ncontinue;\r\ncase 1:\r\nif(i == 7)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"one\");\r\ndefault:\r\ntrace(\"def\");\r\nbreak;\r\ncase 5:\r\ntrace(\"five\");\r\nbreak;\r\ncase 10:\r\ntrace(\"ten\");\r\n}\r\ntrace(\"before loop end\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -725,7 +725,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testIfTry",
   "static": false,
-  "expected": "var c:int = 0;\r\nvar i:int = 0;\r\nvar b:Boolean = true;\r\nif(b)\r\n{\r\nc = 5;\r\nfor(i = 0; i < c; )\r\n{\r\ntrace(\"xx\");\r\ni++;\r\n}\r\n}\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n"
+  "expected": "var b:Boolean = true;\r\nvar c:int;\r\nvar i:int;\r\nif(b)\r\n{\r\nc = 5;\r\nfor(i = 0; i < c; )\r\n{\r\ntrace(\"xx\");\r\ni++;\r\n}\r\n}\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -900,14 +900,14 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testLogicalComputing",
   "static": false,
-  "expected": "var b:Boolean = false;\r\nvar i:int = 5;\r\nvar j:int = 7;\r\nif(i > j)\r\n{\r\nj = 9;\r\nb = true;\r\n}\r\nb = (i == 0 || i == 1) && j == 0;\r\n"
+  "expected": "var b:Boolean;\r\nvar i:int = 5;\r\nvar j:int = 7;\r\nif(i > j)\r\n{\r\nj = 9;\r\nb = true;\r\n}\r\nb = (i == 0 || i == 1) && j == 0;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testLoopInLoop",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar a:Boolean = true;\r\nvar b:Boolean = true;\r\nvar c:Boolean = true;\r\ndo\r\n{\r\ntrace(\"A\");\r\nfor(i = 0; i < 10; i++)\r\n{\r\nif(!a)\r\n{\r\ntrace(\"B\");\r\nif(c)\r\n{\r\ntrace(\"C\");\r\n}\r\nelse\r\n{\r\ntrace(\"D\");\r\nif(b)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"H\");\r\n}\r\nif(c)\r\n{\r\ntrace(\"L\");\r\n}\r\n}\r\n}\r\n}\r\nwhile(!a);\r\n"
+  "expected": "var a:Boolean = true;\r\nvar b:Boolean = true;\r\nvar c:Boolean = true;\r\nvar i:int;\r\ndo\r\n{\r\ntrace(\"A\");\r\nfor(i = 0; i < 10; i++)\r\n{\r\nif(!a)\r\n{\r\ntrace(\"B\");\r\nif(c)\r\n{\r\ntrace(\"C\");\r\n}\r\nelse\r\n{\r\ntrace(\"D\");\r\nif(b)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"H\");\r\n}\r\nif(c)\r\n{\r\ntrace(\"L\");\r\n}\r\n}\r\n}\r\n}\r\nwhile(!a);\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -956,7 +956,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testNames2",
   "static": false,
-  "expected": "var j:int = 0;\r\nvar g:Function = null;\r\nthis.i = 0;\r\ni = 1;\r\nj = 2;\r\ntrace(this.i);\r\ntrace(i);\r\ntrace(j);\r\nf();\r\nthis.f();\r\ng();\r\n"
+  "expected": "this.i = 0;\r\ni = 1;\r\nvar j:int;\r\nj = 2;\r\ntrace(this.i);\r\ntrace(i);\r\ntrace(j);\r\nf();\r\nthis.f();\r\nvar g:Function;\r\ng();\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -984,7 +984,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testOptimization",
   "static": false,
-  "expected": "var f:int = 0;\r\nvar g:int = 0;\r\nvar h:int = 0;\r\nvar a:int = 1;\r\nvar b:int = 2;\r\nvar c:int = 3;\r\nvar d:int = 4;\r\nvar e:int = d + 5;\r\nvar i:int = h = g = f;\r\n"
+  "expected": "var a:int = 1;\r\nvar b:int = 2;\r\nvar c:int = 3;\r\nvar d:int = 4;\r\nvar e:int = d + 5;\r\nvar f:int;\r\nvar g:int;\r\nvar h:int;\r\nvar i:int = h = g = f;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1040,7 +1040,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testRegExp",
   "static": false,
-  "expected": "var r:Number = NaN;\r\nvar a1:RegExp = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar a2:RegExp = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar b1:RegExp = /[0-9AB]+/;\r\nvar b2:RegExp = /[0-9AB]+/;\r\nvar n1:Number = 5;\r\nvar n2:Number = 2;\r\nvar n3:Number = 1;\r\ntrace(\"not a regexp 1\");\r\nr = n1 / n2 / n3;\r\ntrace(\"not a regexp 2\");\r\nr /= n1 / n2;\r\n"
+  "expected": "var a1:RegExp = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar a2:RegExp = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar r:Number;\r\nvar b1:RegExp = /[0-9AB]+/;\r\nvar b2:RegExp = /[0-9AB]+/;\r\nvar n1:Number = 5;\r\nvar n2:Number = 2;\r\nvar n3:Number = 1;\r\ntrace(\"not a regexp 1\");\r\nr = n1 / n2 / n3;\r\ntrace(\"not a regexp 2\");\r\nr /= n1 / n2;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1124,7 +1124,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testSwitchContinue",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar r:int = Math.random() % 10;\r\nif(r > 5)\r\n{\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"hello\");\r\nbreak;\r\ncase 1:\r\ntrace(\"hi\");\r\nbreak;\r\ncase 2:\r\ntrace(\"howdy\");\r\nbreak;\r\ndefault:\r\ncontinue;\r\n}\r\ntrace(\"message shown\");\r\n}\r\n}\r\n"
+  "expected": "var r:int = Math.random() % 10;\r\nvar i:int;\r\nif(r > 5)\r\n{\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"hello\");\r\nbreak;\r\ncase 1:\r\ntrace(\"hi\");\r\nbreak;\r\ncase 2:\r\ntrace(\"howdy\");\r\nbreak;\r\ndefault:\r\ncontinue;\r\n}\r\ntrace(\"message shown\");\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1166,7 +1166,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testTry",
   "static": false,
-  "expected": "var i:int = 0;\r\ni = 7;\r\ntry\r\n{\r\ntrace(\"try body\");\r\n}\r\ncatch(e:DefinitionError)\r\n{\r\ntrace(\"catched DefinitionError\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"Error message:\" + e.message);\r\ntrace(\"Stacktrace:\" + e.getStackTrace());\r\n}\r\nfinally\r\n{\r\ntrace(\"Finally part\");\r\n}\r\ntrace(\"end\");\r\n"
+  "expected": "var i:int;\r\ni = 7;\r\ntry\r\n{\r\ntrace(\"try body\");\r\n}\r\ncatch(e:DefinitionError)\r\n{\r\ntrace(\"catched DefinitionError\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"Error message:\" + e.message);\r\ntrace(\"Stacktrace:\" + e.getStackTrace());\r\n}\r\nfinally\r\n{\r\ntrace(\"Finally part\");\r\n}\r\ntrace(\"end\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1180,7 +1180,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testTryReturn",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar b:Boolean = false;\r\ntry\r\n{\r\ni = 0;\r\nb = true;\r\nif(i > 0)\r\n{\r\nwhile(this.testDoWhile2())\r\n{\r\nif(b)\r\n{\r\nreturn 5;\r\n}\r\n}\r\n}\r\ni++;\r\nreturn 2;\r\n}\r\ncatch(e:Error)\r\n{\r\n}\r\nreturn 4;\r\n"
+  "expected": "var b:Boolean;\r\nvar i:int;\r\ntry\r\n{\r\ni = 0;\r\nb = true;\r\nif(i > 0)\r\n{\r\nwhile(this.testDoWhile2())\r\n{\r\nif(b)\r\n{\r\nreturn 5;\r\n}\r\n}\r\n}\r\ni++;\r\nreturn 2;\r\n}\r\ncatch(e:Error)\r\n{\r\n}\r\nreturn 4;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1194,7 +1194,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testUndefined",
   "static": false,
-  "expected": "var i:int;\r\nvar j:int;\r\nvar c:int;\r\nvar f:Function;\r\nc = 5 + i;\r\nf = function():void\r\n{\r\ntrace(c);\r\ntrace(j);\r\n};\r\nwhile(i < 10)\r\n{\r\ntrace(i);\r\ni++;\r\n}\r\nf();\r\n"
+  "expected": "var i:int;\r\nvar j:int;\r\nvar c:int = 5 + i;\r\nvar f:Function = function():void\r\n{\r\ntrace(c);\r\ntrace(j);\r\n};\r\nwhile(i < 10)\r\n{\r\ntrace(i);\r\ni++;\r\n}\r\nf();\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1236,7 +1236,7 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testWhileBreak",
   "static": false,
-  "expected": "var a:int = 0;\r\nwhile(a < 10)\r\n{\r\nif(a > 1 && a > 2 && a > 3 && a > 4 && a > 5)\r\n{\r\nreturn \"A\";\r\n}\r\ntrace(\"middle\");\r\nif(a == 5)\r\n{\r\nbreak;\r\n}\r\n}\r\nreturn \"B\";\r\n"
+  "expected": "var a:int;\r\nwhile(a < 10)\r\n{\r\nif(a > 1 && a > 2 && a > 3 && a > 4 && a > 5)\r\n{\r\nreturn \"A\";\r\n}\r\ntrace(\"middle\");\r\nif(a == 5)\r\n{\r\nbreak;\r\n}\r\n}\r\nreturn \"B\";\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
@@ -1299,14 +1299,14 @@
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testXml",
   "static": false,
-  "expected": "var name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = myXML.@id;\r\nvar all:String = myXML.@*.toXMLString();\r\nk = myXML.book;\r\nk = myXML.book.(@isbn == \"12345\");\r\nvar list:Vector.<int> = new Vector.<int>();\r\nvar i:int = Math.random();\r\nlist[i] = myXML.book.(@isbn == i + 1);\r\nvar g:XML = <script>\r\n<![CDATA[\r\nfunction() {\r\n\r\nFBAS = {\r\n\r\nsetSWFObjectID: function( swfObjectID ) {\r\nFBAS.swfObjectID = swfObjectID;\r\n},\r\n\r\ninit: function( opts ) {\r\nFB.init( FB.JSON.parse( opts ) );\r\n\r\nFB.Event.subscribe( 'auth.sessionChange', function( response ) {\r\nFBAS.updateSwfSession( response.session );\r\n} );\r\n},\r\n\r\nsetCanvasAutoResize: function( autoSize, interval ) {\r\nFB.Canvas.setAutoResize( autoSize, interval );\r\n},\r\n\r\nsetCanvasSize: function( width, height ) {\r\nFB.Canvas.setSize( { width: width, height: height } );\r\n},\r\n\r\nlogin: function( opts ) {\r\nFB.login( FBAS.handleUserLogin, FB.JSON.parse( opts ) );\r\n},\r\n\r\naddEventListener: function( event ) {\r\nFB.Event.subscribe( event, function( response ) {\r\nFBAS.getSwf().handleJsEvent( event, FB.JSON.stringify( response ) );\r\n} );\r\n},\r\n\r\nhandleUserLogin: function( response ) {\r\nif( response.session == null ) {\r\nFBAS.updateSwfSession( null );\r\nreturn;\r\n}\r\n\r\nif( response.perms != null ) {\r\n// user is logged in and granted some permissions.\r\n// perms is a comma separated list of granted permissions\r\nFBAS.updateSwfSession( response.session, response.perms );\r\n} else {\r\nFBAS.updateSwfSession( response.session );\r\n}\r\n},\r\n\r\nlogout: function() {\r\nFB.logout( FBAS.handleUserLogout );\r\n},\r\n\r\nhandleUserLogout: function( response ) {\r\nswf = FBAS.getSwf();\r\nswf.logout();\r\n},\r\n\r\nui: function( params ) {\r\nobj = FB.JSON.parse( params );\r\nmethod = obj.method;\r\ncb = function( response ) { FBAS.getSwf().uiResponse( FB.JSON.stringify( response ), method ); }\r\nFB.ui( obj, cb );\r\n},\r\n\r\ngetSession: function() {\r\nsession = FB.getSession();\r\nreturn FB.JSON.stringify( session );\r\n},\r\n\r\ngetLoginStatus: function() {\r\nFB.getLoginStatus( function( response ) {\r\nif( response.session ) {\r\nFBAS.updateSwfSession( response.session );\r\n} else {\r\nFBAS.updateSwfSession( null );\r\n}\r\n} );\r\n},\r\n\r\ngetSwf: function getSwf() {\r\nreturn document.getElementById( FBAS.swfObjectID );\r\n},\r\n\r\nupdateSwfSession: function( session, extendedPermissions ) {\r\nswf = FBAS.getSwf();\r\nextendedPermissions = ( extendedPermissions == null ) ? '' : extendedPermissions;\r\n\r\nif( session == null ) {\r\nswf.sessionChange( null );\r\n} else {\r\nswf.sessionChange( FB.JSON.stringify( session ), FB.JSON.stringify( extendedPermissions.split( ',' ) ) );\r\n}\r\n}\r\n};\r\n}\r\n]]>\r\n</script>;\r\nvar testCdata:XML = <![CDATA[\r\nhello from cdata;\r\nfunction(){\r\nhere some code;\r\n}\r\n]]>;\r\nvar testComment:XML = <!-- myXML comment-->;\r\nvar xtaga:String = \"a\";\r\nvar xtagb:String = \"b\";\r\nvar xattrname:String = \"attr\";\r\nvar xattrval:String = \"value\";\r\nvar xcontent:String = \"content\";\r\nvar xxx:XML = <{xtaga} >\r\n<{xtagb} >\r\n<ul>\r\n<li>Item 1</li>\r\n<li  {xattrname}=\"val\" attr2={xattrval}>Item 2: {xcontent}</li>\r\n<?processinstr testvalue ?>\r\n<!--\r\ncomment\r\n-->\r\n</ul>\r\n</{xtagb} >\r\n</{xtaga} >\r\n;\r\nvar m:XMLList = myXML.*;\r\n"
+  "expected": "var name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = myXML.@id;\r\nvar all:String = myXML.@*.toXMLString();\r\nk = myXML.book;\r\nk = myXML.book.(@isbn == \"12345\");\r\nvar list:Vector.<int> = new Vector.<int>();\r\nvar i:int = Math.random();\r\nlist[i] = myXML.book.(@isbn == i + 1);\r\nvar g:XML = new XML(\"<script>\\n\\t\\t\\t\\t<![CDATA[\\n\\t\\t\\t\\t\\tfunction() {\\n\\t\\t\\t\\n\\t\\t\\t\\t\\t\\tFBAS = {\\n\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetSWFObjectID: function( swfObjectID ) {\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tFBAS.swfObjectID = swfObjectID;\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tinit: function( opts ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.init( FB.JSON.parse( opts ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Event.subscribe( \\'auth.sessionChange\\', function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetCanvasAutoResize: function( autoSize, interval ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Canvas.setAutoResize( autoSize, interval );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetCanvasSize: function( width, height ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Canvas.setSize( { width: width, height: height } );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tlogin: function( opts ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.login( FBAS.handleUserLogin, FB.JSON.parse( opts ) );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\taddEventListener: function( event ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Event.subscribe( event, function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.getSwf().handleJsEvent( event, FB.JSON.stringify( response ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\thandleUserLogin: function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tif( response.session == null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\treturn;\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tif( response.perms != null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t// user is logged in and granted some permissions.\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t// perms is a comma separated list of granted permissions\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session, response.perms );\\n\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tlogout: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.logout( FBAS.handleUserLogout );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\thandleUserLogout: function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tswf = FBAS.getSwf();\\n\\t\\t\\t\\t\\t\\t\\t\\tswf.logout();\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tui: function( params ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tobj = FB.JSON.parse( params );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tmethod = obj.method;\\n\\t\\t\\t\\t\\t\\t\\t\\tcb = function( response ) { FBAS.getSwf().uiResponse( FB.JSON.stringify( response ), method ); }\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.ui( obj, cb );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetSession: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tsession = FB.getSession();\\n\\t\\t\\t\\t\\t\\t\\t\\treturn FB.JSON.stringify( session );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetLoginStatus: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.getLoginStatus( function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tif( response.session ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetSwf: function getSwf() {\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\treturn document.getElementById( FBAS.swfObjectID );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tupdateSwfSession: function( session, extendedPermissions ) {\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tswf = FBAS.getSwf();\\n\\t\\t\\t\\t\\t\\t\\t\\textendedPermissions = ( extendedPermissions == null ) ? \\'\\' : extendedPermissions;\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tif( session == null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tswf.sessionChange( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tswf.sessionChange( FB.JSON.stringify( session ), FB.JSON.stringify( extendedPermissions.split( \\',\\' ) ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t};\\n\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t]]>\\n\\t\\t\\t</script>\");\r\nvar testCdata:XML =<![CDATA[\r\nhello from cdata;\r\nfunction(){\r\nhere some code;\r\n}\r\n]]>;\r\nvar testComment:XML =<!-- myXML comment-->;\r\nvar xtaga:String = \"a\";\r\nvar xtagb:String = \"b\";\r\nvar xattrname:String = \"attr\";\r\nvar xattrval:String = \"value\";\r\nvar xcontent:String = \"content\";\r\nvar xxx:XML = <{xtaga} >\r\n<{xtagb} >\r\n<ul>\r\n<li>Item 1</li>\r\n<li  {xattrname}=\"val\" attr2={xattrval}>Item 2: {xcontent}</li>\r\n<?processinstr testvalue ?>\r\n<!--\r\ncomment\r\n-->\r\n</ul>\r\n</{xtagb} >\r\n</{xtaga} >\r\n;\r\nvar m:XMLList = myXML.*;\r\n"
  },
  {
   "suite": "ActionScript3ClassicAirDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.air.swf",
   "method": "testXml2",
   "static": false,
-  "expected": "var x1:XML = <elem name=\"aaa\" value=\"xxx&#10;\"/>;\r\nvar x2:XML = <elem\r\nname=\"aaa\"\r\nvalue=\"xxx\"\r\n/>;\r\nvar x3:XML = <elem\r\nname=\"aaa\" value=\"xxx\">\r\n<sub title=\"yyy\">\r\nampersand: &amp;\r\n</sub>\r\n<sub />\r\n</elem>;\r\nvar x4:XML = <elem>\r\n<elem>\r\nA\r\n</elem>\r\n<elem>\r\nB\r\n</elem>\r\n<elem>\r\n<elem>\r\nC\r\n</elem>\r\n</elem>\r\n</elem>;\r\nvar x5:XML = <elem attr=\"abc\\r\\n\\tdef\"></elem>;\r\nvar x_invalid:XML = new XML(\"<aaa >> invalid \\\"\\n\");\r\nvar a:int = 5;\r\ntrace(\"B\");\r\n"
+  "expected": "var x1:XML = new XML(\"<elem name=\\\"aaa\\\" value=\\\"xxx\\n\\\"/>\");\r\nvar x2:XML = <elem\r\nname=\"aaa\"\r\nvalue=\"xxx\"\r\n/>;\r\nvar x3:XML = <elem\r\nname=\"aaa\" value=\"xxx\">\r\n<sub title=\"yyy\">\r\nampersand: &amp;\r\n</sub>\r\n<sub />\r\n</elem>;\r\nvar x4:XML = <elem>\r\n<elem>\r\nA\r\n</elem>\r\n<elem>\r\nB\r\n</elem>\r\n<elem>\r\n<elem>\r\nC\r\n</elem>\r\n</elem>\r\n</elem>;\r\nvar x5:XML = <elem attr=\"abc\\r\\n\\tdef\"></elem>;\r\nvar x_invalid:XML = new XML(\"<aaa >> invalid \\\"\\n\");\r\nvar a:int = 5;\r\ntrace(\"B\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1320,7 +1320,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testAlwaysBreak",
   "static": false,
-  "expected": "var v:int = 0;\r\nv = 5;\r\ntrace(\"a\");\r\nwhile(true)\r\n{\r\nif(v > 4)\r\n{\r\ntrace(\"b\");\r\nif(v > 10)\r\n{\r\ntrace(\"c\");\r\nbreak;\r\n}\r\ntrace(\"d\");\r\n}\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n"
+  "expected": "var v:int;\r\nv = 5;\r\ntrace(\"a\");\r\nwhile(true)\r\n{\r\nif(v > 4)\r\n{\r\ntrace(\"b\");\r\nif(v > 10)\r\n{\r\ntrace(\"c\");\r\nbreak;\r\n}\r\ntrace(\"d\");\r\n}\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1376,7 +1376,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testChain2",
   "static": false,
-  "expected": "var g:Array = null;\r\nvar h:Boolean = false;\r\nvar extraLine:Boolean = false;\r\nvar r:int = 7;\r\nvar t:int = 0;\r\nt = this.getInt();\r\nif(t + 1 < g.length)\r\n{\r\nt++;\r\nh = true;\r\n}\r\nif(t >= 0)\r\n{\r\ntrace(\"ch\");\r\n}\r\n"
+  "expected": "var g:Array;\r\nvar h:Boolean = false;\r\nvar extraLine:Boolean = false;\r\nvar r:int = 7;\r\nvar t:int = 0;\r\nt = this.getInt();\r\nif(t + 1 < g.length)\r\n{\r\nt++;\r\nh = true;\r\n}\r\nif(t >= 0)\r\n{\r\ntrace(\"ch\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1404,7 +1404,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testChainedAssignments4",
   "static": false,
-  "expected": "var slota:int;\r\nvar slotb:int;\r\nvar slotc:int;\r\nvar f:Function;\r\ntrace(\"slotc = slotb = slota = 5;\");\r\nslota = 0;\r\nslotb = 0;\r\nslotc = 0;\r\nf = function(n1:int, n2:int):int\r\n{\r\nreturn n1 + n2;\r\n};\r\nslotc = slotb = slota = 5;\r\n"
+  "expected": "trace(\"slotc = slotb = slota = 5;\");\r\nvar slota:int = 0;\r\nvar slotb:int = 0;\r\nvar slotc:int = 0;\r\nvar f:Function = function(n1:int, n2:int):int\r\n{\r\nreturn n1 + n2;\r\n};\r\nslotc = slotb = slota = 5;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1432,21 +1432,21 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testCompoundAssignments",
   "static": false,
-  "expected": "var t:MyTest;\r\nvar b:* = [10,20,30];\r\nvar a:int = 0;\r\ntrace(\"a += 5\");\r\na += 5;\r\ntrace(\"arr[call()] = arr[call()] + 2;\");\r\nb[this.calc()] = b[this.calc()] + 2;\r\nt = new MyTest();\r\ntrace(\"t.attr *= 10\");\r\nt.attr *= 10;\r\ntrace(\"attr -= 5\");\r\nthis.attr -= 5;\r\ntrace(\"arr[2] += 5\");\r\nb[2] += 5;\r\ntrace(\"arr[call()] /= 5\");\r\nb[this.calc()] = b[this.calc()] / 5;\r\ntrace(\"arr[call()][call()] &= 10;\");\r\nb[this.calc()][this.calc()] = b[this.calc()][this.calc()] & 0x0A;\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(e.message);\r\n}\r\n"
+  "expected": "var b:* = [10,20,30];\r\nvar a:int = 0;\r\ntrace(\"a += 5\");\r\na += 5;\r\ntrace(\"arr[call()] = arr[call()] + 2;\");\r\nb[this.calc()] = b[this.calc()] + 2;\r\nvar t:MyTest = new MyTest();\r\ntrace(\"t.attr *= 10\");\r\nt.attr *= 10;\r\ntrace(\"attr -= 5\");\r\nthis.attr -= 5;\r\ntrace(\"arr[2] += 5\");\r\nb[2] += 5;\r\ntrace(\"arr[call()] /= 5\");\r\nb[this.calc()] = b[this.calc()] / 5;\r\ntrace(\"arr[call()][call()] &= 10;\");\r\nb[this.calc()][this.calc()] = b[this.calc()][this.calc()] & 0x0A;\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(e.message);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testContinueLevels",
   "static": false,
-  "expected": "var b:* = undefined;\r\nvar c:* = undefined;\r\nvar d:* = undefined;\r\nvar e:* = undefined;\r\nvar a:* = 5;\r\nswitch(a)\r\n{\r\ncase 57 * a:\r\ntrace(\"fiftyseven multiply a\");\r\nb = 0;\r\nwhile(b < 50)\r\n{\r\nif(b == 10)\r\n{\r\nbreak;\r\n}\r\nif(b == 15)\r\n{\r\nbreak;\r\n}\r\nb += 1;\r\n}\r\nbreak;\r\ncase 13:\r\ntrace(\"thirteen\");\r\ncase 14:\r\ntrace(\"fourteen\");\r\nbreak;\r\ncase 89:\r\ntrace(\"eightynine\");\r\nbreak;\r\ndefault:\r\ntrace(\"default clause\");\r\n}\r\nloop1:\r\nfor(c = 0; c < 8; c += 1)\r\n{\r\nfor(d = 0; d < 25; d++)\r\n{\r\ne = 0;\r\nif(e < 50)\r\n{\r\nif(e == 9)\r\n{\r\nbreak;\r\n}\r\nif(e == 20)\r\n{\r\ncontinue loop1;\r\n}\r\nif(e != 8)\r\n{\r\nbreak loop1;\r\n}\r\n}\r\n}\r\ntrace(\"hello\");\r\n}\r\n"
+  "expected": "var a:* = 5;\r\nvar b:*;\r\nswitch(a)\r\n{\r\ncase 57 * a:\r\ntrace(\"fiftyseven multiply a\");\r\nb = 0;\r\nwhile(b < 50)\r\n{\r\nif(b == 10)\r\n{\r\nbreak;\r\n}\r\nif(b == 15)\r\n{\r\nbreak;\r\n}\r\nb += 1;\r\n}\r\nbreak;\r\ncase 13:\r\ntrace(\"thirteen\");\r\ncase 14:\r\ntrace(\"fourteen\");\r\nbreak;\r\ncase 89:\r\ntrace(\"eightynine\");\r\nbreak;\r\ndefault:\r\ntrace(\"default clause\");\r\n}\r\nvar c:*;\r\nvar d:*;\r\nvar e:*;\r\nloop1:\r\nfor(c = 0; c < 8; c += 1)\r\n{\r\nfor(d = 0; d < 25; d++)\r\n{\r\ne = 0;\r\nif(e < 50)\r\n{\r\nif(e == 9)\r\n{\r\nbreak;\r\n}\r\nif(e == 20)\r\n{\r\ncontinue loop1;\r\n}\r\nif(e != 8)\r\n{\r\nbreak loop1;\r\n}\r\n}\r\n}\r\ntrace(\"hello\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testConvert",
   "static": false,
-  "expected": "var s:String = null;\r\nvar i:int = 0;\r\nvar a:* = undefined;\r\nvar dict:Dictionary = new Dictionary();\r\ns = \"a\";\r\ni = int(s);\r\nvar j:int = this.n;\r\ns = String(j);\r\ns = this.ns;\r\ns = String(i == 4 ? \"\" : i);\r\ns = i == 4 ? \"\" : String(i);\r\ns = TestConvert.TEST;\r\ni = this.TEST;\r\ni = Number(\"4\") * 5;\r\ni = a * 6;\r\ni = a;\r\nvar o:Object = {\r\n0:\"A\",\r\n1:\"B\",\r\n2:\"C\"\r\n};\r\ni = int(s.charAt(10));\r\nvar v:Vector.<String> = new Vector.<String>();\r\nv.push(\"A\");\r\nv.push(\"B\");\r\ni = int(v[0]);\r\ns = v[1];\r\ns = v.join(\"x\");\r\ni = int(v.join(\"x\"));\r\ni = prot;\r\ns = String(prot);\r\ni = sprot;\r\ns = String(sprot);\r\ns = String(getTimer());\r\nvar x:XML = <list>\r\n<item id=\"1\">1</item>\r\n<item id=\"2\">2</item>\r\n<item id=\"3\">3</item>\r\n</list>;\r\ns = x;\r\ntrace(\"a\");\r\nvar xlist:XMLList = x.item;\r\ntrace(\"b\");\r\ni = int(xlist[i].@id);\r\ntrace(\"c\");\r\ni = int(x.item[i].@id);\r\ndict[String(x.item[i].@id)] = \"Hello\";\r\nvar lc:LocalClass = new LocalClass();\r\ni = lc.attr;\r\ns = String(lc.attr);\r\nvar f:Function = this.f;\r\nif(Boolean(f))\r\n{\r\ntrace(\"OK\");\r\n}\r\nif(Boolean(i))\r\n{\r\ntrace(i);\r\n}\r\nif(Boolean(s))\r\n{\r\ntrace(s);\r\n}\r\nif(Boolean(o))\r\n{\r\ntrace(\"obj\");\r\n}\r\ns = xlist;\r\nvar d:Number = 0;\r\nd = 1;\r\nd = 1.5;\r\ni = 1;\r\ni = 1.5;\r\no[int(d * 5)] = 1;\r\nthis.n = 1.5;\r\nsuper.prot = 1.5;\r\nsuper.prot = int(s);\r\ni = super.prot;\r\ns = String(super.prot);\r\nvar a2:* = \"5\";\r\nvar s2:String = \"s\";\r\nvar i2:int = a2;\r\na2 = Number(a2);\r\n"
+  "expected": "var s:String;\r\nvar i:int;\r\nvar dict:Dictionary = new Dictionary();\r\ns = \"a\";\r\ni = int(s);\r\nvar j:int = this.n;\r\ns = String(j);\r\ns = this.ns;\r\ns = String(i == 4 ? \"\" : i);\r\ns = i == 4 ? \"\" : String(i);\r\ns = TestConvert.TEST;\r\ni = this.TEST;\r\ni = Number(\"4\") * 5;\r\nvar a:*;\r\ni = a * 6;\r\ni = a;\r\nvar o:Object = {\r\n0:\"A\",\r\n1:\"B\",\r\n2:\"C\"\r\n};\r\ni = int(s.charAt(10));\r\nvar v:Vector.<String> = new Vector.<String>();\r\nv.push(\"A\");\r\nv.push(\"B\");\r\ni = int(v[0]);\r\ns = v[1];\r\ns = v.join(\"x\");\r\ni = int(v.join(\"x\"));\r\ni = prot;\r\ns = String(prot);\r\ni = sprot;\r\ns = String(sprot);\r\ns = String(getTimer());\r\nvar x:XML = <list>\r\n<item id=\"1\">1</item>\r\n<item id=\"2\">2</item>\r\n<item id=\"3\">3</item>\r\n</list>;\r\ns = x;\r\ntrace(\"a\");\r\nvar xlist:XMLList = x.item;\r\ntrace(\"b\");\r\ni = int(xlist[i].@id);\r\ntrace(\"c\");\r\ni = int(x.item[i].@id);\r\ndict[String(x.item[i].@id)] = \"Hello\";\r\nvar lc:LocalClass = new LocalClass();\r\ni = lc.attr;\r\ns = String(lc.attr);\r\nvar f:Function = this.f;\r\nif(Boolean(f))\r\n{\r\ntrace(\"OK\");\r\n}\r\nif(Boolean(i))\r\n{\r\ntrace(i);\r\n}\r\nif(Boolean(s))\r\n{\r\ntrace(s);\r\n}\r\nif(Boolean(o))\r\n{\r\ntrace(\"obj\");\r\n}\r\ns = xlist;\r\nvar d:Number = 0;\r\nd = 1;\r\nd = 1.5;\r\ni = 1;\r\ni = 1.5;\r\no[int(d * 5)] = 1;\r\nthis.n = 1.5;\r\nsuper.prot = 1.5;\r\nsuper.prot = int(s);\r\ni = super.prot;\r\ns = String(super.prot);\r\nvar a2:* = \"5\";\r\nvar s2:String = \"s\";\r\nvar i2:int = a2;\r\na2 = Number(a2);\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1460,7 +1460,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testDeclarationInterface",
   "static": false,
-  "expected": "var i:MyIFace = null;\r\nvar n:int = 2;\r\nswitch(n)\r\n{\r\ncase 0:\r\ni = new MyClass();\r\nbreak;\r\ncase 1:\r\ni = new MyClass2();\r\n}\r\nreturn i;\r\n"
+  "expected": "var i:MyIFace;\r\nvar n:int = 2;\r\nswitch(n)\r\n{\r\ncase 0:\r\ni = new MyClass();\r\nbreak;\r\ncase 1:\r\ni = new MyClass2();\r\n}\r\nreturn i;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1523,21 +1523,21 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testDotParent",
   "static": false,
-  "expected": "var d:* = undefined;\r\nvar k:* = undefined;\r\nvar g:* = undefined;\r\nd = new TestClass1();\r\nk = null;\r\nk.(++d.attrib,0);\r\ntrace(\"between\");\r\ng = k.(++d.attrib,0);\r\ntrace(\"end\");\r\n"
+  "expected": "var d:*;\r\nd = new TestClass1();\r\nvar k:*;\r\nk = null;\r\nk.(++d.attrib,0);\r\ntrace(\"between\");\r\nvar g:*;\r\ng = k.(++d.attrib,0);\r\ntrace(\"end\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testExecutionOrder",
   "static": false,
-  "expected": "var m:MyClass = null;\r\nm.x = (m = create() as MyClass).x + 5;\r\ntrace(m.x);\r\n"
+  "expected": "var m:MyClass;\r\nm.x = (m = create() as MyClass).x + 5;\r\ntrace(m.x);\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testExpressions",
   "static": false,
-  "expected": "var arr:Array = null;\r\nvar i:int = 5;\r\nvar j:int = 5;\r\ni = i = i / 2;\r\nif(i == 1 || i == 2)\r\n{\r\narguments.concat(i);\r\n}\r\nelse if(i == 0)\r\n{\r\ni = j++;\r\n}\r\nelse\r\n{\r\narr[0]();\r\n}\r\nreturn i == 0;\r\n"
+  "expected": "var arr:Array;\r\nvar i:int = 5;\r\nvar j:int = 5;\r\ni = i = i / 2;\r\nif(i == 1 || i == 2)\r\n{\r\narguments.concat(i);\r\n}\r\nelse if(i == 0)\r\n{\r\ni = j++;\r\n}\r\nelse\r\n{\r\narr[0]();\r\n}\r\nreturn i == 0;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1558,7 +1558,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForAnd",
   "static": false,
-  "expected": "var x:Boolean = false;\r\nvar len:int = 5;\r\nvar a:int = 4;\r\nvar b:int = 7;\r\nvar c:int = 9;\r\nfor(var i:uint = 0; i < len; x = a > 4 && b < 2 || c > 10)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\nif(c == 7)\r\n{\r\ntrace(\"B\");\r\ncontinue;\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
+  "expected": "var len:int = 5;\r\nvar x:Boolean;\r\nvar a:int = 4;\r\nvar b:int = 7;\r\nvar c:int = 9;\r\nfor(var i:uint = 0; i < len; x = a > 4 && b < 2 || c > 10)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\nif(c == 7)\r\n{\r\ntrace(\"B\");\r\ncontinue;\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1579,91 +1579,91 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEach",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar item:* = undefined;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\ntrace(\"item #\" + item);\r\n}\r\n"
+  "expected": "var list:Array;\r\nvar item:* = undefined;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\ntrace(\"item #\" + item);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachObjectArray",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar test:Array = null;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\ntest = new Array();\r\ntest[0] = 0;\r\nfor each(test[0] in list)\r\n{\r\ntrace(\"item #\" + test[0]);\r\n}\r\n"
+  "expected": "var list:Array;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nvar test:Array;\r\ntest = new Array();\r\ntest[0] = 0;\r\nfor each(test[0] in list)\r\n{\r\ntrace(\"item #\" + test[0]);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachObjectAttribute",
   "static": false,
-  "expected": "var list:Array = null;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(this.testPriv in list)\r\n{\r\ntrace(\"item #\" + this.testPriv);\r\n}\r\n"
+  "expected": "var list:Array;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(this.testPriv in list)\r\n{\r\ntrace(\"item #\" + this.testPriv);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachReturn",
   "static": false,
-  "expected": "var list:Array = null;\r\nvar item:* = undefined;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nvar _loc3_:int = 0;\r\nvar _loc4_:* = list;\r\nfor each(item in _loc4_)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
+  "expected": "var list:Array;\r\nvar item:* = undefined;\r\nlist = new Array();\r\nlist[0] = \"first\";\r\nlist[1] = \"second\";\r\nlist[2] = \"third\";\r\nfor each(item in list)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachReturn2",
   "static": false,
-  "expected": "var item:* = undefined;\r\nvar obj:* = null;\r\nvar x:* = 5;\r\nif(x != null)\r\n{\r\nobj = {};\r\nfor each(item in obj)\r\n{\r\nswitch(item[\"key\"])\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ncase 4:\r\nreturn item;\r\n}\r\n}\r\n}\r\nreturn null;\r\n"
+  "expected": "var obj:* = null;\r\nvar x:* = 5;\r\nvar item:*;\r\nif(x != null)\r\n{\r\nobj = {};\r\nfor each(item in obj)\r\n{\r\nswitch(item[\"key\"])\r\n{\r\ncase 1:\r\ncase 2:\r\ncase 3:\r\ncase 4:\r\nreturn item;\r\n}\r\n}\r\n}\r\nreturn null;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachSwitch",
   "static": false,
-  "expected": "var name:String = null;\r\nvar a:Boolean = true;\r\nvar b:Boolean = true;\r\nvar c:Boolean = true;\r\nvar s:int = 5;\r\nvar obj:Object = {};\r\nfor each(name in obj)\r\n{\r\nif(a)\r\n{\r\nswitch(s)\r\n{\r\ncase 1:\r\ntrace(\"1\");\r\nif(b)\r\n{\r\ntrace(\"1b\");\r\n}\r\ncase 2:\r\ntrace(\"2\");\r\nif(c)\r\n{\r\ntrace(\"2c\");\r\n}\r\nbreak;\r\ncase 3:\r\ntrace(\"3\");\r\nbreak;\r\ncase 4:\r\ntrace(\"4\");\r\n}\r\n}\r\ntrace(\"before_continue\");\r\n}\r\n"
+  "expected": "var a:Boolean = true;\r\nvar b:Boolean = true;\r\nvar c:Boolean = true;\r\nvar s:int = 5;\r\nvar obj:Object = {};\r\nvar name:String;\r\nfor each(name in obj)\r\n{\r\nif(a)\r\n{\r\nswitch(s)\r\n{\r\ncase 1:\r\ntrace(\"1\");\r\nif(b)\r\n{\r\ntrace(\"1b\");\r\n}\r\ncase 2:\r\ntrace(\"2\");\r\nif(c)\r\n{\r\ntrace(\"2c\");\r\n}\r\nbreak;\r\ncase 3:\r\ntrace(\"3\");\r\nbreak;\r\ncase 4:\r\ntrace(\"4\");\r\n}\r\n}\r\ntrace(\"before_continue\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForEachTry",
   "static": false,
-  "expected": "var name:String = null;\r\nvar list:Object = {};\r\nvar b:Boolean = true;\r\nfor each(name in list)\r\n{\r\ntry\r\n{\r\ntrace(\"xx\");\r\nif(b)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\ntrace(\"B\");\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
+  "expected": "var list:Object = {};\r\nvar b:Boolean = true;\r\nvar name:String;\r\nfor each(name in list)\r\n{\r\ntry\r\n{\r\ntrace(\"xx\");\r\nif(b)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\ntrace(\"B\");\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"D\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForGoto",
   "static": false,
-  "expected": "var c:int = 0;\r\nvar len:int = 5;\r\nfor(var i:uint = 0; i < len; i++)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"exit\");\r\n"
+  "expected": "var len:int = 5;\r\nvar c:int;\r\nfor(var i:uint = 0; i < len; i++)\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\ntrace(\"exit\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForIn",
   "static": false,
-  "expected": "var dic:Dictionary = null;\r\nvar item:* = null;\r\nfor(item in dic)\r\n{\r\ntrace(item);\r\n}\r\nfor each(item in dic)\r\n{\r\ntrace(item);\r\n}\r\n"
+  "expected": "var dic:Dictionary;\r\nvar item:* = null;\r\nfor(item in dic)\r\n{\r\ntrace(item);\r\n}\r\nfor each(item in dic)\r\n{\r\ntrace(item);\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForInIf",
   "static": false,
-  "expected": "var a:String = null;\r\nvar arr:Array = [\"a\",\"b\",\"c\"];\r\nvar b:int = 5;\r\nfor(a in arr)\r\n{\r\nif(b == 5)\r\n{\r\nif(b <= 7)\r\n{\r\nreturn;\r\n}\r\ntrace(\"b>7\");\r\n}\r\ntrace(\"forend\");\r\n}\r\n"
+  "expected": "var arr:Array = [\"a\",\"b\",\"c\"];\r\nvar b:int = 5;\r\nvar a:String;\r\nfor(a in arr)\r\n{\r\nif(b == 5)\r\n{\r\nif(b <= 7)\r\n{\r\nreturn;\r\n}\r\ntrace(\"b>7\");\r\n}\r\ntrace(\"forend\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForInReturn",
   "static": false,
-  "expected": "var dic:Dictionary = null;\r\nvar item:* = null;\r\nvar _loc3_:int = 0;\r\nvar _loc4_:* = dic;\r\nfor(item in _loc4_)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
+  "expected": "var dic:Dictionary;\r\nvar item:* = null;\r\nfor(item in dic)\r\n{\r\nreturn item;\r\n}\r\nreturn null;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForInSwitch",
   "static": false,
-  "expected": "var a:String = null;\r\nvar arr:Array = [\"a\",\"b\",\"c\"];\r\nfor(a in arr)\r\n{\r\nswitch(a)\r\n{\r\ncase \"a\":\r\ntrace(\"val a\");\r\nbreak;\r\ncase \"b\":\r\ntrace(\"val b\");\r\nbreak;\r\ncase \"c\":\r\ntrace(\"val c\");\r\n}\r\ntrace(\"final\");\r\n}\r\n"
+  "expected": "var arr:Array = [\"a\",\"b\",\"c\"];\r\nvar a:String;\r\nfor(a in arr)\r\n{\r\nswitch(a)\r\n{\r\ncase \"a\":\r\ntrace(\"val a\");\r\nbreak;\r\ncase \"b\":\r\ntrace(\"val b\");\r\nbreak;\r\ncase \"c\":\r\ntrace(\"val c\");\r\n}\r\ntrace(\"final\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testForXml",
   "static": false,
-  "expected": "var i:int;\r\nvar c:int = 0;\r\nvar name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = null;\r\nvar len:int = 5;\r\nvar a:int = 5;\r\nvar b:int = 6;\r\nfor(i = 0; i < len; k = myXML.book.(@isbn == \"12345\"))\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\n"
+  "expected": "var name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = null;\r\nvar len:int = 5;\r\nvar a:int = 5;\r\nvar b:int = 6;\r\nvar c:int;\r\nfor(var i:int = 0; i < len; k = myXML.book.(@isbn == \"12345\"))\r\n{\r\nc = 1;\r\nif(c == 2)\r\n{\r\ntrace(\"A\");\r\n}\r\nelse\r\n{\r\nif(c != 3)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"B\");\r\n}\r\ntrace(\"C\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1691,7 +1691,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testGotos3",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar a:int = 5;\r\nif(a > 5)\r\n{\r\nfor(i = 0; i < 5; i++)\r\n{\r\nif(i > 3)\r\n{\r\ntrace(\"A\");\r\nif(i == 4)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"B\");\r\n}\r\n}\r\nelse\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"return\");\r\n"
+  "expected": "var a:int = 5;\r\nvar i:int;\r\nif(a > 5)\r\n{\r\nfor(i = 0; i < 5; i++)\r\n{\r\nif(i > 3)\r\n{\r\ntrace(\"A\");\r\nif(i == 4)\r\n{\r\nbreak;\r\n}\r\n}\r\ntrace(\"B\");\r\n}\r\n}\r\nelse\r\n{\r\ntrace(\"C\");\r\n}\r\ntrace(\"return\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1705,7 +1705,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testGotos5",
   "static": false,
-  "expected": "var j:int = 0;\r\nvar s:String = \"A\";\r\nfor(var i:int = 0; i < 10; i++)\r\n{\r\nif(s == \"B\")\r\n{\r\nif(s == \"C\")\r\n{\r\ncontinue;\r\n}\r\n}\r\ntrace(\"D\");\r\nj = 0;\r\nwhile(j < 29)\r\n{\r\ntrace(\"E\");\r\nj++;\r\n}\r\n}\r\n"
+  "expected": "var s:String = \"A\";\r\nvar j:int;\r\nfor(var i:int = 0; i < 10; i++)\r\n{\r\nif(s == \"B\")\r\n{\r\nif(s == \"C\")\r\n{\r\ncontinue;\r\n}\r\n}\r\ntrace(\"D\");\r\nj = 0;\r\nwhile(j < 29)\r\n{\r\ntrace(\"E\");\r\nj++;\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1768,7 +1768,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testIfTry",
   "static": false,
-  "expected": "var c:int = 0;\r\nvar i:int = 0;\r\nvar b:Boolean = true;\r\nif(b)\r\n{\r\nc = 5;\r\nfor(i = 0; i < c; i++)\r\n{\r\ntrace(\"xx\");\r\n}\r\n}\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n"
+  "expected": "var b:Boolean = true;\r\nvar c:int;\r\nvar i:int;\r\nif(b)\r\n{\r\nc = 5;\r\nfor(i = 0; i < c; i++)\r\n{\r\ntrace(\"xx\");\r\n}\r\n}\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1901,7 +1901,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testInlineFunctions",
   "static": false,
-  "expected": "var first:String = null;\r\nfirst = \"value1\";\r\nvar traceParameter:Function = function(aParam:String):String\r\n{\r\nvar second:String = null;\r\nsecond = \"value2\";\r\nsecond += \"cc\";\r\nvar traceParam2:Function = function(bParam:String):String\r\n{\r\ntrace(bParam + \",\" + aParam);\r\nreturn first + second + aParam + bParam;\r\n};\r\ntrace(second);\r\ntraceParam2(aParam);\r\nreturn first;\r\n};\r\ntraceParameter(\"hello\");\r\n"
+  "expected": "var first:String;\r\nfirst = \"value1\";\r\nvar traceParameter:Function = function(aParam:String):String\r\n{\r\nvar second:String;\r\nsecond = \"value2\";\r\nsecond += \"cc\";\r\nvar traceParam2:Function = function(bParam:String):String\r\n{\r\ntrace(bParam + \",\" + aParam);\r\nreturn first + second + aParam + bParam;\r\n};\r\ntrace(second);\r\ntraceParam2(aParam);\r\nreturn first;\r\n};\r\ntraceParameter(\"hello\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -1950,7 +1950,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testLoopInLoop",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar a:Boolean = true;\r\nvar b:Boolean = true;\r\nfor(var c:Boolean = true; true; )\r\n{\r\ntrace(\"A\");\r\nfor(i = 0; i < 10; i++)\r\n{\r\nif(!a)\r\n{\r\ntrace(\"B\");\r\nif(c)\r\n{\r\ntrace(\"C\");\r\n}\r\nelse\r\n{\r\ntrace(\"D\");\r\nif(b)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"H\");\r\n}\r\nif(c)\r\n{\r\ntrace(\"L\");\r\n}\r\n}\r\n}\r\nif(a)\r\n{\r\nbreak;\r\n}\r\n}\r\n"
+  "expected": "var a:Boolean = true;\r\nvar b:Boolean = true;\r\nvar i:int;\r\nfor(var c:Boolean = true; true; )\r\n{\r\ntrace(\"A\");\r\nfor(i = 0; i < 10; i++)\r\n{\r\nif(!a)\r\n{\r\ntrace(\"B\");\r\nif(c)\r\n{\r\ntrace(\"C\");\r\n}\r\nelse\r\n{\r\ntrace(\"D\");\r\nif(b)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"H\");\r\n}\r\nif(c)\r\n{\r\ntrace(\"L\");\r\n}\r\n}\r\n}\r\nif(a)\r\n{\r\nbreak;\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -2020,21 +2020,21 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testOperations",
   "static": false,
-  "expected": "var cr:MyClass = null;\r\nvar br:Boolean = false;\r\nvar r:Number = NaN;\r\nvar v:* = undefined;\r\nvar xlr:XMLList = null;\r\nvar sr:String = null;\r\nvar c:MyClass = new MyClass();\r\nvar d:Dictionary = new Dictionary();\r\nvar n1:Number = 2;\r\nvar n2:Number = 3;\r\nvar b1:Boolean = true;\r\nvar b2:Boolean = false;\r\nvar x:XML = <a>\r\n<b>one\r\n<c>\r\n<b>two</b>\r\n</c>\r\n</b>\r\n<b>three</b>\r\n</a>;\r\nvar o:Object = {\r\n\"a\":1,\r\n\"b\":2\r\n};\r\nvar s1:String = \"hello\";\r\nvar s2:String = \"there\";\r\nr = -n1;\r\nr = ~n1;\r\nbr = !b1;\r\nr = ++n1;\r\nr = n1++;\r\ncr = c as MyClass;\r\nbr = \"hello\" in d;\r\nr = b1 ? n1 : n2;\r\nr = n1 << n2;\r\nr = n1 >> n2;\r\nr = n1 >>> n2;\r\nr = n1 & n2;\r\nr = n1 | n2;\r\nr = n1 / n2;\r\nr = n1 % n2;\r\nbr = n1 == n2;\r\nbr = n1 === n2;\r\nbr = n1 != n2;\r\nbr = n1 !== n2;\r\nbr = n1 < n2;\r\nbr = n1 <= n2;\r\nbr = n1 > n2;\r\nbr = n1 >= n2;\r\nbr = b1 && b2;\r\nbr = b1 || b2;\r\nr = n1 - n2;\r\nr = n1 * n2;\r\nr = n1 + n2;\r\nr = n1 ^ n2;\r\nbr = c instanceof MyClass;\r\nbr = c is MyClass;\r\nxlr = x..b;\r\nsr = s1 + s2;\r\nr &= n1;\r\nr |= n1;\r\nr /= n1;\r\nr -= n1;\r\nr %= n1;\r\nr *= n1;\r\nr += n1;\r\nr <<= n1;\r\nr >>= n1;\r\nr >>>= n1;\r\nr ^= n1;\r\nbr &&= b1;\r\nbr ||= b1;\r\nsr += s1;\r\ndelete o.a;\r\n\"test\" + this.f();\r\nv = undefined;\r\nsr = typeof c;\r\n"
+  "expected": "var c:MyClass = new MyClass();\r\nvar cr:MyClass;\r\nvar d:Dictionary = new Dictionary();\r\nvar n1:Number = 2;\r\nvar n2:Number = 3;\r\nvar b1:Boolean = true;\r\nvar b2:Boolean = false;\r\nvar br:Boolean;\r\nvar r:Number;\r\nvar v:*;\r\nvar x:XML = <a>\r\n<b>one\r\n<c>\r\n<b>two</b>\r\n</c>\r\n</b>\r\n<b>three</b>\r\n</a>;\r\nvar xlr:XMLList;\r\nvar o:Object = {\r\n\"a\":1,\r\n\"b\":2\r\n};\r\nvar sr:String;\r\nvar s1:String = \"hello\";\r\nvar s2:String = \"there\";\r\nr = -n1;\r\nr = ~n1;\r\nbr = !b1;\r\nr = ++n1;\r\nr = n1++;\r\ncr = c as MyClass;\r\nbr = \"hello\" in d;\r\nr = b1 ? n1 : n2;\r\nr = n1 << n2;\r\nr = n1 >> n2;\r\nr = n1 >>> n2;\r\nr = n1 & n2;\r\nr = n1 | n2;\r\nr = n1 / n2;\r\nr = n1 % n2;\r\nbr = n1 == n2;\r\nbr = n1 === n2;\r\nbr = n1 != n2;\r\nbr = n1 !== n2;\r\nbr = n1 < n2;\r\nbr = n1 <= n2;\r\nbr = n1 > n2;\r\nbr = n1 >= n2;\r\nbr = b1 && b2;\r\nbr = b1 || b2;\r\nr = n1 - n2;\r\nr = n1 * n2;\r\nr = n1 + n2;\r\nr = n1 ^ n2;\r\nbr = c instanceof MyClass;\r\nbr = c is MyClass;\r\nxlr = x..b;\r\nsr = s1 + s2;\r\nr &= n1;\r\nr |= n1;\r\nr /= n1;\r\nr -= n1;\r\nr %= n1;\r\nr *= n1;\r\nr += n1;\r\nr <<= n1;\r\nr >>= n1;\r\nr >>>= n1;\r\nr ^= n1;\r\nbr &&= b1;\r\nbr ||= b1;\r\nsr += s1;\r\ndelete o.a;\r\n\"test\" + this.f();\r\nv = undefined;\r\nsr = typeof c;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testOptimization",
   "static": false,
-  "expected": "var f:int = 0;\r\nvar g:int = 0;\r\nvar h:int = 0;\r\nvar a:int = 1;\r\nvar b:int = 2;\r\nvar c:int = 3;\r\nvar d:int = 4;\r\nvar e:int = d + 5;\r\nvar i:int = h = g = f;\r\n"
+  "expected": "var a:int = 1;\r\nvar b:int = 2;\r\nvar c:int = 3;\r\nvar d:int = 4;\r\nvar e:int = d + 5;\r\nvar f:int;\r\nvar g:int;\r\nvar h:int;\r\nvar i:int = h = g = f;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testOptimizationAndOr",
   "static": false,
-  "expected": "var plugin:Object = null;\r\nvar o:Object = {\r\n\"a\":\"Object\",\r\n\"b\":\"Object\",\r\n\"c\":\"Object\"\r\n};\r\nvar a:String = \"d\";\r\nif(a in o && (plugin = new o[a]()).toString().length > 2)\r\n{\r\ntrace(\"okay\");\r\n}\r\n"
+  "expected": "var o:Object = {\r\n\"a\":\"Object\",\r\n\"b\":\"Object\",\r\n\"c\":\"Object\"\r\n};\r\nvar a:String = \"d\";\r\nvar plugin:Object;\r\nif(a in o && (plugin = new o[a]()).toString().length > 2)\r\n{\r\ntrace(\"okay\");\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -2083,7 +2083,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testRegExp",
   "static": false,
-  "expected": "var r:Number = NaN;\r\nvar a1:* = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar a2:* = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar b1:* = /[0-9AB]+/;\r\nvar b2:* = /[0-9AB]+/;\r\nvar n1:Number = 5;\r\nvar n2:Number = 2;\r\nvar n3:Number = 1;\r\ntrace(\"not a regexp 1\");\r\nr = n1 / n2 / n3;\r\ntrace(\"not a regexp 2\");\r\nr /= n1 / n2;\r\n"
+  "expected": "var a1:* = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar a2:* = /[a-z\\r\\n0-9\\\\]+/i;\r\nvar b1:* = /[0-9AB]+/;\r\nvar b2:* = /[0-9AB]+/;\r\nvar n1:Number = 5;\r\nvar n2:Number = 2;\r\nvar n3:Number = 1;\r\ntrace(\"not a regexp 1\");\r\nvar r:Number;\r\nr = n1 / n2 / n3;\r\ntrace(\"not a regexp 2\");\r\nr /= n1 / n2;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -2167,7 +2167,7 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testSwitchContinue",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar r:int = Math.random() % 10;\r\nif(r > 5)\r\n{\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"hello\");\r\nbreak;\r\ncase 1:\r\ntrace(\"hi\");\r\nbreak;\r\ncase 2:\r\ntrace(\"howdy\");\r\nbreak;\r\ndefault:\r\ncontinue;\r\n}\r\ntrace(\"message shown\");\r\n}\r\n}\r\n"
+  "expected": "var r:int = Math.random() % 10;\r\nvar i:int;\r\nif(r > 5)\r\n{\r\nfor(i = 0; i < 10; i++)\r\n{\r\nswitch(i)\r\n{\r\ncase 0:\r\ntrace(\"hello\");\r\nbreak;\r\ncase 1:\r\ntrace(\"hi\");\r\nbreak;\r\ncase 2:\r\ntrace(\"howdy\");\r\nbreak;\r\ndefault:\r\ncontinue;\r\n}\r\ntrace(\"message shown\");\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -2230,21 +2230,21 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testTryReturn2",
   "static": false,
-  "expected": "var a:Boolean;\r\nvar b:Boolean;\r\nvar d:Boolean;\r\nvar e:Boolean;\r\nvar c:Boolean = false;\r\ntrace(\"before\");\r\na = true;\r\nb = false;\r\nc = true;\r\nd = false;\r\ne = true;\r\ntry\r\n{\r\nif(a)\r\n{\r\nreturn \"A\";\r\n}\r\nif(b)\r\n{\r\nreturn \"B\";\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\nif(c)\r\n{\r\nreturn \"C\";\r\n}\r\n}\r\nfinally\r\n{\r\nif(d)\r\n{\r\nreturn \"D\";\r\n}\r\nif(e)\r\n{\r\nreturn \"E\";\r\n}\r\n}\r\ntrace(\"after\");\r\nreturn \"X\";\r\n"
+  "expected": "trace(\"before\");\r\nvar a:Boolean = true;\r\nvar b:Boolean = false;\r\nvar c:Boolean;\r\nc = true;\r\nvar d:Boolean = false;\r\nvar e:Boolean = true;\r\ntry\r\n{\r\nif(a)\r\n{\r\nreturn \"A\";\r\n}\r\nif(b)\r\n{\r\nreturn \"B\";\r\n}\r\n}\r\ncatch(e:Error)\r\n{\r\nif(c)\r\n{\r\nreturn \"C\";\r\n}\r\n}\r\nfinally\r\n{\r\nif(d)\r\n{\r\nreturn \"D\";\r\n}\r\nif(e)\r\n{\r\nreturn \"E\";\r\n}\r\n}\r\ntrace(\"after\");\r\nreturn \"X\";\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testUndefined",
   "static": false,
-  "expected": "var i:int = 0;\r\nvar j:int = 0;\r\nvar c:int = 0;\r\nc = 5 + i;\r\nvar f:Function = function():void\r\n{\r\ntrace(c);\r\ntrace(j);\r\n};\r\nwhile(i < 10)\r\n{\r\ntrace(i);\r\ni++;\r\n}\r\nf();\r\n"
+  "expected": "var i:int;\r\nvar j:int;\r\nvar c:int;\r\nc = 5 + i;\r\nvar f:Function = function():void\r\n{\r\ntrace(c);\r\ntrace(j);\r\n};\r\nwhile(i < 10)\r\n{\r\ntrace(i);\r\ni++;\r\n}\r\nf();\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testUsagesTry",
   "static": false,
-  "expected": "var a:Boolean;\r\nvar b:Boolean;\r\nvar k:int = 5;\r\nswitch(k)\r\n{\r\ncase 0:\r\ntrace(\"1\");\r\nbreak;\r\ncase 1:\r\ntrace(\"2\");\r\n}\r\na = true;\r\nb = true;\r\ntry\r\n{\r\nif(b)\r\n{\r\nreturn \"B\";\r\n}\r\ntrace(\"A\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"E\");\r\n}\r\nfinally\r\n{\r\ntrace(\"finally\");\r\n}\r\ntrace(\"after\");\r\nreturn \"X\";\r\n"
+  "expected": "var k:int = 5;\r\nswitch(k)\r\n{\r\ncase 0:\r\ntrace(\"1\");\r\nbreak;\r\ncase 1:\r\ntrace(\"2\");\r\n}\r\nvar a:Boolean = true;\r\nvar b:Boolean = true;\r\ntry\r\n{\r\nif(b)\r\n{\r\nreturn \"B\";\r\n}\r\ntrace(\"A\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"E\");\r\n}\r\nfinally\r\n{\r\ntrace(\"finally\");\r\n}\r\ntrace(\"after\");\r\nreturn \"X\";\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
@@ -2335,21 +2335,21 @@
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testWhileTry2",
   "static": false,
-  "expected": "var i:*;\r\nvar j:* = undefined;\r\nfor(i = 0; i < 100; i++)\r\n{\r\ntry\r\n{\r\nfor(j = 0; j < 20; j++)\r\n{\r\ntrace(\"a\");\r\n}\r\n}\r\ncatch(e:EOFError)\r\n{\r\ncontinue;\r\n}\r\ncatch(e:Error)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"after_try\");\r\n}\r\ntrace(\"end\");\r\n"
+  "expected": "var j:* = undefined;\r\nfor(var i:* = 0; i < 100; i++)\r\n{\r\ntry\r\n{\r\nfor(j = 0; j < 20; j++)\r\n{\r\ntrace(\"a\");\r\n}\r\n}\r\ncatch(e:EOFError)\r\n{\r\ncontinue;\r\n}\r\ncatch(e:Error)\r\n{\r\ncontinue;\r\n}\r\ntrace(\"after_try\");\r\n}\r\ntrace(\"end\");\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testXml",
   "static": false,
-  "expected": "var list:Vector.<int> = null;\r\nvar i:int = 0;\r\nvar g:XML = null;\r\nvar testCdata:XML = null;\r\nvar testComment:XML = null;\r\nvar xtaga:String = null;\r\nvar xtagb:String = null;\r\nvar xattrname:String = null;\r\nvar xattrval:String = null;\r\nvar xcontent:String = null;\r\nvar xxx:XML = null;\r\nvar m:XMLList = null;\r\nvar name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = myXML.@id;\r\nvar all:String = myXML.@*.toXMLString();\r\nk = myXML.book;\r\nk = myXML.book.(@isbn == \"12345\");\r\nlist = new Vector.<int>();\r\ni = int(Math.random());\r\nlist[i] = myXML.book.(@isbn == i + 1);\r\ng = <script>\r\n<![CDATA[\r\nfunction() {\r\n\r\nFBAS = {\r\n\r\nsetSWFObjectID: function( swfObjectID ) {\r\nFBAS.swfObjectID = swfObjectID;\r\n},\r\n\r\ninit: function( opts ) {\r\nFB.init( FB.JSON.parse( opts ) );\r\n\r\nFB.Event.subscribe( 'auth.sessionChange', function( response ) {\r\nFBAS.updateSwfSession( response.session );\r\n} );\r\n},\r\n\r\nsetCanvasAutoResize: function( autoSize, interval ) {\r\nFB.Canvas.setAutoResize( autoSize, interval );\r\n},\r\n\r\nsetCanvasSize: function( width, height ) {\r\nFB.Canvas.setSize( { width: width, height: height } );\r\n},\r\n\r\nlogin: function( opts ) {\r\nFB.login( FBAS.handleUserLogin, FB.JSON.parse( opts ) );\r\n},\r\n\r\naddEventListener: function( event ) {\r\nFB.Event.subscribe( event, function( response ) {\r\nFBAS.getSwf().handleJsEvent( event, FB.JSON.stringify( response ) );\r\n} );\r\n},\r\n\r\nhandleUserLogin: function( response ) {\r\nif( response.session == null ) {\r\nFBAS.updateSwfSession( null );\r\nreturn;\r\n}\r\n\r\nif( response.perms != null ) {\r\n// user is logged in and granted some permissions.\r\n// perms is a comma separated list of granted permissions\r\nFBAS.updateSwfSession( response.session, response.perms );\r\n} else {\r\nFBAS.updateSwfSession( response.session );\r\n}\r\n},\r\n\r\nlogout: function() {\r\nFB.logout( FBAS.handleUserLogout );\r\n},\r\n\r\nhandleUserLogout: function( response ) {\r\nswf = FBAS.getSwf();\r\nswf.logout();\r\n},\r\n\r\nui: function( params ) {\r\nobj = FB.JSON.parse( params );\r\nmethod = obj.method;\r\ncb = function( response ) { FBAS.getSwf().uiResponse( FB.JSON.stringify( response ), method ); }\r\nFB.ui( obj, cb );\r\n},\r\n\r\ngetSession: function() {\r\nsession = FB.getSession();\r\nreturn FB.JSON.stringify( session );\r\n},\r\n\r\ngetLoginStatus: function() {\r\nFB.getLoginStatus( function( response ) {\r\nif( response.session ) {\r\nFBAS.updateSwfSession( response.session );\r\n} else {\r\nFBAS.updateSwfSession( null );\r\n}\r\n} );\r\n},\r\n\r\ngetSwf: function getSwf() {\r\nreturn document.getElementById( FBAS.swfObjectID );\r\n},\r\n\r\nupdateSwfSession: function( session, extendedPermissions ) {\r\nswf = FBAS.getSwf();\r\nextendedPermissions = ( extendedPermissions == null ) ? '' : extendedPermissions;\r\n\r\nif( session == null ) {\r\nswf.sessionChange( null );\r\n} else {\r\nswf.sessionChange( FB.JSON.stringify( session ), FB.JSON.stringify( extendedPermissions.split( ',' ) ) );\r\n}\r\n}\r\n};\r\n}\r\n]]>\r\n</script>;\r\ntestCdata =  <![CDATA[\r\nhello from cdata;\r\nfunction(){\r\nhere some code;\r\n}\r\n]]>;\r\ntestComment =  <!-- myXML comment-->;\r\nxtaga = \"a\";\r\nxtagb = \"b\";\r\nxattrname = \"attr\";\r\nxattrval = \"value\";\r\nxcontent = \"content\";\r\nxxx = <{xtaga}>\r\n<{xtagb}>\r\n<ul>\r\n<li>Item 1</li>\r\n<li {xattrname}=\"val\" attr2={xattrval}>Item 2: {xcontent}</li>\r\n<?processinstr testvalue ?>\r\n<!--\r\ncomment\r\n-->\r\n</ul>\r\n</{xtagb}>\r\n</{xtaga}>;\r\nm = myXML.*;\r\n"
+  "expected": "var name:String = \"ahoj\";\r\nvar myXML:XML = <order id=\"604\">\r\n<book isbn=\"12345\">\r\n<title>{name}</title>\r\n</book>\r\n</order>;\r\nvar k:* = myXML.@id;\r\nvar all:String = myXML.@*.toXMLString();\r\nk = myXML.book;\r\nk = myXML.book.(@isbn == \"12345\");\r\nvar list:Vector.<int>;\r\nlist = new Vector.<int>();\r\nvar i:int;\r\ni = int(Math.random());\r\nlist[i] = myXML.book.(@isbn == i + 1);\r\nvar g:XML;\r\ng = new XML(\"<script>\\n\\t\\t\\t\\t<![CDATA[\\n\\t\\t\\t\\t\\tfunction() {\\n\\t\\t\\t\\n\\t\\t\\t\\t\\t\\tFBAS = {\\n\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetSWFObjectID: function( swfObjectID ) {\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tFBAS.swfObjectID = swfObjectID;\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tinit: function( opts ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.init( FB.JSON.parse( opts ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Event.subscribe( \\'auth.sessionChange\\', function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetCanvasAutoResize: function( autoSize, interval ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Canvas.setAutoResize( autoSize, interval );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tsetCanvasSize: function( width, height ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Canvas.setSize( { width: width, height: height } );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tlogin: function( opts ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.login( FBAS.handleUserLogin, FB.JSON.parse( opts ) );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\taddEventListener: function( event ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.Event.subscribe( event, function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.getSwf().handleJsEvent( event, FB.JSON.stringify( response ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\thandleUserLogin: function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tif( response.session == null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\treturn;\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tif( response.perms != null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t// user is logged in and granted some permissions.\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t// perms is a comma separated list of granted permissions\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session, response.perms );\\n\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tlogout: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.logout( FBAS.handleUserLogout );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\thandleUserLogout: function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tswf = FBAS.getSwf();\\n\\t\\t\\t\\t\\t\\t\\t\\tswf.logout();\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tui: function( params ) {\\n\\t\\t\\t\\t\\t\\t\\t\\tobj = FB.JSON.parse( params );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tmethod = obj.method;\\n\\t\\t\\t\\t\\t\\t\\t\\tcb = function( response ) { FBAS.getSwf().uiResponse( FB.JSON.stringify( response ), method ); }\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.ui( obj, cb );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetSession: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tsession = FB.getSession();\\n\\t\\t\\t\\t\\t\\t\\t\\treturn FB.JSON.stringify( session );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetLoginStatus: function() {\\n\\t\\t\\t\\t\\t\\t\\t\\tFB.getLoginStatus( function( response ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tif( response.session ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( response.session );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t\\tFBAS.updateSwfSession( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t\\t} );\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tgetSwf: function getSwf() {\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\treturn document.getElementById( FBAS.swfObjectID );\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t},\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\tupdateSwfSession: function( session, extendedPermissions ) {\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tswf = FBAS.getSwf();\\n\\t\\t\\t\\t\\t\\t\\t\\textendedPermissions = ( extendedPermissions == null ) ? \\'\\' : extendedPermissions;\\n\\t\\t\\t\\t\\t\\t\\t\\t\\n\\t\\t\\t\\t\\t\\t\\t\\tif( session == null ) {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tswf.sessionChange( null );\\n\\t\\t\\t\\t\\t\\t\\t\\t} else {\\n\\t\\t\\t\\t\\t\\t\\t\\t\\tswf.sessionChange( FB.JSON.stringify( session ), FB.JSON.stringify( extendedPermissions.split( \\',\\' ) ) );\\n\\t\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t\\t\\t};\\n\\t\\t\\t\\t\\t}\\n\\t\\t\\t\\t]]>\\n\\t\\t\\t</script>\");\r\nvar testCdata:XML;\r\ntestCdata = <![CDATA[\r\nhello from cdata;\r\nfunction(){\r\nhere some code;\r\n}\r\n]]>;\r\nvar testComment:XML;\r\ntestComment = <!-- myXML comment-->;\r\nvar xtaga:String;\r\nxtaga = \"a\";\r\nvar xtagb:String;\r\nxtagb = \"b\";\r\nvar xattrname:String;\r\nxattrname = \"attr\";\r\nvar xattrval:String;\r\nxattrval = \"value\";\r\nvar xcontent:String;\r\nxcontent = \"content\";\r\nvar xxx:XML;\r\nxxx = <{xtaga}>\r\n<{xtagb}>\r\n<ul>\r\n<li>Item 1</li>\r\n<li {xattrname}=\"val\" attr2={xattrval}>Item 2: {xcontent}</li>\r\n<?processinstr testvalue ?>\r\n<!--\r\ncomment\r\n-->\r\n</ul>\r\n</{xtagb}>\r\n</{xtaga}>;\r\nvar m:XMLList;\r\nm = myXML.*;\r\n"
  },
  {
   "suite": "ActionScript3ClassicDecompileTest",
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "method": "testXml2",
   "static": false,
-  "expected": "var x1:XML = <elem name=\"aaa\" value=\"xxx&#10;\"/>;\r\nvar x2:XML = <elem name=\"aaa\" value=\"xxx\"/>;\r\nvar x3:XML = <elem name=\"aaa\" value=\"xxx\">\r\n<sub title=\"yyy\">\r\nampersand: &amp;\r\n</sub>\r\n<sub/>\r\n</elem>;\r\nvar x4:XML = <elem>\r\n<elem>\r\nA\r\n</elem>\r\n<elem>\r\nB\r\n</elem>\r\n<elem>\r\n<elem>\r\nC\r\n</elem>\r\n</elem>\r\n</elem>;\r\nvar x5:XML = <elem attr=\"abc&#13;&#10;&#9;def\"></elem>;\r\nvar x_invalid:XML = new XML(\"<aaa >> invalid \\\"\\n\");\r\nvar a:int = 5;\r\ntrace(\"B\");\r\n"
+  "expected": "var x1:XML = new XML(\"<elem name=\\\"aaa\\\" value=\\\"xxx\\n\\\"/>\");\r\nvar x2:XML = <elem name=\"aaa\" value=\"xxx\"/>;\r\nvar x3:XML = <elem name=\"aaa\" value=\"xxx\">\r\n<sub title=\"yyy\">\r\nampersand: &amp;\r\n</sub>\r\n<sub/>\r\n</elem>;\r\nvar x4:XML = <elem>\r\n<elem>\r\nA\r\n</elem>\r\n<elem>\r\nB\r\n</elem>\r\n<elem>\r\n<elem>\r\nC\r\n</elem>\r\n</elem>\r\n</elem>;\r\nvar x5:XML = <elem attr=\"abc&#13;&#10;&#9;def\"></elem>;\r\nvar x_invalid:XML = new XML(\"<aaa >> invalid \\\"\\n\");\r\nvar a:int = 5;\r\ntrace(\"B\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
@@ -2398,28 +2398,28 @@
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchInWhile2",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ > 5)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\nif(_loc1_ == 6)\r\n{\r\ncontinue;\r\n}\r\nif(_loc1_ == 7)\r\n{\r\nbreak;\r\n}\r\ntrace(\"after inner while\");\r\n}\r\ncatch(e:EOFError)\r\n{\r\ncontinue;\r\n}\r\ncatch(e:Error)\r\n{\r\nif(_loc1_ == 8)\r\n{\r\nbreak;\r\n}\r\ncontinue;\r\n}\r\n_loc1_++;\r\n}\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ > 5)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\nif(_loc1_ == 6)\r\n{\r\ncontinue;\r\n}\r\nif(_loc1_ == 7)\r\n{\r\nbreak;\r\n}\r\ntrace(\"after inner while\");\r\n}\r\ncatch(e:EOFError)\r\n{\r\ncontinue;\r\n}\r\ncatch(e:Error)\r\n{\r\nif(_loc1_ == 8)\r\n{\r\nbreak;\r\n}\r\ncontinue;\r\n}\r\n_loc1_++;\r\n}\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchInWhile3",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ > 5)\r\n{\r\ntry\r\n{\r\nreturn \"intry return\";\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n_loc1_++;\r\n}\r\n}\r\nreturn \"OK\";\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ > 5)\r\n{\r\ntry\r\n{\r\nreturn \"intry return\";\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n_loc1_++;\r\n}\r\n}\r\nreturn \"OK\";\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchInWhile4",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"try2\");\r\nif(_loc1_ == 10)\r\n{\r\ntrace(\"br\");\r\nbreak;\r\n}\r\nreturn;\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch2\");\r\ntrace(\"a=\" + _loc1_);\r\n}\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"try2\");\r\nif(_loc1_ == 10)\r\n{\r\ntrace(\"br\");\r\nbreak;\r\n}\r\nreturn;\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch2\");\r\ntrace(\"a=\" + _loc1_);\r\n}\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchInWhile5",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\nvar _loc2_:int = 0;\r\n_loc2_ = 5;\r\nwhile(_loc1_ < 10)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\nvar _loc3_:* = e;\r\nif(_loc2_ > 4)\r\n{\r\nthrow new Error(\"Problem: \" + _loc3_);\r\n}\r\n}\r\n_loc1_++;\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\nvar _loc2_:int;\r\n_loc2_ = 5;\r\nwhile(_loc1_ < 10)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\nvar _loc3_:* = e;\r\nif(_loc2_ > 4)\r\n{\r\nthrow new Error(\"Problem: \" + _loc3_);\r\n}\r\n}\r\n_loc1_++;\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
@@ -2433,49 +2433,49 @@
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\ntry\r\n{\r\ntrace(\"in try1\");\r\nwhile(_loc1_ < 10)\r\n{\r\ntrace(\"a=\" + _loc1_);\r\n_loc1_++;\r\n}\r\ntrace(\"in try2\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\ntry\r\n{\r\ntrace(\"in try1\");\r\nwhile(_loc1_ < 10)\r\n{\r\ntrace(\"a=\" + _loc1_);\r\n_loc1_++;\r\n}\r\ntrace(\"in try2\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak2",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ < 20)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\nreturn;\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\ntrace(\"a=\" + _loc1_);\r\n}\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ < 20)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\nreturn;\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\ntrace(\"a=\" + _loc1_);\r\n}\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak3",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntrace(\"a\");\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nbreak;\r\n}\r\ncatch(e:EOFError)\r\n{\r\ntrace(\"in catch2\");\r\nbreak;\r\n}\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntrace(\"a\");\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nbreak;\r\n}\r\ncatch(e:EOFError)\r\n{\r\ntrace(\"in catch2\");\r\nbreak;\r\n}\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak4",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nif(_loc1_ > 5)\r\n{\r\ntrace(\"a\");\r\nif(_loc1_ > 6)\r\n{\r\ntrace(\"b\");\r\nbreak;\r\n}\r\ntrace(\"c\");\r\n}\r\ntrace(\"in catch1b\");\r\nif(_loc1_ > 10)\r\n{\r\ntrace(\"d\");\r\nif(_loc1_ > 11)\r\n{\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nif(_loc1_ > 5)\r\n{\r\ntrace(\"a\");\r\nif(_loc1_ > 6)\r\n{\r\ntrace(\"b\");\r\nbreak;\r\n}\r\ntrace(\"c\");\r\n}\r\ntrace(\"in catch1b\");\r\nif(_loc1_ > 10)\r\n{\r\ntrace(\"d\");\r\nif(_loc1_ > 11)\r\n{\r\ntrace(\"e\");\r\nbreak;\r\n}\r\ntrace(\"f\");\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak5",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nwhile(true)\r\n{\r\ntrace(\"xx\");\r\nif(_loc1_ > 5)\r\n{\r\nbreak;\r\n}\r\ntrace(\"yy\");\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(true)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nwhile(true)\r\n{\r\ntrace(\"xx\");\r\nif(_loc1_ > 5)\r\n{\r\nbreak;\r\n}\r\ntrace(\"yy\");\r\n}\r\ntrace(\"in catch1c\");\r\n}\r\n}\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchLoopBreak6",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ < 10)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nif(_loc1_ > 3)\r\n{\r\nbreak;\r\n}\r\ntry\r\n{\r\ntrace(\"in try2\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch2\");\r\nif(_loc1_ > 4)\r\n{\r\nbreak;\r\n}\r\n}\r\n}\r\n_loc1_++;\r\n}\r\ntrace(\"after\");\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 0;\r\ntrace(\"before loop\");\r\nwhile(_loc1_ < 10)\r\n{\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch1\");\r\nif(_loc1_ > 3)\r\n{\r\nbreak;\r\n}\r\ntry\r\n{\r\ntrace(\"in try2\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch2\");\r\nif(_loc1_ > 4)\r\n{\r\nbreak;\r\n}\r\n}\r\n}\r\n_loc1_++;\r\n}\r\ntrace(\"after\");\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",
   "swf": "testdata/as3_cross_compile/bin/as3_cross_compile.swftools.swf",
   "method": "testTryCatchReturn",
   "static": false,
-  "expected": "var _loc1_:int = 0;\r\n_loc1_ = 5;\r\ntrace(\"before try\");\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\nif(_loc1_ == 5)\r\n{\r\nreturn _loc1_;\r\n}\r\ntrace(\"in catch2\");\r\n}\r\ntrace(\"after\");\r\nreturn -1;\r\n"
+  "expected": "var _loc1_:int;\r\n_loc1_ = 5;\r\ntrace(\"before try\");\r\ntry\r\n{\r\ntrace(\"in try\");\r\n}\r\ncatch(e:Error)\r\n{\r\ntrace(\"in catch\");\r\nif(_loc1_ == 5)\r\n{\r\nreturn _loc1_;\r\n}\r\ntrace(\"in catch2\");\r\n}\r\ntrace(\"after\");\r\nreturn -1;\r\n"
  },
  {
   "suite": "ActionScript3CrossCompileSwfToolsDecompileTest",

@@ -86,7 +86,10 @@ pub mod op {
     pub const INITPROPERTY: u8 = 0x68;
     pub const GETSLOT: u8 = 0x6c;
     pub const SETSLOT: u8 = 0x6d;
+    pub const COERCE: u8 = 0x80;
     pub const COERCE_A: u8 = 0x82;
+    pub const COERCE_S: u8 = 0x85;
+    pub const CONVERT_U: u8 = 0x74;
     pub const CONVERT_I: u8 = 0x73;
     pub const INCLOCAL: u8 = 0x92;
     pub const DECLOCAL: u8 = 0x94;

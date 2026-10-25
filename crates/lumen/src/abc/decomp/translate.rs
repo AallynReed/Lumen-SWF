@@ -1698,11 +1698,6 @@ impl<'x, 'c, 'a> X<'x, 'c, 'a> {
         let args = self.args(self.op(1));
         let fm = self.resolve_multiname(true, mn);
         let obj = self.pop();
-        let is_xml = self.is_top_level(&fm, "XML");
-        let is_regexp = self.is_top_level(&fm, "RegExp");
-        if self.xml_or_regexp(is_xml, is_regexp, &args) {
-            return;
-        }
         let (is_static, t, _) = self.resolve_property_type(&obj, &fm);
         if is::find_property(&obj) {
             if let K::FullMultiname { property, .. } = &mut fm.borrow_mut().k {

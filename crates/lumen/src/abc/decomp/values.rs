@@ -171,6 +171,9 @@ pub fn xml_append(parts: &List, w: &mut Writer, ld: &LocalData) {
                 w.append("new XML(\"").append(&escape_as(&s)).append("\")");
                 return;
             }
+            if s.trim_start().starts_with("<!") || s.trim_start().starts_with("<?") {
+                w.trim_space();
+            }
             w.append(&s);
             return;
         }

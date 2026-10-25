@@ -133,6 +133,9 @@ pub fn local_reg_names(ctx: &Ctx, method: usize, code: &Code, max_regs: usize) -
     if mi.flags & method_flags::NEED_REST != 0 {
         ret.insert(pos, "rest".into());
     }
+    if !(mi.flags & method_flags::HAS_PARAM_NAMES != 0 && ctx.cfg.param_names) {
+        ret.extend(activation_param_names(ctx, method, code));
+    }
     if ctx.cfg.local_names_from_debug {
         let fmt = |r: i32| ctx.cfg.reg_name(r);
         for (k, v) in code.local_reg_names_from_debug(abc, max_regs, &fmt) {
@@ -140,6 +143,33 @@ pub fn local_reg_names(ctx: &Ctx, method: usize, code: &Code, max_regs: usize) -
         }
     }
     ret
+}
+
+/// The parameter names a needs-activation prologue reveals: ASC copies each parameter register into the
+/// activation slot named after it.
+pub fn activation_param_names(ctx: &Ctx, method: usize, code: &Code) -> HashMap<i32, String> {
+    let abc = ctx.abc;
+    let mut out = HashMap::new();
+    let (Some(body), mi) = (abc.body(method), &abc.methods[method]) else { return out };
+    if mi.flags & method_flags::NEED_ACTIVATION == 0 {
+        return out;
+    }
+    let nregs = mi.param_types.len() as i32 + i32::from(mi.flags & (method_flags::NEED_ARGUMENTS | method_flags::NEED_REST) != 0);
+    let ins: Vec<_> = code.ins.iter().filter(|i| !matches!(i.code, op::DEBUG | op::DEBUGLINE | op::DEBUGFILE)).collect();
+    for w in ins.windows(3) {
+        if w[0].is_branch() || w[0].is_exit() || w[0].code == op::LABEL {
+            break;
+        }
+        let Some(r) = w[1].get_local_reg().filter(|r| (1..=nregs).contains(r)) else { continue };
+        if (w[0].code != op::GETSCOPEOBJECT && w[0].get_local_reg().is_none()) || w[2].code != op::SETSLOT {
+            continue;
+        }
+        let slot = w[2].op(0) as usize;
+        if let Some(t) = body.traits.iter().find(|t| matches!(t.data, TraitData::Slot { slot_id, .. } if slot_id == slot)) {
+            out.entry(r).or_insert_with(|| ctx.names().name(t.name, &[], true, true));
+        }
+    }
+    out
 }
 
 /// `convertMethodBody`: the prepared instruction list, with traps removed when deobfuscating.
@@ -372,7 +402,134 @@ pub fn to_graph_target_items(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, c
     let mut st = DeclState { declared_slots: Vec::new(), declared_slots_dec: Vec::new(), declared_props: Vec::new(), declared_props_dec: Vec::new() };
     inject_declarations(ctx, req.method, 0, &param_names, &list, 1, &mut d, &mut st);
     unite_locals_declaration_types(&d, &list);
+    fold_needs_init(&list, &needs_init_stores(ctx, req.method, code));
     list
+}
+
+/// The type whose default `push` sequence starts `s`, as ASC's `storeDefaultValue` emits it, and its length.
+fn default_value_type(ctx: &Ctx, s: &[(usize, &super::code::Ins)]) -> Option<(It, usize)> {
+    let at = |i: usize| s.get(i).map(|x| x.1);
+    let next = at(1).map(|x| x.code);
+    let first = at(0)?;
+    Some(match first.code {
+        op::PUSHBYTE if first.op(0) == 0 && next == Some(op::CONVERT_U) => (ty("uint"), 2),
+        op::PUSHBYTE if first.op(0) == 0 => (ty("int"), 1),
+        op::PUSHFALSE => (ty("Boolean"), 1),
+        op::PUSHNAN => (ty("Number"), 1),
+        op::PUSHUNDEFINED if next == Some(op::COERCE_A) => (unbounded(), 2),
+        op::PUSHNULL if next == Some(op::COERCE_S) => (ty("String"), 2),
+        op::PUSHNULL if next == Some(op::COERCE) => (index::mn_type(ctx, at(1)?.op(0) as usize), 2),
+        _ => return None,
+    })
+}
+
+/// The stores ASC's code generator puts at method entry for the locals its flow analysis marks `needs_init`, by
+/// instruction index, with the type whose default each one stores.
+fn needs_init_stores(ctx: &Ctx, method: usize, code: &Code) -> HashMap<usize, It> {
+    let abc = ctx.abc;
+    let mut out = HashMap::new();
+    let (Some(body), mi) = (abc.body(method), &abc.methods[method]) else { return out };
+    let ins: Vec<(usize, &super::code::Ins)> = code.ins.iter().enumerate().filter(|(_, i)| !matches!(i.code, op::DEBUG | op::DEBUGLINE | op::DEBUGFILE)).collect();
+    let code_at = |p: usize| ins.get(p).map(|x| x.1.code);
+    let mut p = if code_at(0) == Some(op::GETLOCAL0) && code_at(1) == Some(op::PUSHSCOPE) { 2 } else { 0 };
+    let mut act_reg = None;
+    if code_at(p) == Some(op::NEWACTIVATION) && code_at(p + 1) == Some(op::DUP) && code_at(p + 3) == Some(op::PUSHSCOPE) {
+        act_reg = ins.get(p + 2).and_then(|x| x.1.set_local_reg());
+        if act_reg.is_some() {
+            p += 4;
+        }
+    }
+    if p == 0 {
+        return out;
+    }
+    let first_local = mi.param_types.len() as i32 + 1 + i32::from(mi.flags & (method_flags::NEED_ARGUMENTS | method_flags::NEED_REST) != 0);
+    while p < ins.len() {
+        let act = act_reg.is_some() && (code_at(p) == Some(op::GETSCOPEOBJECT) || ins[p].1.get_local_reg() == act_reg);
+        let q = (p + usize::from(act)).min(ins.len());
+        let Some((t, n)) = default_value_type(ctx, &ins[q..]) else { break };
+        let Some(&(ip, store)) = ins.get(q + n) else { break };
+        if act {
+            let slot = store.op(0) as usize;
+            let Some(tr) = body.traits.iter().find(|t| matches!(t.data, TraitData::Slot { slot_id, .. } if slot_id == slot)) else { break };
+            let TraitData::Slot { type_name, .. } = tr.data else { break };
+            if store.code != op::SETSLOT || !super::eq::eq(&index::mn_type(ctx, type_name), &t) {
+                break;
+            }
+        } else if !store.set_local_reg().is_some_and(|r| r >= first_local && Some(r) != act_reg) {
+            break;
+        }
+        out.insert(ip, t);
+        p = q + n + 1;
+    }
+    out
+}
+
+#[derive(PartialEq, Clone, Copy)]
+enum VarKey {
+    Reg(i32),
+    Slot(i32),
+}
+
+fn var_key(it: &It) -> Option<VarKey> {
+    match &it.borrow().k {
+        K::SetLocal { reg, .. } | K::LocalReg { reg, .. } => Some(VarKey::Reg(*reg)),
+        K::SetSlot { idx, .. } | K::GetSlot { idx, .. } => Some(VarKey::Slot(*idx)),
+        _ => None,
+    }
+}
+
+fn mentions(it: &It, key: VarKey) -> bool {
+    let mut found = var_key(it) == Some(key);
+    visit_recursively(it, &mut |s| {
+        found |= var_key(s) == Some(key);
+        !found
+    });
+    found
+}
+
+/// Prints each of ASC's `needs_init` entry stores as the bare declaration that makes ASC emit it again, moved down
+/// to just before the variable's first use or a later variable's declaration, so declarations keep slot order. The
+/// last store moves first, so earlier ones stop at its new place.
+fn fold_needs_init(list: &List, stores: &HashMap<usize, It>) {
+    if stores.is_empty() {
+        return;
+    }
+    let found: Vec<(usize, VarKey)> = list
+        .borrow()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, it)| match &it.borrow().k {
+            K::Declaration { assignment, ty: Some(t), show_value: true, .. } => {
+                let a = assignment.borrow();
+                let store = matches!(a.k, K::SetLocal { .. } | K::SetSlot { .. });
+                let d = a.src.and_then(|s| stores.get(&s));
+                drop(a);
+                if store && d.is_some_and(|d| super::eq::eq(d, t)) { var_key(assignment).map(|k| (i, k)) } else { None }
+            }
+            _ => None,
+        })
+        .collect();
+    for &(i, key) in found.iter().rev() {
+        let it = list.borrow()[i].clone();
+        decl_mut(&it, |_, _, s| *s = false);
+        let mut j = i + 1;
+        while j < list.borrow().len() {
+            let next = list.borrow()[j].clone();
+            let later = match &next.borrow().k {
+                K::Declaration { assignment, .. } => match (var_key(assignment), key) {
+                    (Some(VarKey::Reg(a)), VarKey::Reg(b)) | (Some(VarKey::Slot(a)), VarKey::Slot(b)) => a > b,
+                    _ => true,
+                },
+                _ => false,
+            };
+            if later || mentions(&next, key) {
+                break;
+            }
+            j += 1;
+        }
+        let d = list.borrow_mut().remove(i);
+        list.borrow_mut().insert(j - 1, d);
+    }
 }
 
 /// The initializer-trait handling of `toGraphTargetItems`. Returns true when the list is final.
@@ -838,6 +995,30 @@ fn handle_declare_reg(minreg: usize, assignment: &It, d: &mut [Option<It>], reg:
     }
 }
 
+/// Turns `a = r = v`, where `r` is first set here, into a read of `r` so that `var r = v;` can come first: mxmlc's
+/// peephole pass compiles `setlocal r; getlocal r` to `dup; setlocal r`, which is where the chain came from.
+fn split_chain(current: &It, sub: &It, reg: i32) -> bool {
+    let assigns = matches!(current.borrow().k, K::SetLocal { .. } | K::SetSlot { .. } | K::SetProperty { .. } | K::InitProperty { .. } | K::SetSuper { .. });
+    let mut p = current.clone();
+    while assigns {
+        let Some(v) = p.borrow().value.clone() else { return false };
+        if same(&v, sub) {
+            let ty = match &sub.borrow().k {
+                K::SetLocal { ty, .. } => ty.clone(),
+                _ => unbounded(),
+            };
+            let (src, ls) = (sub.borrow().src, sub.borrow().line_start);
+            p.borrow_mut().value = Some(mk(K::LocalReg { reg, computed: None, ty, is_ct: false }, src, ls, prec::PRIMARY, None));
+            return true;
+        }
+        if !matches!(v.borrow().k, K::Coerce { .. } | K::Convert { .. }) {
+            return false;
+        }
+        p = v;
+    }
+    false
+}
+
 fn items_on_line(item: &It) -> Vec<It> {
     let mut v = vec![item.clone()];
     visit_recursively_no_block(item, &mut |i, _| v.push(i.clone()));
@@ -887,71 +1068,6 @@ fn inject_declarations(ctx: &Ctx, method: usize, level: usize, param_names: &[St
         TraitData::Slot { type_name, .. } | TraitData::Const { type_name, .. } => index::mn_type(ctx, type_name),
         _ => unbounded(),
     };
-    if level == 0 {
-        let mut begin: Vec<String> = Vec::new();
-        let n = items.borrow().len();
-        for i in 0..n {
-            let item = items.borrow()[i].clone();
-            let k = item.borrow().k.clone();
-            let (prop_name, value) = match &k {
-                K::StoreNewActivation { .. } => continue,
-                K::SetSlot { slot_name, .. } => {
-                    let Some(sn) = slot_name else { break };
-                    (names.name(*sn, &[], true, true), item.borrow().val())
-                }
-                K::SetProperty { obj, prop, .. } => {
-                    if !is::find_property(obj) {
-                        break;
-                    }
-                    match &prop.borrow().k {
-                        K::FullMultiname { resolved, .. } => (resolved.clone().unwrap_or_default(), item.borrow().val()),
-                        _ => break,
-                    }
-                }
-                _ => break,
-            };
-            let value = not_coerced(&value);
-            let mut has_prev = false;
-            visit_recursively_no_block(&value, &mut |sub, _| {
-                let pm = match &sub.borrow().k {
-                    K::GetProperty { obj, prop, .. } if is::find_property(obj) => match &prop.borrow().k {
-                        K::FullMultiname { mn, .. } => Some(*mn),
-                        _ => None,
-                    },
-                    K::GetLex { mn, .. } => Some(*mn),
-                    _ => None,
-                };
-                if let Some(pm) = pm {
-                    let pn = names.name(pm, &[], true, true);
-                    if trait_of(&pn).is_some() && !param_names.contains(&pn) && !begin.contains(&pn) {
-                        has_prev = true;
-                    }
-                }
-            });
-            if has_prev {
-                break;
-            }
-            if !begin.contains(&prop_name) {
-                begin.push(prop_name);
-            }
-        }
-        let mut pos = 0;
-        for (tn, t) in &traits {
-            if param_names.contains(tn) || begin.contains(tn) {
-                continue;
-            }
-            let t_ty = type_of(t);
-            let full = names.name_with_ns(t.name, true);
-            let lex = bare(K::GetLex { mn: t.name, ty: t_ty.clone(), call_ty: unbounded(), is_static: false, full }, prec::PRIMARY);
-            let dec = mk(K::Declaration { assignment: lex, ty: Some(t_ty), type_is_null: false, show_value: false }, None, None, prec::PRIMARY, None);
-            st.declared_slots_dec.push(dec.clone());
-            st.declared_slots.push(t.name);
-            items.borrow_mut().insert(pos, dec.clone());
-            pos += 1;
-            st.declared_props_dec.push(dec);
-            st.declared_props.push(tn.clone());
-        }
-    }
     let mut i = 0;
     while i < items.borrow().len() {
         let current = items.borrow()[i].clone();
@@ -981,7 +1097,9 @@ fn inject_declarations(ctx: &Ctx, method: usize, level: usize, param_names: &[St
                     if same(&sub, &current) {
                         items.borrow_mut()[i] = dec;
                     } else {
-                        decl_mut(&dec, |_, _, s| *s = false);
+                        if !split_chain(&current, &sub, reg) {
+                            decl_mut(&dec, |_, _, s| *s = false);
+                        }
                         items.borrow_mut().insert(i, dec);
                         i += 1;
                     }
@@ -1067,6 +1185,21 @@ fn inject_declarations(ctx: &Ctx, method: usize, level: usize, param_names: &[St
         }
         i += 1;
     }
+    if level == 0 {
+        let mut pos = 0;
+        for (tn, t) in &traits {
+            let declared = st.declared_props.contains(tn) || st.declared_slots.iter().any(|&s| abc.str(name_index_of(ctx, s)) == abc.str(name_index_of(ctx, t.name)));
+            if param_names.contains(tn) || declared {
+                continue;
+            }
+            let t_ty = type_of(t);
+            let full = names.name_with_ns(t.name, true);
+            let lex = bare(K::GetLex { mn: t.name, ty: t_ty.clone(), call_ty: unbounded(), is_static: false, full }, prec::PRIMARY);
+            let dec = mk(K::Declaration { assignment: lex, ty: Some(t_ty), type_is_null: false, show_value: false }, None, None, prec::PRIMARY, None);
+            items.borrow_mut().insert(pos, dec);
+            pos += 1;
+        }
+    }
 }
 
 fn name_index_of(ctx: &Ctx, mn: usize) -> usize {
@@ -1141,7 +1274,9 @@ pub fn param_str(ctx: &Ctx, method: usize, fqn: &[Dotted], w: &mut Writer) {
     let mi = &abc.methods[method];
     let names = ctx.names();
     let mut regs: HashMap<i32, String> = HashMap::new();
+    let mut act: HashMap<i32, String> = HashMap::new();
     if let Some(body) = abc.body(method) {
+        act = activation_param_names(ctx, method, &Code::new(abc, body));
         if ctx.cfg.local_names_from_debug {
             let code = Code::new(abc, body);
             let fmt = |r: i32| ctx.cfg.reg_name(r);
@@ -1157,6 +1292,8 @@ pub fn param_str(ctx: &Ctx, method: usize, fqn: &[Dotted], w: &mut Writer) {
             w.append(&ctx.ids.print(regs.get(&(i as i32 + 1)).map(String::as_str).unwrap_or("")));
         } else if mi.param_names.len() > i && mi.param_names[i] != 0 && ctx.cfg.param_names {
             w.append(&ctx.ids.print(abc.str(mi.param_names[i])));
+        } else if let Some(a) = act.get(&(i as i32 + 1)) {
+            w.append(&ctx.ids.print(a));
         } else {
             w.append(&format!("param{}", i + 1));
         }
@@ -1178,7 +1315,7 @@ pub fn param_str(ctx: &Ctx, method: usize, fqn: &[Dotted], w: &mut Writer) {
             add.push_str(", ");
         }
         add.push_str("... ");
-        let rest = if !regs.is_empty() { regs.get(&(n as i32 + 1)).cloned().unwrap_or_default() } else { "rest".into() };
+        let rest = if !regs.is_empty() { regs.get(&(n as i32 + 1)).cloned().unwrap_or_default() } else { act.get(&(n as i32 + 1)).cloned().unwrap_or_else(|| "rest".into()) };
         w.append(&add);
         w.append(&rest);
     }
