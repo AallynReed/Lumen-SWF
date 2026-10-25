@@ -1,5 +1,5 @@
 name: Build
-# Bundles the MSI and the CLI; tests run locally before pushing. Every push to main publishes
+# Bundles the MSI and the CLI in parallel; tests run locally before pushing. Every push to main publishes
 # a release versioned 0.<phase>.<n> (see tools/version.mjs); pull requests only build.
 on:
   push:
@@ -15,16 +15,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: windows-latest
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Version
+        id: version
+        run: node tools/version.mjs
+
+  msi:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: msi
 
       - uses: actions/setup-node@v4
         with:
@@ -32,34 +46,56 @@ jobs:
 
       - run: npm ci
 
-      - name: Version
-        id: version
-        run: node tools/version.mjs > version.conf.json
-
       - name: Bundle MSI
-        run: npx tauri build --bundles msi --config version.conf.json
+        run: |
+          node -e "require('fs').writeFileSync('version.conf.json', JSON.stringify({ version: '${{ needs.version.outputs.version }}' }))"
+          npx tauri build --bundles msi --config version.conf.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+  cli:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cli
 
       - name: Build CLI
         run: cargo build --release -p lumen-cli
         env:
-          LUMEN_VERSION: ${{ steps.version.outputs.version }}
+          LUMEN_VERSION: ${{ needs.version.outputs.version }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lumen-swf-${{ steps.version.outputs.version }}
-          path: |
-            target/release/bundle/msi/*.msi
-            target/release/lumen-swf-cli.exe
+          name: cli
+          path: target/release/lumen-swf-cli.exe
           if-no-files-found: error
 
-      - name: Publish release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+  publish:
+    needs: [version, msi, cli]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: v${{ steps.version.outputs.version }}
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Lumen-SWF ${{ steps.version.outputs.version }}
+          name: Lumen-SWF ${{ needs.version.outputs.version }}
           generate_release_notes: true
           files: |
-            target/release/bundle/msi/*.msi
-            target/release/lumen-swf-cli.exe
+            dist/*.msi
+            dist/lumen-swf-cli.exe
