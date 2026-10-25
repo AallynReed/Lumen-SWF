@@ -57,7 +57,7 @@
  {
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",
   "path": "tests_classes.TestInitializer",
-  "expected": "package tests_classes\n{\n   public class TestInitializer\n   {\n      public static var s_alpha:RegExp = /[a-z]+/;\n      \n      public static var s_numbers:RegExp = /[0-9]+/;\n      \n      public static var s_regs:Array = [s_alpha,s_numbers];\n      \n      public var i_email:RegExp = /.*@.*\\..*/;\n      \n      public var i_link:RegExp = /<a href=\".*\">/;\n      \n      public var i_regs:Array = [this.i_email,this.i_link];\n      \n      public var i_a:int = 1;\n      \n      public var i_b:int = this.i_a + 1;\n      \n      public const i_c:int = this.i_a + this.i_b + 1;\n      \n      public var i_d:int;\n      \n      public function TestInitializer(p:int)\n      {\n         super();\n         trace(s_regs[1]);\n         this.i_a = 7;\n         this.i_d = p;\n      }\n   }\n}\n"
+  "expected": "package tests_classes\n{\n   public class TestInitializer\n   {\n      public static var s_alpha:RegExp = /[a-z]+/;\n      \n      public static var s_numbers:RegExp = /[0-9]+/;\n      \n      public static var s_regs:Array = [s_alpha,s_numbers];\n      \n      public var i_email:RegExp = /.*@.*\\..*/;\n      \n      public var i_link:RegExp = /<a href=\".*\">/;\n      \n      public var i_regs:Array = [i_email,i_link];\n      \n      public var i_a:int = 1;\n      \n      public var i_b:int = i_a + 1;\n      \n      public const i_c:int = i_a + i_b + 1;\n      \n      public var i_d:int;\n      \n      public function TestInitializer(p:int)\n      {\n         super();\n         trace(s_regs[1]);\n         this.i_a = 7;\n         this.i_d = p;\n      }\n   }\n}\n"
  },
  {
   "swf": "testdata/as3_new/bin/as3_new.flex.swf",

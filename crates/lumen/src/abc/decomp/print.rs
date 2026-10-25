@@ -312,6 +312,9 @@ pub fn format_property(w: &mut Writer, ld: LD, object: &It, property: &It, is_st
     let mut property = property.clone();
     let td = through_duplicate(object);
     let mut empty = is::find_property(&td);
+    if ld.instance_initializer && matches!(td.borrow().k, K::This { show_class: false, .. }) {
+        empty = true;
+    }
     if let K::LocalReg { computed: Some(c), .. } = &object.borrow().k {
         if is::find_property(&through_not_compilable(c)) {
             empty = true;

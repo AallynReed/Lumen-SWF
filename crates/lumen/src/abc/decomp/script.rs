@@ -1341,6 +1341,7 @@ fn slot_to_string(ctx: &Ctx, cd: &ConvertData, t: &Trait, is_static: bool, class
         ld.fqn = fqn.to_vec();
         ld.class_index = class;
         ld.call_stack = vec![method];
+        ld.instance_initializer = !is_static && class >= 0;
         ld
     };
     if let Some(a) = &assigned {

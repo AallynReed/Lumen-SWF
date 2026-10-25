@@ -60,7 +60,6 @@ fn recompiling_is_stable() {
 
 /// Classes mxmlc.jar and JPEXS themselves do not round-trip, in decompile order.
 const KNOWN: &[(&str, &str)] = &[
-    ("tests_classes.TestInitializer", "JPEXS prints `this.` in instance field initializers, which mxmlc rejects there"),
     ("tests.TestXml", "ASC's scanner puts the whitespace before an XML comment or CDATA literal into it"),
     ("tests.TestTryReturn2", "ASC stores a needs_init slot's default at entry and JPEXS prints that as the declaration"),
     ("tests.TestForEachReturn", "JPEXS keeps a for-each's registers as locals when the body returns"),

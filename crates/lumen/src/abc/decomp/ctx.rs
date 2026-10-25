@@ -94,11 +94,13 @@ pub struct LocalData<'c, 'a> {
     pub as2: bool,
     /// `localData.as2ClassMemberScope`.
     pub as2_scope: std::cell::RefCell<Option<std::rc::Rc<crate::action::decomp::print::Scope>>>,
+    /// Printing an instance field's initializer, where mxmlc types `this` as the class.
+    pub instance_initializer: bool,
 }
 
 impl<'c, 'a> LocalData<'c, 'a> {
     pub fn new(ctx: &'c Ctx<'a>) -> Self {
-        LocalData { ctx, local_reg_names: HashMap::new(), fqn: Vec::new(), seen_methods: HashSet::new(), class_index: -1, call_stack: Vec::new(), as2: false, as2_scope: Default::default() }
+        LocalData { ctx, local_reg_names: HashMap::new(), fqn: Vec::new(), seen_methods: HashSet::new(), class_index: -1, call_stack: Vec::new(), as2: false, as2_scope: Default::default(), instance_initializer: false }
     }
 
     pub fn abc(&self) -> &'a Abc {
