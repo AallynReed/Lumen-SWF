@@ -12,6 +12,10 @@ fn qname_of(abc: &Abc, ns: usize, name: usize) -> Option<String> {
         return None;
     }
     let ns = abc.constants.namespaces.get(ns)?;
+    // A file-private definition is no definition of the library, as compc's catalog leaves it out.
+    if ns.kind == ns_kind::PRIVATE {
+        return None;
+    }
     let pkg = abc.str(ns.name);
     if pkg.is_empty() || !matches!(ns.kind, ns_kind::PACKAGE | ns_kind::PACKAGE_INTERNAL) {
         Some(local.to_string())

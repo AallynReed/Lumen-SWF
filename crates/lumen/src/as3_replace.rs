@@ -68,7 +68,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         root,
         abcs: context(abcs, selected, plan.script_blocks(), &names),
         same_build: true,
-        app: ApplicationOptions { playerglobal: true, ..Default::default() },
+        app: ApplicationOptions { playerglobal: true, omit_trace_statements: false, ..Default::default() },
         ..Default::default()
     };
     let unit = compile_unit(&opts).map_err(|d| report(&d, &canonical_path(&file), &names.to_written(&shown.to_string_lossy()), &names))?;

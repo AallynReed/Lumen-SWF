@@ -56,6 +56,7 @@ fn own_source_gives_the_same_abc() {
         main: dir.join("Main.as"),
         source_path: vec![dir.clone()],
         playerglobal: true,
+        omit_trace_statements: false,
         compile_date: Some(0),
         ..Default::default()
     };
@@ -113,8 +114,8 @@ fn replaces_a_class_of_a_flex_build() {
     let replaced = entries(&after).into_iter().find(|e| e.full_name() == "tests.TestAndInt").unwrap();
     assert_eq!(replaced.script, target.script);
     let text = entry_source(&new_index, &after, &replaced, &SwfContext::of(&swf));
-    // A release compile omits trace calls, as mxmlc does by default.
-    assert!(text.contains("public class TestAndInt") && text.contains("var _loc2_:int = 5;") && !text.contains("trace("), "{text}");
+    // Release code, but the source's trace calls are kept.
+    assert!(text.contains("public class TestAndInt") && text.contains("var _loc2_:int = 5;") && text.contains("trace(\"okay\")"), "{text}");
     for e in all.iter().filter(|e| e.script.abs_diff(target.script) == 1) {
         let n = entries(&after).into_iter().find(|x| x.full_name() == e.full_name()).unwrap();
         assert_eq!(entry_source(&new_index, &after, &n, &ctx), entry_source(&old_index, &before, e, &ctx), "{}", e.full_name());

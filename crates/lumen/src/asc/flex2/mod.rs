@@ -26,6 +26,7 @@ pub struct ApplicationOptions {
     pub debug: bool,
     pub strict: bool,
     pub optimize: bool,
+    pub omit_trace_statements: bool,
     pub warnings: bool,
     /// `-define=NS::name,value`.
     pub defines: Vec<(String, String)>,
@@ -52,6 +53,7 @@ impl Default for ApplicationOptions {
             debug: false,
             strict: true,
             optimize: true,
+            omit_trace_statements: true,
             warnings: true,
             defines: Vec::new(),
             compile_date: None,
@@ -84,6 +86,7 @@ impl ApplicationOptions {
         c.debug = self.debug;
         c.strict = self.strict;
         c.optimize = self.optimize;
+        c.omit_trace_statements = self.omit_trace_statements;
         c.warnings = self.warnings;
         c.source_path = self.source_path.clone();
         c.library_path = self.library_path.clone();
