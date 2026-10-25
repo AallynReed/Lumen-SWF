@@ -86,6 +86,10 @@ pub struct CompilationUnit {
     pub type_info: Option<ObjectValue>,
     pub class_table: HashMap<String, Rc<AbcClass>>,
     pub check_bits: i32,
+    pub styles: super::css::styles::Styles,
+    /// Only MXML components set it (`setStylesContainer`).
+    pub styles_container: Option<Rc<super::css::styles_container::StylesContainer>>,
+    pub style_name: Option<String>,
 }
 
 impl CompilationUnit {
@@ -126,6 +130,9 @@ impl CompilationUnit {
             type_info: None,
             class_table: HashMap::new(),
             check_bits: 0,
+            styles: super::css::styles::Styles::new(2),
+            styles_container: None,
+            style_name: None,
         }))
     }
 
@@ -160,6 +167,7 @@ impl CompilationUnit {
         self.expression_history.clear();
         self.namespace_history.clear();
         self.check_bits = 0;
+        self.styles.clear();
         self.has_type_info = false;
         self.type_info = None;
         self.class_table.clear();

@@ -143,9 +143,8 @@ fn line_text(path: &str, line: i32) -> String {
     let Ok(bytes) = std::fs::read(path) else { return String::new() };
     let text = String::from_utf8_lossy(&bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-    if line < 1 {
-        return String::new();
-    }
+    // `FileUtil.readLine` reads the first line for any line below 2.
+    let line = line.max(1);
     let mut n = 1;
     let mut start = 0;
     let b = text.as_bytes();
@@ -287,4 +286,14 @@ pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, sour
 /// `ThreadLocalToolkit.log(message, source)`: a message about a whole source.
 pub fn log_for(m: CompilerMessage, name_for_reporting: &str) {
     log(m, Some(name_for_reporting), -1, -1, None);
+}
+
+/// `logError(path, line, error)` / `logWarning(path, line, warning)` (CSS parser messages).
+pub fn log_path_line(level: Level, path: &str, line: i32, msg: &str) {
+    if !forward(level) {
+        return;
+    }
+    let sep = if level == Level::Error { ":  " } else { ": " };
+    let text = format!("{}({}){}{}: {}\n\n{}", path, line, sep, level_word(level), msg, line_text(path, line));
+    console(Diagnostic { level, path: Some(path.to_string()), line, col: -1, message: msg.to_string(), code: -1, text });
 }

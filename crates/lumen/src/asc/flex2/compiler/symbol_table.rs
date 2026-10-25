@@ -22,6 +22,9 @@ pub struct SymbolTable {
     q_name_table: JHashMap<QName, SourceRef>,
     multi_names: JHashMap<MultiName, QName>,
     pub emitter: EmitterRef,
+    styles: super::css::styles::Styles,
+    /// `getContext().getAttribute(StylesContainer.class.getName())`: the application's styles, made by `PreLink`.
+    pub styles_container: Option<Rc<super::css::styles_container::StylesContainer>>,
 }
 
 impl SymbolTable {
@@ -49,7 +52,27 @@ impl SymbolTable {
             q_name_table: JHashMap::with_capacity(300),
             multi_names: JHashMap::with_capacity(1024),
             emitter,
+            styles: super::css::styles::Styles::default(),
+            styles_container: None,
         }
+    }
+
+    /// `registerStyles(newStyles)`.
+    pub fn register_styles(&mut self, new_styles: &super::css::styles::Styles) -> Result<(), super::css::styles::StyleConflictException> {
+        self.styles.add_styles(new_styles)
+    }
+
+    pub fn get_style(&self, style_name: Option<&str>) -> Option<&crate::asc::semantics::meta_data::MetaData> {
+        self.styles.get_style(style_name?)
+    }
+
+    pub fn get_styles(&self) -> &super::css::styles::Styles {
+        &self.styles
+    }
+
+    /// `getClassNames()`.
+    pub fn get_class_names(&self) -> Vec<String> {
+        self.class_table.keys().cloned().collect()
     }
 
     pub fn register_class(&mut self, class_name: &str, cls: Rc<AbcClass>) {

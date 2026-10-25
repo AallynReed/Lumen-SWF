@@ -56,6 +56,10 @@ pub struct Configuration {
     pub flex_major: u8,
     pub flex_minor: u8,
     pub flex_build: i64,
+    /// `compiler.keep-generated-actionscript` with its `generated-directory`.
+    pub generated_directory: Option<String>,
+    /// The style options (`-defaults-css-url`, `-theme`, namespaces, ...).
+    pub css: super::css::options::CssOptions,
 }
 
 impl Default for Configuration {
@@ -108,6 +112,8 @@ impl Default for Configuration {
             flex_major: 4,
             flex_minor: 6,
             flex_build: 23188,
+            generated_directory: None,
+            css: Default::default(),
         }
     }
 }

@@ -426,6 +426,7 @@ impl SubCompiler for As3Compiler {
             u.inheritance.insert(name.clone());
         }
         drop(u);
+        super::style_evaluator::style_extension_parse1(&unit);
         Some(unit)
     }
 
@@ -574,6 +575,7 @@ impl SubCompiler for As3Compiler {
             for (k, c) in classes {
                 symbol_table.register_class(&k, c);
             }
+            super::style_evaluator::register_unit_styles(unit, symbol_table);
             evaluate_loader_class_base(unit, symbol_table);
             return;
         }
@@ -604,6 +606,7 @@ impl SubCompiler for As3Compiler {
             return;
         }
         register_classes(unit, &node, symbol_table);
+        super::style_evaluator::register_unit_styles(unit, symbol_table);
         evaluate_loader_class_base(unit, symbol_table);
     }
 

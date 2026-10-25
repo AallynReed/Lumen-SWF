@@ -7,6 +7,7 @@ pub mod compilation_unit;
 pub mod compiler_api;
 pub mod compiler_swc_context;
 pub mod configuration;
+pub mod css;
 pub mod source;
 pub mod source_path;
 pub mod swc;

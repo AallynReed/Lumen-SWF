@@ -1,7 +1,9 @@
 //! Port of mxmlc's driver (Flex SDK 4.8.0 `flex2.compiler`, `flex2.linker`, `flex2.tools`) for pure-ActionScript
 //! builds: the same units compiled in the same order against the same libraries, linked into the same SWF.
 
+pub mod batik;
 pub mod compiler;
+pub mod flash;
 pub mod linker;
 pub mod swf;
 pub mod tools;
@@ -37,6 +39,10 @@ pub struct ApplicationOptions {
     pub compress: bool,
     /// Compile against the crate's bundled `playerglobal` as an external library.
     pub playerglobal: bool,
+    /// `-keep-generated-actionscript`: where generated sources are written.
+    pub generated_directory: Option<PathBuf>,
+    /// The style options: `-defaults-css-url`, `-theme`, the namespace manifests, ...
+    pub css: compiler::css::options::CssOptions,
 }
 
 impl Default for ApplicationOptions {
@@ -60,6 +66,8 @@ impl Default for ApplicationOptions {
             compile_date: None,
             compress: true,
             playerglobal: false,
+            generated_directory: None,
+            css: Default::default(),
         }
     }
 }
@@ -101,6 +109,8 @@ impl ApplicationOptions {
             })
             .collect();
         c.compile_date = self.compile_date;
+        c.generated_directory = self.generated_directory.as_ref().map(|p| p.to_string_lossy().into_owned());
+        c.css = self.css.clone();
         c
     }
 }

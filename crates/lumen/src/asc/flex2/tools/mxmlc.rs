@@ -27,12 +27,21 @@ pub fn source_path_mime_types() -> [&'static str; 3] {
 }
 
 pub fn compilers(config: &Rc<Configuration>) -> Vec<Box<dyn SubCompiler>> {
-    vec![Box::new(As3Compiler::new(config.clone())), Box::new(AbcCompiler)]
+    vec![Box::new(As3Compiler::new(config.clone())), Box::new(AbcCompiler), css_compiler(config)]
+}
+
+/// `new CssCompiler(compilerConfig, transcoders, mappings)`: its own `As3Compiler`.
+fn css_compiler(config: &Rc<Configuration>) -> Box<dyn SubCompiler> {
+    let asc = As3Compiler::new(config.clone());
+    let css_config = Rc::new(config.css.compiler_configuration(config.debug, config.generated_directory.clone()));
+    let mappings = Rc::new(crate::asc::flex2::compiler::util::name_mappings::get_name_mappings(&config.css.namespaces));
+    Box::new(crate::asc::flex2::compiler::css::css_compiler::CssCompiler::new(css_config, Box::new(asc), Some(mappings)))
 }
 
 /// `CompilerAPI.compile` with `PreLink`, then `LinkerAPI.link` (with `PostLink` when optimizing a release build).
 pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<crate::asc::flex2::compiler::swc::Swc>, bool)>) -> Compiled {
     let fail = Compiled { sources: Vec::new(), units: Vec::new(), movie: None };
+    super::pre_link_css::reset();
     if !main.is_file() {
         toolkit::log(CompilerMessage::error(format!("unable to open '{}'", main.display())), None, -1, -1, None);
         return fail;
@@ -64,9 +73,14 @@ pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<c
     };
     let units = api.compile(&mut |api: &mut CompilerApi| {
         let units: Vec<UnitRef> = api.units.iter().flatten().cloned().collect();
-        super::pre_link::run(&units, &mut api.configuration)
+        let rerun = super::pre_link::run(&units, &mut api.configuration) | super::pre_link_css::process_main_unit_styles(api);
+        if !rerun {
+            super::pre_link_css::post_run_styles(api);
+        }
+        rerun
     });
     let Ok(units) = units else { return Compiled { sources: api.sources, ..fail } };
+    api.configuration.add_externs(crate::asc::flex2::compiler::css::css_compiler::take_externs());
     let movie = linker::link(&units, &api.configuration).ok();
     Compiled { sources: api.sources, units, movie }
 }
@@ -100,7 +114,11 @@ pub fn compile_unit(mut configuration: Configuration, root: crate::asc::flex2::c
     };
     let units = api.compile(&mut |api: &mut CompilerApi| {
         let units: Vec<UnitRef> = api.units.iter().flatten().cloned().collect();
-        super::pre_link::run(&units, &mut api.configuration)
+        let rerun = super::pre_link::run(&units, &mut api.configuration) | super::pre_link_css::process_main_unit_styles(api);
+        if !rerun {
+            super::pre_link_css::post_run_styles(api);
+        }
+        rerun
     });
     Compiled { units: units.unwrap_or_default(), sources: api.sources, movie: None }
 }

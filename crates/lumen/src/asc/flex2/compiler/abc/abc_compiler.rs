@@ -114,6 +114,7 @@ impl SubCompiler for AbcCompiler {
         }
         let mut tree_evaluator = SyntaxTreeEvaluator::new(unit.clone());
         evaluator_adapter::evaluate(&mut tree_evaluator, &cx, &node);
+        crate::asc::flex2::compiler::as3::style_evaluator::style_extension_parse1(&unit);
         Some(unit)
     }
 
@@ -181,6 +182,7 @@ impl SubCompiler for AbcCompiler {
 
     fn analyze4(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
         if unit.borrow().has_type_info {
+            crate::asc::flex2::compiler::as3::style_evaluator::register_unit_styles(unit, symbol_table);
             evaluate_loader_class_base(unit, symbol_table);
             return;
         }
@@ -195,6 +197,7 @@ impl SubCompiler for AbcCompiler {
             return;
         }
         register_classes(unit, &node, symbol_table);
+        crate::asc::flex2::compiler::as3::style_evaluator::register_unit_styles(unit, symbol_table);
         evaluate_loader_class_base(unit, symbol_table);
     }
 

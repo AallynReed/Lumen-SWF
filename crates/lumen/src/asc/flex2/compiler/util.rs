@@ -242,6 +242,10 @@ impl MultiNameMap {
             s.clear();
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&MultiName, &QName)> {
+        self.s.iter().flat_map(|s| s.iter())
+    }
 }
 
 /// `StandardDefs.CLASS_VECTOR`.
@@ -352,3 +356,5 @@ pub mod mime_mappings {
         [MXML, AS, FXG, ABC, CSS].into_iter().find(|m| lower.ends_with(get_extension(m)))
     }
 }
+
+pub mod name_mappings;
