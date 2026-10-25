@@ -44,15 +44,15 @@ jobs:
         run: node tools/version.mjs > version.conf.json
 
       - name: Test
-        run: cargo test --release -p ffdec
+        run: cargo test --release -p lumen
 
       - name: Bundle MSI
         run: npx tauri build --bundles msi --config version.conf.json
 
       - name: Build CLI
-        run: cargo build --release -p ffdec-cli
+        run: cargo build --release -p lumen-cli
         env:
-          FFDEC_VERSION: ${{ steps.version.outputs.version }}
+          LUMEN_VERSION: ${{ steps.version.outputs.version }}
 
       - uses: actions/upload-artifact@v4
         with:

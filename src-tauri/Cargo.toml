@@ -1,5 +1,5 @@
 [package]
-name = "rust-ffdec"
+name = "lumen-swf"
 version = "0.6.0"
 description = "Lumen-SWF"
 edition.workspace = true
@@ -14,7 +14,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-ffdec = { path = "../crates/ffdec" }
+lumen = { path = "../crates/lumen" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 parking_lot = "0.12"

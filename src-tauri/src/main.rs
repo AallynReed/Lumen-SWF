@@ -4,10 +4,10 @@ use std::mem::ManuallyDrop;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use ffdec::export::{Exporter, Kind, Options};
-use ffdec::info::{describe, Field};
-use ffdec::tree::{self, Node};
-use ffdec::{Compression, SaveOptions, Swf};
+use lumen::export::{Exporter, Kind, Options};
+use lumen::info::{describe, Field};
+use lumen::tree::{self, Node};
+use lumen::{Compression, SaveOptions, Swf};
 use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::{Manager, State};
@@ -68,7 +68,7 @@ impl Doc {
         let bytes = self.swf().save(&opts).map_err(|e| e.to_string())?;
         let err = |e: &dyn std::fmt::Display| format!("{}: {e}", self.path.display());
         let archive = std::fs::read(&self.path).map_err(|e| err(&e))?;
-        let out = ffdec::bundle::put(&self.path, &archive, &key, &bytes).map_err(|e| err(&e))?;
+        let out = lumen::bundle::put(&self.path, &archive, &key, &bytes).map_err(|e| err(&e))?;
         std::fs::write(&self.path, out).map_err(|e| err(&e))?;
         self.modified = false;
         Ok(())
@@ -98,7 +98,7 @@ impl Drop for Doc {
 struct SolDoc {
     id: u32,
     path: PathBuf,
-    sol: ffdec::amf::Sol,
+    sol: lumen::amf::Sol,
     modified: bool,
 }
 
@@ -163,7 +163,7 @@ fn tag_path(path: &str) -> Res<Vec<usize>> {
     }
 }
 
-fn find_tag<'a>(swf: &'a Swf, path: &str) -> Res<&'a ffdec::Tag> {
+fn find_tag<'a>(swf: &'a Swf, path: &str) -> Res<&'a lumen::Tag> {
     let p = tree::parse_path(path).ok_or("bad tag path")?;
     swf.tag(&p).ok_or_else(|| "no such tag".to_string())
 }
@@ -182,18 +182,18 @@ fn load(docs: &Docs, path: PathBuf) -> Res<Vec<Opened>> {
     let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
     let data = std::fs::read(&path).map_err(|e| err(&e))?;
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("sol")) {
-        let sol = ffdec::amf::Sol::parse(&data).map_err(|e| err(&e))?;
+        let sol = lumen::amf::Sol::parse(&data).map_err(|e| err(&e))?;
         let id = docs.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         let doc = SolDoc { id, path, sol, modified: false };
         let opened = Opened { id, name: doc.name(), path: doc.path.display().to_string(), warnings: Vec::new(), kind: "sol" };
         docs.sols.lock().push(doc);
         return Ok(vec![opened]);
     }
-    if !ffdec::bundle::is_bundle(&path) || Swf::parse(&data).is_ok() {
+    if !lumen::bundle::is_bundle(&path) || Swf::parse(&data).is_ok() {
         let swf = Swf::parse(&data).map_err(|e| err(&e))?;
         return Ok(vec![add(docs, path, None, swf)]);
     }
-    let b = ffdec::bundle::open(&path, &data).map_err(|e| err(&e))?;
+    let b = lumen::bundle::open(&path, &data).map_err(|e| err(&e))?;
     let writable = !b.read_only();
     let mut out = Vec::new();
     for (key, bytes) in b.entries {
@@ -325,7 +325,7 @@ fn header_info(docs: State<'_, Docs>, id: u32) -> Res<Vec<Field>> {
 fn tag_info(docs: State<'_, Docs>, id: u32, path: String) -> Res<TagInfo> {
     with_doc(&docs, id, |d| {
         let t = find_tag(d.swf(), &path)?;
-        Ok(TagInfo { fields: describe(t), size: t.body.len(), importable: ffdec::importers::Asset::of(t.code).is_some() })
+        Ok(TagInfo { fields: describe(t), size: t.body.len(), importable: lumen::importers::Asset::of(t.code).is_some() })
     })
 }
 
@@ -393,7 +393,7 @@ async fn replace_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, pa
     let p = tag_path(&path)?;
     let asset = with_doc(&docs, id, |d| {
         let t = d.swf().tag(&p).ok_or("no such tag")?;
-        ffdec::importers::Asset::of(t.code).ok_or_else(|| format!("{} tags cannot be replaced yet", t.name()))
+        lumen::importers::Asset::of(t.code).ok_or_else(|| format!("{} tags cannot be replaced yet", t.name()))
     })?;
     let mut dialog = app.dialog().file();
     if !asset.extensions().is_empty() {
@@ -401,7 +401,7 @@ async fn replace_asset(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, pa
     }
     let Some(file) = dialog.add_filter("All files", &["*"]).blocking_pick_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let data = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::importers::import(swf, &p, &data).map_err(|e| e.to_string())))?;
+    with_doc_mut(&docs, id, |d| d.edit(|swf| lumen::importers::import(swf, &p, &data).map_err(|e| e.to_string())))?;
     Ok(Some(file.display().to_string()))
 }
 
@@ -415,18 +415,18 @@ async fn add_font_chars(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, p
     let data = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let chars: Vec<char> = chars.chars().filter(|c| !c.is_control()).collect();
     let mut n = 0;
-    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::importers::font(swf, &p, &data, &chars).map(|c| n = c).map_err(|e| e.to_string())))?;
+    with_doc_mut(&docs, id, |d| d.edit(|swf| lumen::importers::font(swf, &p, &data, &chars).map(|c| n = c).map_err(|e| e.to_string())))?;
     Ok(Some(n))
 }
 
 #[tauri::command]
-fn get_header(docs: State<'_, Docs>, id: u32) -> Res<ffdec::edit::HeaderEdit> {
-    with_doc(&docs, id, |d| Ok(ffdec::edit::header(d.swf())))
+fn get_header(docs: State<'_, Docs>, id: u32) -> Res<lumen::edit::HeaderEdit> {
+    with_doc(&docs, id, |d| Ok(lumen::edit::header(d.swf())))
 }
 
 #[tauri::command]
-fn set_header(docs: State<'_, Docs>, id: u32, header: ffdec::edit::HeaderEdit) -> Res<()> {
-    with_doc_mut(&docs, id, |d| d.edit(|swf| ffdec::edit::set_header(swf, &header)))
+fn set_header(docs: State<'_, Docs>, id: u32, header: lumen::edit::HeaderEdit) -> Res<()> {
+    with_doc_mut(&docs, id, |d| d.edit(|swf| lumen::edit::set_header(swf, &header)))
 }
 
 #[tauri::command]
@@ -441,8 +441,8 @@ struct EditError {
     message: String,
 }
 
-impl From<ffdec::action::asm::ParseError> for EditError {
-    fn from(e: ffdec::action::asm::ParseError) -> Self {
+impl From<lumen::action::asm::ParseError> for EditError {
+    fn from(e: lumen::action::asm::ParseError) -> Self {
         EditError { line: e.line, message: e.message }
     }
 }
@@ -460,7 +460,7 @@ async fn apply_source(docs: State<'_, Docs>, id: u32, path: String, script: Stri
     let mut failure = None;
     let r = with_doc_mut(&docs, id, |d| {
         d.edit(|swf| {
-            ffdec::edit::set_script_source(swf, &p, &script, &text).map_err(|e| {
+            lumen::edit::set_script_source(swf, &p, &script, &text).map_err(|e| {
                 let m = e.message.clone();
                 failure = Some(e);
                 m
@@ -473,13 +473,13 @@ async fn apply_source(docs: State<'_, Docs>, id: u32, path: String, script: Stri
 #[tauri::command]
 fn script_methods(docs: State<'_, Docs>, id: u32, path: String, script: String) -> Res<Vec<String>> {
     let p = tag_path(&path)?;
-    with_doc(&docs, id, |d| ffdec::edit::script_methods(d.swf(), &p, &script).map_err(|e| e.message))
+    with_doc(&docs, id, |d| lumen::edit::script_methods(d.swf(), &p, &script).map_err(|e| e.message))
 }
 
 #[tauri::command]
 fn script_pcode(docs: State<'_, Docs>, id: u32, path: String, script: String, method: Option<String>) -> Res<String> {
     let p = tag_path(&path)?;
-    with_doc(&docs, id, |d| ffdec::edit::script_pcode(d.swf(), &p, &script, method.as_deref()).map_err(|e| e.message))
+    with_doc(&docs, id, |d| lumen::edit::script_pcode(d.swf(), &p, &script, method.as_deref()).map_err(|e| e.message))
 }
 
 /// Assembles edited p-code into the script; errors carry the line they are on.
@@ -489,7 +489,7 @@ async fn apply_pcode(docs: State<'_, Docs>, id: u32, path: String, script: Strin
     let mut failure = None;
     let r = with_doc_mut(&docs, id, |d| {
         d.edit(|swf| {
-            ffdec::edit::set_script_pcode(swf, &p, &script, method.as_deref(), &text).map_err(|e| {
+            lumen::edit::set_script_pcode(swf, &p, &script, method.as_deref(), &text).map_err(|e| {
                 let m = e.message.clone();
                 failure = Some(e);
                 m
@@ -502,7 +502,7 @@ async fn apply_pcode(docs: State<'_, Docs>, id: u32, path: String, script: Strin
 #[tauri::command]
 fn text_source(docs: State<'_, Docs>, id: u32, path: String) -> Res<Option<String>> {
     let p = tag_path(&path)?;
-    with_doc(&docs, id, |d| ffdec::edit::text_source(d.swf(), &p).map_err(|e| e.message))
+    with_doc(&docs, id, |d| lumen::edit::text_source(d.swf(), &p).map_err(|e| e.message))
 }
 
 /// Stores an edited text; errors carry the line they are on.
@@ -512,7 +512,7 @@ async fn apply_text(docs: State<'_, Docs>, id: u32, path: String, text: String) 
     let mut failure = None;
     let r = with_doc_mut(&docs, id, |d| {
         d.edit(|swf| {
-            ffdec::edit::set_text_source(swf, &p, &text).map_err(|e| {
+            lumen::edit::set_text_source(swf, &p, &text).map_err(|e| {
                 let m = e.message.clone();
                 failure = Some(e);
                 m
@@ -664,33 +664,33 @@ async fn export_document(app: tauri::AppHandle, docs: State<'_, Docs>, id: u32, 
     let Some(out) = save_dialog(&app, &format!("{stem}.{ext}"), (label, &[ext])) else { return Ok(None) };
     with_doc(&docs, id, |d| {
         if format == "swc" {
-            let data = ffdec::export::swc::swc(d.swf(), false).map_err(|e| e.to_string())?;
+            let data = lumen::export::swc::swc(d.swf(), false).map_err(|e| e.to_string())?;
             std::fs::write(&out, data).map_err(|e| e.to_string())?;
             return Ok(Some(out.display().to_string()));
         }
         if format == "iggy" {
             let name = format!("{stem}.swf");
-            let (mut file, warnings) = ffdec::iggy::from_swf::create(d.swf(), ffdec::iggy::file::Variant::X64, &name).map_err(|e| e.to_string())?;
+            let (mut file, warnings) = lumen::iggy::from_swf::create(d.swf(), lumen::iggy::file::Variant::X64, &name).map_err(|e| e.to_string())?;
             std::fs::write(&out, file.save().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
             let skipped = if warnings.is_empty() { String::new() } else { format!(" ({} tags Iggy cannot store were left out)", warnings.len()) };
             return Ok(Some(format!("{}{skipped}", out.display())));
         }
         let compressed = format == "fla";
-        let version = if as3 { ffdec::xfl::FlaVersion::Cc } else { ffdec::xfl::FlaVersion::Cs6 };
-        let opts = ffdec::xfl::Options { compressed, version, timestamp: mtime, ..Default::default() };
+        let version = if as3 { lumen::xfl::FlaVersion::Cc } else { lumen::xfl::FlaVersion::Cs6 };
+        let opts = lumen::xfl::Options { compressed, version, timestamp: mtime, ..Default::default() };
         let base = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(stem);
         let dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
-        let xfl = ffdec::xfl::convert(d.swf(), &base, &opts).map_err(|e| e.to_string())?;
-        ffdec::xfl::convert::write(&xfl, &dir, &base, compressed).map_err(|e| e.to_string())?;
+        let xfl = lumen::xfl::convert(d.swf(), &base, &opts).map_err(|e| e.to_string())?;
+        lumen::xfl::convert::write(&xfl, &dir, &base, compressed).map_err(|e| e.to_string())?;
         Ok(Some(if compressed { out.display().to_string() } else { dir.join(&base).display().to_string() }))
     })
 }
 
 /// Scripts or texts of one file matching a pattern.
 #[tauri::command]
-async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool, regex: bool, pcode: bool, texts: bool) -> Res<Vec<ffdec::search::Hit>> {
-    let q = ffdec::search::Query { text, ignore_case, regex, pcode, texts };
-    with_doc(&docs, id, |d| ffdec::search::search(d.exporter(), &q).map_err(|e| e.to_string()))
+async fn search(docs: State<'_, Docs>, id: u32, text: String, ignore_case: bool, regex: bool, pcode: bool, texts: bool) -> Res<Vec<lumen::search::Hit>> {
+    let q = lumen::search::Query { text, ignore_case, regex, pcode, texts };
+    with_doc(&docs, id, |d| lumen::search::search(d.exporter(), &q).map_err(|e| e.to_string()))
 }
 
 /// The file as it is in memory, uncompressed, for the Ruffle player.
@@ -702,12 +702,12 @@ fn movie_data(docs: State<'_, Docs>, id: u32) -> Result<tauri::ipc::Response, St
 
 #[tauri::command]
 fn set_auto_deobfuscate(on: bool) {
-    ffdec::set_auto_deobfuscate(on);
+    lumen::set_auto_deobfuscate(on);
 }
 
 #[tauri::command]
 fn deobfuscate(docs: State<'_, Docs>, id: u32, level: String) -> Res<usize> {
-    use ffdec::edit::Deobfuscation as D;
+    use lumen::edit::Deobfuscation as D;
     let level = match level.as_str() {
         "traps" => D::Traps,
         "groupparts" => D::GroupParts,
@@ -716,7 +716,7 @@ fn deobfuscate(docs: State<'_, Docs>, id: u32, level: String) -> Res<usize> {
     let mut n = 0;
     with_doc_mut(&docs, id, |d| {
         d.edit(|swf| {
-            n = ffdec::edit::deobfuscate(swf, level)?;
+            n = lumen::edit::deobfuscate(swf, level)?;
             Ok(())
         })
     })?;

@@ -118,15 +118,15 @@ The MSI ends up in `target/release/bundle/msi/`. For development, run `npx tauri
 The corpus tests read the test corpus from `corpus/`, the repository the CI workflow checks out (see `.github/workflows/build.yml`), and skip when it is missing:
 
 ```
-cargo test -p ffdec --release
+cargo test -p lumen --release
 ```
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `crates/ffdec` | Core library: container, tags, tree, export, rendering, ActionScript, editing, XFL, Iggy, AMF |
-| `crates/ffdec-cli` | Command-line tool |
+| `crates/lumen` | Core library: container, tags, tree, export, rendering, ActionScript, editing, XFL, Iggy, AMF |
+| `crates/lumen-cli` | Command-line tool |
 | `src-tauri` | Desktop shell (Tauri 2) |
 | `web` | UI |
 

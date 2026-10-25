@@ -1014,38 +1014,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ffdec"
-version = "0.2.0"
-dependencies = [
- "aes",
- "cbc",
- "flate2",
- "getrandom 0.3.4",
- "image",
- "indexmap 2.14.2",
- "lzma-rust2",
- "regex",
- "resvg",
- "roxmltree",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "symphonia",
- "thiserror 2.0.21",
- "ttf-parser",
- "zip",
-]
-
-[[package]]
-name = "ffdec-cli"
-version = "0.6.0"
-dependencies = [
- "anyhow",
- "clap",
- "ffdec",
-]
-
-[[package]]
 name = "field-offset"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2156,6 +2124,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "lumen"
+version = "0.2.0"
+dependencies = [
+ "aes",
+ "cbc",
+ "flate2",
+ "getrandom 0.3.4",
+ "image",
+ "indexmap 2.14.2",
+ "lzma-rust2",
+ "regex",
+ "resvg",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "symphonia",
+ "thiserror 2.0.21",
+ "ttf-parser",
+ "zip",
+]
+
+[[package]]
+name = "lumen-cli"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "lumen",
+]
+
+[[package]]
+name = "lumen-swf"
+version = "0.6.0"
+dependencies = [
+ "lumen",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+]
+
+[[package]]
 name = "lzma-rust2"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3028,19 +3041,6 @@ name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
-
-[[package]]
-name = "rust-ffdec"
-version = "0.6.0"
-dependencies = [
- "ffdec",
- "parking_lot",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
-]
 
 [[package]]
 name = "rustc-hash"

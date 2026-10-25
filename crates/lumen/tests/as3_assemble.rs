@@ -1,0 +1,67 @@
+use std::path::Path;
+
+use lumen::abc::asm::assemble_method;
+use lumen::abc::pcode::method_pcode;
+use lumen::abc::{tag_abc, Abc};
+
+fn sample() -> Option<Abc> {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/as3_new/bin/as3_new.flex.swf");
+    let swf = lumen::Swf::parse(&std::fs::read(f).ok()?).ok()?;
+    let mut abc = None;
+    swf.walk(|_, t| {
+        if abc.is_none() {
+            abc = tag_abc(t).and_then(|(d, _)| Abc::parse(d).ok());
+        }
+    });
+    abc
+}
+
+fn with_code(abc: &Abc, m: usize, code: &str) -> String {
+    let text = method_pcode(abc, m);
+    let start = text.find("      code\n").unwrap() + "      code\n".len();
+    let end = text.find("      end ; code").unwrap();
+    format!("{}{code}\n{}", &text[..start], &text[end..])
+}
+
+#[test]
+fn new_constants_are_added() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let strings = abc.constants.strings.len();
+    let text = with_code(&abc, m, "pushstring \"brand new\"\npop\nreturnvoid");
+    assemble_method(&mut abc, m, None, &text).unwrap();
+    assert_eq!(abc.constants.strings.len(), strings + 1);
+    assert!(method_pcode(&abc, m).contains("pushstring \"brand new\""));
+}
+
+#[test]
+fn errors_leave_the_abc_alone() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let before = abc.to_bytes();
+    let text = with_code(&abc, m, "returnvoid\nfrobnicate");
+    let e = assemble_method(&mut abc, m, None, &text).unwrap_err();
+    assert_eq!(text.lines().nth(e.line - 1).map(str::trim), Some("frobnicate"));
+    assert_eq!(abc.to_bytes(), before);
+}
+
+#[test]
+fn limits_grow_to_fit_the_code() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let pushes = "pushbyte 1\n".repeat(40) + &"pop\n".repeat(40) + "getlocal 30\npop\nreturnvoid";
+    let text = with_code(&abc, m, &pushes);
+    assemble_method(&mut abc, m, None, &text).unwrap();
+    let b = &abc.bodies[0];
+    assert_eq!((b.max_stack, b.max_regs), (40, 31));
+}
+
+#[test]
+fn stack_underflow_names_its_line() {
+    let Some(mut abc) = sample() else { return };
+    let m = abc.bodies[0].method;
+    let text = with_code(&abc, m, "pushnull\npop\npop\nreturnvoid");
+    let e = assemble_method(&mut abc, m, None, &text).unwrap_err();
+    assert_eq!(text.lines().nth(e.line - 1).map(str::trim), Some("pop"));
+    assert!(text.lines().nth(e.line - 2).map(str::trim) == Some("pop"), "{e:?}");
+}

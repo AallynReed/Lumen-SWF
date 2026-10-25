@@ -1,0 +1,98 @@
+use std::path::{Path, PathBuf};
+
+use lumen::text::{formatted, set_formatted, StaticText};
+
+/// Compares formatted text with the reference, read from `LUMEN_TEXT_REF` (the TextDump
+/// driver's output: one folder per SWF with swf.txt and id.txt), and checks that importing it
+/// back keeps every record. The reference re-import (id.bin) loses spacing that is relative to
+/// letter spacing, so bodies are only compared where no letter spacing is involved.
+#[test]
+fn texts_match_reference() {
+    let Ok(dir) = std::env::var("LUMEN_TEXT_REF") else { return };
+    let (mut total, mut bad) = (0, Vec::new());
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
+    dirs.sort();
+    for d in dirs {
+        let Ok(swf_path) = std::fs::read_to_string(d.join("swf.txt")) else { continue };
+        let Ok(data) = std::fs::read(swf_path.trim()) else { continue };
+        let Ok(swf) = lumen::Swf::parse(&data) else { continue };
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            let Some(id) = p.file_stem().and_then(|s| s.to_str()).and_then(|s| s.parse::<u16>().ok()) else { continue };
+            if p.extension().is_none_or(|x| x != "txt") {
+                continue;
+            }
+            total += 1;
+            let label = format!("{} {id}", Path::new(swf_path.trim()).file_name().unwrap().to_string_lossy());
+            let expected = std::fs::read_to_string(&p).unwrap().replace("\r\n", "\n");
+            let tag = swf.tag(&swf.find_character(id).unwrap()).unwrap();
+            let mut t = StaticText::read(tag).unwrap();
+            let got = formatted(&swf, &t, false);
+            if got != expected {
+                let at = got.chars().zip(expected.chars()).position(|(a, b)| a != b).unwrap_or(got.len().min(expected.len()));
+                bad.push(format!("{label}: text differs at {at}: got {:?} want {:?}", got.chars().skip(at.saturating_sub(20)).take(60).collect::<String>(), expected.chars().skip(at.saturating_sub(20)).take(60).collect::<String>()));
+                continue;
+            }
+            let original = t.clone();
+            match set_formatted(&swf, &mut t, &expected, None) {
+                Ok(()) if t != original => bad.push(format!("{label}: records change")),
+                Ok(()) if !expected.contains("letterspacing") && std::fs::read(p.with_extension("bin")).is_ok_and(|b| b != t.write()) => bad.push(format!("{label}: body differs from expected")),
+                Ok(()) => {}
+                Err(e) => bad.push(format!("{label}: {e}")),
+            }
+        }
+    }
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("text_report.txt"), bad.join("\n")).unwrap();
+    eprintln!("text: {}/{total} ok", total - bad.len());
+    assert!(bad.is_empty(), "{} texts differ", bad.len());
+}
+
+fn template() -> Option<lumen::Swf> {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata/swt_templates/f5_template.swf");
+    lumen::Swf::parse(&std::fs::read(f).ok()?).ok()
+}
+
+fn plain(swf: &lumen::Swf, id: u16) -> Vec<String> {
+    let tag = swf.tag(&swf.find_character(id).unwrap()).unwrap();
+    let mut fonts = std::collections::HashMap::new();
+    swf.walk(|_, t| {
+        if let Ok(f) = lumen::export::font::Font::read(swf, t) {
+            fonts.insert(f.id, f);
+        }
+    });
+    lumen::export::text::records(tag, &fonts).unwrap()
+}
+
+#[test]
+fn plain_records_replace_the_text_runs() {
+    let Some(mut swf) = template() else { return };
+    let path = swf.find_character(7).unwrap();
+    let mut records = plain(&swf, 7);
+    records[0] = "Textnormal".into();
+    lumen::importers::import(&mut swf, &path, records.join("\r\n--- RECORDSEPARATOR ---\r\n").as_bytes()).unwrap();
+    assert_eq!(plain(&swf, 7), records);
+}
+
+#[test]
+fn formatted_errors_name_their_line() {
+    let Some(mut swf) = template() else { return };
+    let path = swf.find_character(7).unwrap();
+    let e = lumen::importers::import(&mut swf, &path, b"[\nxmin 0\nfont 4\nheight 240\n]normal\xc2\xa4").unwrap_err();
+    assert!(e.to_string().contains("line 5") && e.to_string().contains("no character"), "{e}");
+    let e = lumen::text::import(&mut swf, &path, "[\nxmin 0\ncolor red\n]").unwrap_err();
+    assert_eq!(e.line, 3);
+}
+
+#[test]
+fn spacing_survives_a_round_trip() {
+    let Some(swf) = template() else { return };
+    let tag = swf.tag(&swf.find_character(7).unwrap()).unwrap();
+    let mut t = StaticText::read(tag).unwrap();
+    let original = t.clone();
+    let text = formatted(&swf, &t, false);
+    assert!(text.contains("letterspacing 159") && text.contains("spacingpair \"k\" \"e\" 1"));
+    set_formatted(&swf, &mut t, &text, None).unwrap();
+    assert_eq!(t, original);
+}
