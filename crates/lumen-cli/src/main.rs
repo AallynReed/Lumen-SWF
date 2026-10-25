@@ -18,6 +18,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Compile an AS3 application into a SWF, taking mxmlc's own arguments
+    #[command(after_help = "Takes the arguments mxmlc.jar takes, for example:
+  lumen-swf-cli mxmlc -load-config= -external-library-path=playerglobal.swc -target-player=11.2 -swf-version=15 -default-size 601 502 -default-frame-rate 24 -default-background-color=0 -source-path src lib -output out.swf src/Main.as")]
+    Mxmlc {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Print the header and any parse warnings
     #[command(after_help = "Examples:
   lumen-swf-cli info movie.swf")]
@@ -237,6 +244,103 @@ enum Cmd {
     },
 }
 
+/// mxmlc's command line: `-name=value`, `-name+=value`, or `-name` followed by its values, with the source to
+/// compile last. Returns the options and the output path.
+fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptions, PathBuf)> {
+    let mut o = lumen::asc::flex2::ApplicationOptions::default();
+    let mut output = None;
+    let mut files = Vec::new();
+    let mut i = 0;
+    let flag = |v: &str| -> Result<bool> {
+        match v {
+            "" | "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(anyhow!("'{v}' is not a valid boolean")),
+        }
+    };
+    while i < args.len() {
+        let arg = &args[i];
+        i += 1;
+        let Some(opt) = arg.strip_prefix('-') else {
+            files.push(PathBuf::from(arg));
+            continue;
+        };
+        let opt = opt.trim_start_matches('-');
+        let (name, inline) = match opt.split_once("+=").or_else(|| opt.split_once('=')) {
+            Some((n, v)) => (n, Some(v.to_string())),
+            None => (opt, None),
+        };
+        let name = name.strip_prefix("compiler.").unwrap_or(name);
+        let mut take = |n: usize, list: bool| -> Vec<String> {
+            if let Some(v) = &inline {
+                return if list { v.split(',').filter(|s| !s.is_empty()).map(String::from).collect() } else { vec![v.clone()] };
+            }
+            let mut out = Vec::new();
+            while i < args.len() && (list || out.len() < n) && !args[i].starts_with('-') {
+                out.push(args[i].clone());
+                i += 1;
+            }
+            out
+        };
+        match name {
+            "source-path" | "sp" => o.source_path.extend(take(0, true).into_iter().map(PathBuf::from)),
+            "library-path" | "l" => o.library_path.extend(take(0, true).into_iter().map(PathBuf::from)),
+            "external-library-path" | "el" => o.external_library_path.extend(take(0, true).into_iter().map(PathBuf::from)),
+            "includes" => o.includes.extend(take(0, true)),
+            "output" | "o" => output = take(1, false).pop().map(PathBuf::from),
+            "target-player" => o.target_player = take(1, false).pop().unwrap_or_default(),
+            "swf-version" => o.swf_version = take(1, false).pop().unwrap_or_default().parse()?,
+            "default-size" => {
+                let v = take(2, false);
+                let [w, h] = v.as_slice() else { return Err(anyhow!("-default-size takes a width and a height")) };
+                o.default_size = (w.parse()?, h.parse()?);
+            }
+            "default-frame-rate" => o.default_frame_rate = take(1, false).pop().unwrap_or_default().parse()?,
+            "default-background-color" => {
+                let v = take(1, false).pop().unwrap_or_default();
+                o.default_background_color = match v.strip_prefix("0x").or_else(|| v.strip_prefix('#')) {
+                    Some(h) => i32::from_str_radix(h, 16)?,
+                    None => v.parse()?,
+                };
+            }
+            "define" => {
+                let v = take(2, false);
+                match v.as_slice() {
+                    [n, val] => o.defines.push((n.clone(), val.clone())),
+                    [nv] => {
+                        let (n, val) = nv.split_once(',').ok_or_else(|| anyhow!("-define takes NAMESPACE::name,value"))?;
+                        o.defines.push((n.to_string(), val.to_string()));
+                    }
+                    _ => return Err(anyhow!("-define takes NAMESPACE::name,value")),
+                }
+            }
+            "debug" => o.debug = flag(&inline.unwrap_or_default())?,
+            "strict" => o.strict = flag(&inline.unwrap_or_default())?,
+            "optimize" => o.optimize = flag(&inline.unwrap_or_default())?,
+            "omit-trace-statements" => o.omit_trace_statements = flag(&inline.unwrap_or_default())?,
+            "warnings" => o.warnings = flag(&inline.unwrap_or_default())?,
+            "compress" => o.compress = flag(&inline.unwrap_or_default())?,
+            "static-link-runtime-shared-libraries" => {
+                flag(&inline.unwrap_or_default())?;
+            }
+            "load-config" | "theme" | "fonts.local-fonts-snapshot" => {
+                if inline.as_deref().is_some_and(|v| !v.is_empty()) {
+                    return Err(anyhow!("-{name} with a file is not supported; pass the options directly"));
+                }
+            }
+            _ => return Err(anyhow!("unknown configuration variable '{name}'")),
+        }
+    }
+    let main = files.pop().ok_or_else(|| anyhow!("a source file to compile is required"))?;
+    if !files.is_empty() {
+        return Err(anyhow!("only one source file can be compiled"));
+    }
+    o.playerglobal = o.external_library_path.is_empty();
+    let output = output.unwrap_or_else(|| main.with_extension("swf"));
+    o.main = main;
+    Ok((o, output))
+}
+
 fn open(path: &PathBuf) -> Result<Swf> {
     let data = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     Ok(Swf::parse(&data)?)
@@ -295,6 +399,29 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     lumen::set_auto_deobfuscate(cli.deobfuscate);
     match cli.cmd {
+        Cmd::Mxmlc { args } => {
+            let (opts, output) = mxmlc_options(&args)?;
+            let errors = match lumen::asc::flex2::compile_application(&opts) {
+                Ok(app) => {
+                    for d in &app.diagnostics {
+                        eprintln!("{}", d.text);
+                    }
+                    std::fs::write(&output, &app.swf).with_context(|| format!("writing {}", output.display()))?;
+                    let shown = std::fs::canonicalize(&output).unwrap_or(output.clone());
+                    println!("{} ({} bytes)", shown.display().to_string().trim_start_matches(r"\\?\"), app.swf.len());
+                    0
+                }
+                Err(diagnostics) => {
+                    for d in &diagnostics {
+                        eprintln!("{}", d.text);
+                    }
+                    diagnostics.iter().filter(|d| d.level == lumen::asc::flex2::Level::Error).count().max(1)
+                }
+            };
+            if errors > 0 {
+                std::process::exit(errors as i32);
+            }
+        }
         Cmd::Deobfuscate { input, output, dead_code, group_parts } => {
             use lumen::edit::Deobfuscation as D;
             let level = if dead_code {

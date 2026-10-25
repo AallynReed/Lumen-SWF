@@ -20,6 +20,8 @@ pub struct ApplicationOptions {
     pub source_path: Vec<PathBuf>,
     pub library_path: Vec<PathBuf>,
     pub external_library_path: Vec<PathBuf>,
+    /// `-includes`: classes linked whether or not anything references them.
+    pub includes: Vec<String>,
     /// `-target-player`, e.g. `"11.2"`.
     pub target_player: String,
     pub swf_version: i32,
@@ -52,6 +54,7 @@ impl Default for ApplicationOptions {
             source_path: Vec::new(),
             library_path: Vec::new(),
             external_library_path: Vec::new(),
+            includes: Vec::new(),
             target_player: "11.1".to_string(),
             swf_version: 14,
             default_size: (500, 375),
@@ -100,6 +103,8 @@ impl ApplicationOptions {
         c.source_path = self.source_path.clone();
         c.library_path = self.library_path.clone();
         c.external_library_path = self.external_library_path.clone();
+        // `cfgIncludes`: `toQNameString`, so `a.b.C` is looked up as `a.b:C`.
+        c.includes = self.includes.iter().map(|i| compiler::util::name_formatter::to_colon(i)).collect();
         c.defines = self
             .defines
             .iter()

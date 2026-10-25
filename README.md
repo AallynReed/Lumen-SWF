@@ -90,6 +90,7 @@ lumen-swf-cli replace in.swf out.swf com.example.Main Main.as
 lumen-swf-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 lumen-swf-cli replace in.swf out.swf 12/3 body.bin --raw
 lumen-swf-cli bundle game.exe [outdir]
+lumen-swf-cli mxmlc -load-config= -external-library-path=playerglobal.swc -target-player=11.2 -swf-version=15 -default-size 601 502 -default-frame-rate 24 -source-path src lib -output out.swf src/Main.as
 lumen-swf-cli swc movie.swf movie.swc [--no-deps]
 lumen-swf-cli xfl movie.swf movie.fla [--compressed] [--version cs6]
 lumen-swf-cli swf2iggy movie.swf movie.iggy [--variant 32]
@@ -103,7 +104,7 @@ lumen-swf-cli compress in.swf out.swf --format lzma [--encrypt]
 lumen-swf-cli compress in.swf out.swf --format zlib --encrypt
 ```
 
-A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path. An AS1/2 script is assembled from `.pcode` and compiled from anything else; an AS3 class is compiled whole, or one method's p-code is assembled with `--method`.
+`mxmlc` takes mxmlc.jar's own arguments and builds the same SWF, with mxmlc's error output and exit code. A tag path is the tag's index in the root timeline, then its index inside each nested sprite. `replace` takes a character id, a script name, or with `--raw` a tag path. An AS1/2 script is assembled from `.pcode` and compiled from anything else; an AS3 class is compiled whole, or one method's p-code is assembled with `--method`.
 
 ## Building
 
