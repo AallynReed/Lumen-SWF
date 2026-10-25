@@ -60,3 +60,25 @@ fn recompiling_is_stable() {
 
 /// Classes that do not round-trip yet, in decompile order.
 const KNOWN: &[(&str, &str)] = &[];
+
+/// mxmlc's peephole pass turns `setlocal N; getlocal N` into `dup; setlocal N` for N > 3; that store is its own
+/// statement and must not be folded into a later use of the register.
+#[test]
+fn peephole_store_keeps_its_variable() {
+    let dir = std::env::temp_dir().join(format!("lumen_peephole_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Main.as"), "package { import flash.display.Sprite; public class Main extends Sprite { public function Main() { m(1, 2, 3); } public function m(a:int, b:int, c:int):void { var s:*; var x:XML = <a/>; s = x; trace(s, x); } } }").unwrap();
+    let opts = lumen::asc::flex2::ApplicationOptions { main: dir.join("Main.as"), source_path: vec![dir.clone()], playerglobal: true, omit_trace_statements: false, ..Default::default() };
+    let app = lumen::asc::flex2::compile_application(&opts).unwrap_or_else(|d| panic!("{}", d.iter().map(|d| d.text.clone()).collect::<Vec<_>>().join("\n")));
+    let swf = lumen::Swf::parse(&app.swf).unwrap();
+    let mut abcs = Vec::new();
+    swf.walk(|_, t| {
+        if let Some((d, _)) = tag_abc(t) {
+            abcs.push(Abc::parse(d).unwrap());
+        }
+    });
+    let index = AbcIndex::for_abcs(&abcs.iter().collect::<Vec<_>>());
+    let e = entries(&abcs[0]).into_iter().find(|e| e.full_name() == "Main").unwrap();
+    let text = entry_source(&index, &abcs[0], &e, &SwfContext::of(&swf));
+    assert!(text.contains("var _loc5_:XML = <a/>;") && text.contains("_loc4_ = _loc5_;") && text.contains("trace(_loc4_,_loc5_);"), "{text}");
+}

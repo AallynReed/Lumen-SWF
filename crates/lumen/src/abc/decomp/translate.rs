@@ -354,6 +354,12 @@ impl<'x, 'c, 'a> X<'x, 'c, 'a> {
         o.remove(l - n);
     }
 
+    /// Whether `it` came from the instruction just before this one.
+    fn follows(&self, it: &It) -> bool {
+        let Some(s) = it.borrow().src else { return false };
+        s < self.ip && self.tr.code.ins[s + 1..self.ip].iter().all(|i| matches!(i.code, op::DEBUG | op::DEBUGLINE | op::DEBUGFILE))
+    }
+
     fn usages(&self, src: Option<usize>) -> usize {
         match src {
             Some(s) => self.ld.set_local_usages_of(s as i32).len(),
@@ -1854,7 +1860,7 @@ impl<'x, 'c, 'a> X<'x, 'c, 'a> {
             if super::avm2graph::is_set_type(&set_item) {
                 let sv = val(&set_item).unwrap();
                 let set_local = not_coerced_no_dup(&sv);
-                if reg_set(&set_local) == Some(reg) {
+                if reg_set(&set_local) == Some(reg) && self.follows(&set_item) {
                     let sl_ip = set_local.borrow().src;
                     if self.usages(sl_ip) == 1 {
                         if matches!(set_item.borrow().k, K::SetProperty { .. }) {
