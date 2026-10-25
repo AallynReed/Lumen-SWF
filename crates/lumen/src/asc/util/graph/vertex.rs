@@ -119,8 +119,11 @@ impl<V, W> Vertex<V, W> {
 }
 
 impl<V: JavaHash + Eq, W> Vertex<V, W> {
+    /// Hashing `v` borrows it, which is `self` for a self-loop, so the set is updated outside the borrow.
     pub fn add_predecessor(&self, v: Vertex<V, W>) {
-        self.0.borrow_mut().predecessors.get_or_insert_with(|| JHashSet::with_capacity(INITIAL_CAPACITY)).insert(v);
+        let mut set = self.0.borrow_mut().predecessors.take().unwrap_or_else(|| JHashSet::with_capacity(INITIAL_CAPACITY));
+        set.insert(v);
+        self.0.borrow_mut().predecessors = Some(set);
     }
 
     pub fn get_predecessors(&self) -> Option<Vec<Vertex<V, W>>> {

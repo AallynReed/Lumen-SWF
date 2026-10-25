@@ -456,7 +456,8 @@ pub fn inherit_class_slots_static(cframe: &TypeValue, iframe: &ObjectValue, base
     let basebui = super_type.prototype().expect("NullPointerException").builder().filter(|b| b.is_instance_builder());
     let bui = iframe.builder().expect("NullPointerException");
     let basebui = basebui.expect("NullPointerException");
-    bui.instance_data_mut().can_early_bind = basebui.instance_data().can_early_bind;
+    let can_early_bind = basebui.instance_data().can_early_bind;
+    bui.instance_data_mut().can_early_bind = can_early_bind;
     bui.instance_data_mut().basebui = Some(basebui.clone());
     let (b_var_offset, b_method_offset, b_method_count) = {
         let b = basebui.data();

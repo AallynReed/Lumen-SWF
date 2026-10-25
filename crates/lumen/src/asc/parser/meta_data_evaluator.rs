@@ -374,8 +374,10 @@ impl Evaluator for MetaDataEvaluator {
             self.eval(cx, &list);
         }
 
+        let mut meta_data = meta_data;
         if self.add_go_to_definition_help_position {
             self.add_position_metadata(cx, node);
+            meta_data = node.borrow().definition().unwrap().meta_data.clone();
         }
 
         if meta_data.is_some() {
@@ -431,8 +433,10 @@ impl Evaluator for MetaDataEvaluator {
         };
         let func_slot = ref_.and_then(|r| r.get_slot_kind(&cx.borrow(), kind));
 
+        let mut meta_data = meta_data;
         if self.add_go_to_definition_help_position {
             self.add_position_metadata(cx, node);
+            meta_data = node.borrow().definition().unwrap().meta_data.clone();
         }
 
         if let Some(func_slot) = func_slot {
@@ -509,8 +513,10 @@ impl Evaluator for MetaDataEvaluator {
             (c.ref_.clone(), c.def.meta_data.clone())
         };
         let class_slot = ref_.and_then(|r| r.get_slot(&cx.borrow()));
+        let mut meta_data = meta_data;
         if self.add_go_to_definition_help_position {
             self.add_position_metadata(cx, node);
+            meta_data = node.borrow().definition().unwrap().meta_data.clone();
         }
         if let Some(class_slot) = class_slot {
             if class_slot.get_metadata().is_none() && meta_data.is_some() {

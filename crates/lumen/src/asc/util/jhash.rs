@@ -298,6 +298,11 @@ impl<K: JavaHash + Eq, V> JHashMap<K, V> {
         self.table.iter_mut().flat_map(|b| b.iter_mut().map(|(_, k, v)| (&*k, v)))
     }
 
+    /// Keys changed through this stay in their old bucket, as a Java key mutated in place does.
+    pub fn keys_mut_in_place(&mut self) -> impl Iterator<Item = &mut K> {
+        self.table.iter_mut().flat_map(|b| b.iter_mut().map(|(_, k, _)| k))
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = &K> {
         self.iter().map(|(k, _)| k)
     }
@@ -377,6 +382,10 @@ impl<K: JavaHash + Eq> JHashSet<K> {
 
     pub fn order_may_differ_from_java(&self) -> bool {
         self.map.order_may_differ_from_java()
+    }
+
+    pub fn keys_mut_in_place(&mut self) -> impl Iterator<Item = &mut K> {
+        self.map.keys_mut_in_place()
     }
 }
 
