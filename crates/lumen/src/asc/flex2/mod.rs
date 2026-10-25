@@ -33,6 +33,8 @@ pub struct ApplicationOptions {
     pub compile_date: Option<i64>,
     /// Write a `CWS` file as mxmlc does; false writes `FWS`.
     pub compress: bool,
+    /// Compile against the crate's bundled `playerglobal` as an external library.
+    pub playerglobal: bool,
 }
 
 impl Default for ApplicationOptions {
@@ -54,6 +56,7 @@ impl Default for ApplicationOptions {
             defines: Vec::new(),
             compile_date: None,
             compress: true,
+            playerglobal: false,
         }
     }
 }
@@ -123,7 +126,8 @@ pub fn compile_application(opts: &ApplicationOptions) -> Result<Application, Vec
     on_compiler_thread(move || {
         let configuration = opts.configuration();
         compiler::toolkit::reset(configuration.warnings);
-        let compiled = tools::mxmlc::mxmlc(configuration, &opts.main);
+        let libraries = if opts.playerglobal { vec![(compiler::abc_library::playerglobal(), true)] } else { Vec::new() };
+        let compiled = tools::mxmlc::mxmlc(configuration, &opts.main, libraries);
         let diagnostics = compiler::toolkit::take_diagnostics();
         let errors = diagnostics.iter().any(|d| d.level == Level::Error);
         let units = compiled
@@ -157,6 +161,10 @@ pub struct UnitOptions {
     pub abcs: Vec<Vec<u8>>,
     /// `ns:name` definitions dropped from `abcs`, such as the class the source replaces.
     pub exclude: Vec<String>,
+    /// `abcs` were compiled in the same build as the source, as when it replaces one of their classes: their code's
+    /// references to it then act as a referencing source's would, which inherits the unit's slots, and the unit is
+    /// generated only after them, as it was after the sources that pulled it in.
+    pub same_build: bool,
     pub source_path: Vec<PathBuf>,
     pub library_path: Vec<PathBuf>,
     pub external_library_path: Vec<PathBuf>,
@@ -183,7 +191,7 @@ pub fn compile_unit(opts: &UnitOptions) -> Result<CompiledUnit, Vec<Diagnostic>>
         configuration.library_path = opts.library_path.clone();
         configuration.external_library_path = opts.external_library_path.clone();
         compiler::toolkit::reset(configuration.warnings);
-        let library = match compiler::abc_library::library("abc", &opts.abcs, &opts.exclude) {
+        let library = match compiler::abc_library::library("abc", &opts.abcs, &opts.exclude, opts.same_build) {
             Ok(l) => l,
             Err(e) => return Err(vec![Diagnostic { level: Level::Error, path: None, line: -1, col: -1, message: e.clone(), code: -1, text: format!("Error: {e}") }]),
         };
@@ -199,7 +207,12 @@ pub fn compile_unit(opts: &UnitOptions) -> Result<CompiledUnit, Vec<Diagnostic>>
             last_modified: 0,
         };
         let root = compiler::source::Source::new(file, Some(root_dir), &relative_path, &short_name, compiler::source::Owner::SourceList, false, true, true);
-        let compiled = tools::mxmlc::compile_unit(configuration.clone(), root.clone(), vec![(library, true)]);
+        let depends_on = if opts.same_build { vec![library.clone()] } else { Vec::new() };
+        let mut libraries = vec![(library, true)];
+        if opts.app.playerglobal {
+            libraries.insert(0, (compiler::abc_library::playerglobal(), true));
+        }
+        let compiled = tools::mxmlc::compile_unit(configuration.clone(), root.clone(), libraries, &depends_on);
         let diagnostics = compiler::toolkit::take_diagnostics();
         if diagnostics.iter().any(|d| d.level == Level::Error) {
             return Err(diagnostics);
