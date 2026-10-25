@@ -93,6 +93,14 @@ pub fn to_swf(m: &Movie) -> Swf {
 
 /// `CompilerAPI.encode`: zlib-compressed for SWF 6 and later, as `Header.useCompression` decides.
 pub fn encode(m: &Movie, compress: bool) -> crate::error::Result<Vec<u8>> {
-    let compression = if compress && m.version >= 6 { Compression::Zlib } else { Compression::None };
-    to_swf(m).save(&SaveOptions { compression, encrypt: false })
+    let mut out = to_swf(m).save(&SaveOptions { compression: Compression::None, encrypt: false })?;
+    if compress && m.version >= 6 {
+        // TagEncoder.getCompressionLevel: BEST_SPEED once a DebugID tag was written, else BEST_COMPRESSION
+        let level = if m.debug_uuid.is_some() { 1 } else { 9 };
+        let mut z = flate2::write::ZlibEncoder::new(out[..8].to_vec(), flate2::Compression::new(level));
+        std::io::Write::write_all(&mut z, &out[8..])?;
+        out = z.finish()?;
+        out[0] = b'C';
+    }
+    Ok(out)
 }
