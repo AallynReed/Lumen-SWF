@@ -6,3 +6,4 @@ pub mod emit;
 pub mod parser;
 pub mod semantics;
 pub mod util;
+pub mod embedding;
