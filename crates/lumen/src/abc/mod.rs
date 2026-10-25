@@ -1,11 +1,11 @@
 //! ActionScript 3 bytecode (ABC) as found in DoABC/DoABC2 tags.
 
 pub mod asm;
-pub mod compile;
 pub mod decomp;
 pub mod names;
 pub mod opcodes;
 pub mod pcode;
+pub mod pool;
 pub mod scripts;
 pub mod stats;
 pub mod usages;

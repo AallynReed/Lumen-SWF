@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use lumen::abc::asm::assemble_method;
-use lumen::abc::compile::pool;
+use lumen::abc::pool;
 use lumen::abc::decomp::ctx::{Config, Ctx};
 use lumen::abc::decomp::deobf;
 use lumen::abc::decomp::index::AbcIndex;
@@ -91,13 +91,13 @@ fn recompile(body: &str) -> Option<String> {
             abcs.push(Abc::parse(d).unwrap());
         }
     });
-    let text = format!("package {{ public class Test {{  public static function trace(s){{ }} public static function test(){{ {body} }}   }}  }}");
     let e = lumen::abc::scripts::entries(&abcs[0]).into_iter().find(|e| e.trait_index.is_some()).unwrap();
-    let abc = lumen::abc::compile::replace_script(&abcs, 0, e.script, e.trait_index, &text, None).unwrap();
+    let text = format!("package {} {{ public class {} {{  public static function log(s){{ }} public static function test(){{ {body} }}   }}  }}", e.package, e.name);
+    let abc = lumen::abc::decomp::with_big_stack(|| lumen::as3_replace::replace_script(&abcs, 0, e.script, e.trait_index, &text, &[])).unwrap();
     let mut all = abcs.clone();
-    all[0] = abc;
+    all[0] = Abc::parse(&abc).unwrap();
     let index = AbcIndex::for_abcs(&all.iter().collect::<Vec<_>>());
-    let e = lumen::abc::scripts::entries(&all[0]).into_iter().find(|e| e.full_name() == "Test").unwrap();
+    let e = lumen::abc::scripts::entries(&all[0]).into_iter().find(|x| x.full_name() == e.full_name()).unwrap();
     Some(lumen::abc::decomp::entry_source_with(&index, &all[0], &e, &lumen::abc::decomp::SwfContext::of(&swf), Config { deobfuscate: true, ..Config::default() }))
 }
 
@@ -105,14 +105,14 @@ fn recompile(body: &str) -> Option<String> {
 fn constant_conditions_are_removed() {
     for (expr, holds) in [("1!=5", true), ("5==5", true), ("1<4", true), ("5>4", true), ("5*6==30", true), ("1==5", false), ("5!=5", false), ("1>4", false), ("5<4", false), ("5*7==12", false)] {
         let (on_true, on_false) = if holds { ("OK", "FAIL") } else { ("FAIL", "OK") };
-        let Some(res) = recompile(&format!("if({expr}){{trace(\"{on_true}\");}} else {{trace(\"{on_false}\");}}")) else { return };
+        let Some(res) = recompile(&format!("if({expr}){{log(\"{on_true}\");}} else {{log(\"{on_false}\");}}")) else { return };
         assert!(res.contains("\"OK\"") && !res.contains("\"FAIL\""), "{expr}:\n{res}");
     }
 }
 
 #[test]
 fn known_variables_are_removed() {
-    let Some(res) = recompile("var a = true; var b = false;if(a){trace(\"OK1\");}else{trace(\"FAIL1\");}if(b){trace(\"FAIL2\");}else{trace(\"OK2\");}") else { return };
+    let Some(res) = recompile("var a = true; var b = false;if(a){log(\"OK1\");}else{log(\"FAIL1\");}if(b){log(\"FAIL2\");}else{log(\"OK2\");}") else { return };
     for (s, want) in [("\"OK1\"", true), ("\"OK2\"", true), ("\"FAIL1\"", false), ("\"FAIL2\"", false), ("var ", false), ("if", false)] {
         assert_eq!(res.contains(s), want, "{s}:\n{res}");
     }
