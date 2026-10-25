@@ -1,6 +1,6 @@
 [package]
 name = "lumen-swf"
-version = "0.6.0"
+version = "0.8.0"
 description = "Lumen-SWF"
 edition.workspace = true
 license.workspace = true

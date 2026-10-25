@@ -2138,7 +2138,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lumen"
-version = "0.2.0"
+version = "0.8.0"
 dependencies = [
  "aes",
  "cbc",
@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-cli"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2171,7 +2171,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-swf"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "lumen",
  "parking_lot",
