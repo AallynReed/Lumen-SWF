@@ -32,7 +32,11 @@ pub struct ReferenceValueData {
     pub type_params: Option<Vec<ReferenceValue>>,
     pub is_nullable: bool,
     pub has_nullable_anno: bool,
+    /// Creation order, standing in for Java's identity hash where nothing else orders references.
+    pub seq: u64,
 }
+
+static NEXT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// A Java `ReferenceValue` reference; equality and hashing are identity, as in Java.
 #[derive(Clone)]
@@ -69,6 +73,7 @@ impl ReferenceValue {
             type_params: None,
             is_nullable: true,
             has_nullable_anno: false,
+            seq: NEXT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         })))
     }
 

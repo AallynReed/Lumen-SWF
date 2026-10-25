@@ -1,5 +1,5 @@
-//! Port of `flex2.compiler.as3.As3Compiler`, mxmlc's ActionScript `SubCompiler`. The extensions mxmlc registers
-//! (Embed, Style, Bindable, Managed, HostComponent, SkinPart, Signature) only act on Flex metadata and are not ported.
+//! Port of `flex2.compiler.as3.As3Compiler`, mxmlc's ActionScript `SubCompiler`, running its registered
+//! compiler extensions in every phase.
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -155,7 +155,8 @@ pub fn inherit_slots(unit: &UnitRef, which: fn(&crate::asc::flex2::compiler::com
 
 /// Drains one of a `ProgramNode`'s unresolved sets. Java iterates them in identity-hash order, which mxmlc's output
 /// depends on when two names share a bucket of the unit's dependency set. The most frequently referenced name comes
-/// first, as it most often does in Java, then source order.
+/// first, as it most often does in Java, then source order; references at position 0 (generated nodes, such as an
+/// `[Embed]` variable's initializer) in creation order.
 pub fn drain_ordered(set: &mut std::collections::HashSet<ReferenceValue>) -> Vec<ReferenceValue> {
     let key = |r: &ReferenceValue| (r.name(), r.data().namespaces.to_vec().iter().map(|n| n.name()).collect::<Vec<_>>());
     let mut v: Vec<(usize, i32, (String, Vec<String>), ReferenceValue)> = set.drain().map(|r| (0, r.get_position(), key(&r), r)).collect();
@@ -166,7 +167,9 @@ pub fn drain_ordered(set: &mut std::collections::HashSet<ReferenceValue>) -> Vec
     for e in &mut v {
         e.0 = counts[&e.2];
     }
-    v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then_with(|| a.2.cmp(&b.2)));
+    v.sort_by(|a, b| {
+        b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then_with(|| if a.1 == 0 && b.1 == 0 { a.3.data().seq.cmp(&b.3.data().seq) } else { a.2.cmp(&b.2) })
+    });
     v.into_iter().map(|e| e.3).collect()
 }
 
@@ -237,12 +240,28 @@ pub fn evaluate_loader_class_base(unit: &UnitRef, symbol_table: &SymbolTable) {
 pub struct As3Compiler {
     config: Rc<Configuration>,
     warn_map: std::collections::HashMap<i32, bool>,
+    compiler_extensions: Vec<Box<dyn super::extension::Extension>>,
 }
 
 impl As3Compiler {
     pub fn new(config: Rc<Configuration>) -> As3Compiler {
         let warn_map = Self::process_coach_settings(&config);
-        As3Compiler { config, warn_map }
+        As3Compiler { config, warn_map, compiler_extensions: Vec::new() }
+    }
+
+    pub fn add_compiler_extension(&mut self, ext: Box<dyn super::extension::Extension>) {
+        self.compiler_extensions.push(ext);
+    }
+
+    /// Runs one phase of every extension, stopping at the first error as each `As3Compiler` phase does.
+    fn run_extensions(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable, phase: fn(&mut dyn super::extension::Extension, &UnitRef, &mut SymbolTable)) -> bool {
+        for ext in self.compiler_extensions.iter_mut() {
+            phase(ext.as_mut(), unit, symbol_table);
+            if toolkit::error_count() > 0 {
+                return false;
+            }
+        }
+        true
     }
 
     /// `processCoachSettings()` with `CompilerConfiguration`'s `warn-*` defaults.
@@ -426,11 +445,18 @@ impl SubCompiler for As3Compiler {
             u.inheritance.insert(name.clone());
         }
         drop(u);
-        super::style_evaluator::style_extension_parse1(&unit);
+        if !self.run_extensions(&unit, symbol_table, |e, u, st| e.parse1(u, st)) {
+            return None;
+        }
         Some(unit)
     }
 
-    fn parse2(&mut self, _unit: &UnitRef, _symbol_table: &mut SymbolTable) {}
+    fn parse2(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
+        if unit.borrow().has_type_info {
+            return;
+        }
+        self.run_extensions(unit, symbol_table, |e, u, st| e.parse2(u, st));
+    }
 
     fn analyze1(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
         if unit.borrow().has_type_info {
@@ -459,10 +485,13 @@ impl SubCompiler for As3Compiler {
             p.fa_unresolved.clear();
             drain_ordered(&mut p.ns_unresolved)
         };
-        let mut u = unit.borrow_mut();
-        let u = &mut *u;
-        transfer_dependencies(ns_unresolved, &mut u.namespaces, &u.namespace_history);
-        u.type_info = node.borrow().program().unwrap().frame.clone();
+        {
+            let mut u = unit.borrow_mut();
+            let u = &mut *u;
+            transfer_dependencies(ns_unresolved, &mut u.namespaces, &u.namespace_history);
+            u.type_info = node.borrow().program().unwrap().frame.clone();
+        }
+        self.run_extensions(unit, symbol_table, |e, u, st| e.analyze1(u, st));
     }
 
     fn analyze2(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
@@ -498,29 +527,32 @@ impl SubCompiler for As3Compiler {
                 drain_ordered(&mut p.import_def_unresolved),
             )
         };
-        let mut u = unit.borrow_mut();
-        let u = &mut *u;
-        transfer_dependencies(ce, &mut u.types, &u.type_history);
-        transfer_dependencies(body, &mut u.types, &u.type_history);
-        transfer_dependencies(ns, &mut u.namespaces, &u.namespace_history);
-        transfer_dependencies(rt, &mut u.expressions, &u.expression_history);
-        if self.config.strict {
-            for r in pkg {
-                u.import_package_statements.insert(r.name());
-            }
-            for r in idef {
-                let namespaces = r.data().namespaces.to_vec();
-                if let Some(ov) = namespaces.into_iter().find(|ov| ov.is_namespace_value()) {
-                    let kind = ov.get_namespace_kind();
-                    if kind == NS_PUBLIC || kind == NS_INTERNAL {
-                        let q = QName::new(&ov.name(), &r.name());
-                        if !u.import_definition_statements.contains(&q) {
-                            u.import_definition_statements.insert(q);
+        {
+            let mut u = unit.borrow_mut();
+            let u = &mut *u;
+            transfer_dependencies(ce, &mut u.types, &u.type_history);
+            transfer_dependencies(body, &mut u.types, &u.type_history);
+            transfer_dependencies(ns, &mut u.namespaces, &u.namespace_history);
+            transfer_dependencies(rt, &mut u.expressions, &u.expression_history);
+            if self.config.strict {
+                for r in pkg {
+                    u.import_package_statements.insert(r.name());
+                }
+                for r in idef {
+                    let namespaces = r.data().namespaces.to_vec();
+                    if let Some(ov) = namespaces.into_iter().find(|ov| ov.is_namespace_value()) {
+                        let kind = ov.get_namespace_kind();
+                        if kind == NS_PUBLIC || kind == NS_INTERNAL {
+                            let q = QName::new(&ov.name(), &r.name());
+                            if !u.import_definition_statements.contains(&q) {
+                                u.import_definition_statements.insert(q);
+                            }
                         }
                     }
                 }
             }
         }
+        self.run_extensions(unit, symbol_table, |e, u, st| e.analyze2(u, st));
     }
 
     fn analyze3(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
@@ -567,6 +599,7 @@ impl SubCompiler for As3Compiler {
         analyzer.preprocess_definition_type_info_program(&cx, &node);
         cx.borrow().pop_scope();
         unit.borrow_mut().context.constant_evaluator = Some(analyzer);
+        self.run_extensions(unit, symbol_table, |e, u, st| e.analyze3(u, st));
     }
 
     fn analyze4(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
@@ -608,6 +641,7 @@ impl SubCompiler for As3Compiler {
         register_classes(unit, &node, symbol_table);
         super::style_evaluator::register_unit_styles(unit, symbol_table);
         evaluate_loader_class_base(unit, symbol_table);
+        self.run_extensions(unit, symbol_table, |e, u, st| e.analyze4(u, st));
     }
 
     fn generate(&mut self, unit: &UnitRef, _symbol_table: &mut SymbolTable) {
@@ -638,6 +672,9 @@ impl SubCompiler for As3Compiler {
         let mut bytes = Vec::new();
         crate::asc::semantics::emitter::Emitter::emit(&mut *emitter.borrow_mut(), &mut bytes);
         unit.borrow_mut().bytes = bytes;
+        if !self.run_extensions(unit, _symbol_table, |e, u, st| e.generate(u, st)) {
+            return;
+        }
         let (type_info, defs) = {
             let u = unit.borrow();
             (u.type_info.clone(), u.top_level_definitions.clone())

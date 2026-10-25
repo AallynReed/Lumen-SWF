@@ -1,6 +1,7 @@
 //! Ports of `flex2.compiler.as3.StyleEvaluator` and `StyleExtension`: a unit's `[Style]` metadata into its `Styles`.
 
 use super::evaluator_adapter::{self, Adapter};
+use super::extension::Extension;
 use super::syntax_tree_evaluator::localized2;
 use crate::asc::flex2::compiler::compilation_unit::UnitRef;
 use crate::asc::flex2::compiler::symbol_table::SymbolTable;
@@ -93,6 +94,12 @@ pub fn style_extension_parse1(unit: &UnitRef) {
         };
         let mut e = StyleEvaluator::new(unit.clone());
         evaluator_adapter::evaluate(&mut e, &cx, &node);
+    }
+}
+
+impl Extension for StyleExtension {
+    fn parse1(&mut self, unit: &UnitRef, _symbol_table: &mut SymbolTable) {
+        style_extension_parse1(unit);
     }
 }
 

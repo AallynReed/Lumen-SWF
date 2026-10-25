@@ -194,6 +194,16 @@ impl Source {
         &self.owner
     }
 
+    /// Only `ResourceContainer.addResource` sets the owner after construction.
+    pub fn set_owner(&mut self, owner: Owner) {
+        self.owner = owner;
+    }
+
+    /// `getBackingFile()`: the file itself, as no ported source has a delegate.
+    pub fn get_backing_file(&self) -> &VirtualFile {
+        &self.file
+    }
+
     pub fn is_source_path_owner(&self) -> bool {
         matches!(self.owner, Owner::SourcePath)
     }

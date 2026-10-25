@@ -86,6 +86,8 @@ pub struct CompilationUnit {
     pub type_info: Option<ObjectValue>,
     pub class_table: HashMap<String, Rc<AbcClass>>,
     pub check_bits: i32,
+    pub assets: super::assets::Assets,
+    generated_sources: Option<crate::asc::util::jhash::JHashMap<QName, SourceRef>>,
     pub styles: super::css::styles::Styles,
     /// Only MXML components set it (`setStylesContainer`).
     pub styles_container: Option<Rc<super::css::styles_container::StylesContainer>>,
@@ -130,6 +132,8 @@ impl CompilationUnit {
             type_info: None,
             class_table: HashMap::new(),
             check_bits: 0,
+            assets: Default::default(),
+            generated_sources: None,
             styles: super::css::styles::Styles::new(2),
             styles_container: None,
             style_name: None,
@@ -167,6 +171,8 @@ impl CompilationUnit {
         self.expression_history.clear();
         self.namespace_history.clear();
         self.check_bits = 0;
+        self.assets = Default::default();
+        self.generated_sources = None;
         self.styles.clear();
         self.has_type_info = false;
         self.type_info = None;
@@ -217,5 +223,28 @@ impl CompilationUnit {
 
     pub fn get_byte_codes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    /// `addGeneratedSources(generatedSources)`: a `putAll` into the unit's own map.
+    pub fn add_generated_sources(&mut self, sources: crate::asc::util::jhash::JHashMap<QName, SourceRef>) {
+        let n = sources.len();
+        let m = self.generated_sources.get_or_insert_with(Default::default);
+        m.put_all(sources.iter().map(|(k, v)| (k.clone(), v.clone())), n);
+    }
+
+    pub fn add_generated_source(&mut self, def_name: QName, source: SourceRef) {
+        self.generated_sources.get_or_insert_with(Default::default).insert(def_name, source);
+    }
+
+    pub fn get_generated_sources(&self) -> Option<&crate::asc::util::jhash::JHashMap<QName, SourceRef>> {
+        self.generated_sources.as_ref()
+    }
+
+    pub fn clear_generated_sources(&mut self) {
+        self.generated_sources = None;
+    }
+
+    pub fn has_assets(&self) -> bool {
+        self.assets.count() > 0
     }
 }

@@ -213,16 +213,7 @@ pub fn source_resolve(source: &SourceRef, path: &str) -> Option<CssFile> {
     f.or_else(|| toolkit_resolve(path))
 }
 
-thread_local! {
-    static RESOLVED_PATHS: RefCell<std::collections::HashMap<String, VirtualFile>> = RefCell::new(std::collections::HashMap::new());
-}
-
 /// `ThreadLocalToolkit.addResolvedPath(path, file)`.
 pub fn add_resolved_path(path: &str, file: &CssFile) {
-    RESOLVED_PATHS.with(|m| m.borrow_mut().insert(path.to_string(), file.to_virtual_file()));
-}
-
-/// `ThreadLocalToolkit.getResolvedPath(path)`, for the transcoders.
-pub fn get_resolved_path(path: &str) -> Option<VirtualFile> {
-    RESOLVED_PATHS.with(|m| m.borrow().get(path).cloned())
+    crate::asc::flex2::compiler::transcoder::add_resolved_path(path, &file.to_virtual_file());
 }

@@ -51,11 +51,24 @@ pub struct LocalLogger {
     error_count: Cell<i32>,
     warning_count: Cell<i32>,
     connected: Cell<bool>,
+    source: RefCell<Option<std::rc::Weak<RefCell<super::source::Source>>>>,
 }
 
 impl LocalLogger {
     pub fn new() -> Rc<LocalLogger> {
-        Rc::new(LocalLogger { error_count: Cell::new(0), warning_count: Cell::new(0), connected: Cell::new(true) })
+        Rc::new(LocalLogger { error_count: Cell::new(0), warning_count: Cell::new(0), connected: Cell::new(true), source: RefCell::new(None) })
+    }
+
+    /// `new LocalLogger(original, source)`: the source whose messages it carries.
+    pub fn set_source(&self, s: &super::source::SourceRef) {
+        *self.source.borrow_mut() = Some(Rc::downgrade(s));
+    }
+
+    /// `checkPath`: a message about another file (generated code) is reported against the source, without a line.
+    fn misrouted(&self, p: &str) -> Option<String> {
+        let s = self.source.borrow().as_ref()?.upgrade()?;
+        let s = s.borrow();
+        (s.get_name_for_reporting() != p && !s.is_included_file(p)).then(|| s.get_name_for_reporting().to_string())
     }
 
     pub fn error_count(&self) -> i32 {
@@ -244,6 +257,15 @@ pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, sour
         m.path = Some(p.to_string());
         m.line = line;
         m.col = col;
+    }
+    let mut source = source;
+    if let Some(p) = &m.path {
+        if let Some(name) = get_logger().and_then(|l| l.misrouted(p)) {
+            m.path = Some(name);
+            m.line = -1;
+            m.col = -1;
+            source = None;
+        }
     }
     if !forward(m.level) {
         return;

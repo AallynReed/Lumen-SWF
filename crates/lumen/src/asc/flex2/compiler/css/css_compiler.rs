@@ -151,6 +151,12 @@ pub mod transfer {
         }
     }
 
+    pub fn assets(from: &CompilationUnit, to: &mut CompilationUnit) {
+        if from.has_assets() {
+            to.assets.add_all(&from.assets);
+        }
+    }
+
     pub fn meta_data(from: &CompilationUnit, to: &mut CompilationUnit) {
         to.metadata.extend(from.metadata.iter().cloned());
         to.swf_meta_data = from.swf_meta_data.clone();
@@ -173,6 +179,13 @@ pub mod transfer {
         }
     }
 
+    pub fn generated_sources(from: &mut CompilationUnit, to: &mut CompilationUnit) {
+        if let Some(g) = from.get_generated_sources().cloned() {
+            to.add_generated_sources(g);
+        }
+        from.clear_generated_sources();
+    }
+
     pub fn class_table(from: &CompilationUnit, to: &mut CompilationUnit) {
         to.class_table.extend(from.class_table.iter().map(|(k, v)| (k.clone(), v.clone())));
     }
@@ -190,7 +203,7 @@ pub mod transfer {
     }
 }
 
-/// `CssCompiler`: an `As3Compiler` delegate behind `.css` sources.
+/// `CssCompiler`: an `As3Compiler` delegate (with its `EmbedExtension`) behind `.css` sources.
 pub struct CssCompiler {
     configuration: Rc<CssConfiguration>,
     name_mappings: Option<Rc<NameMappings>>,
@@ -322,9 +335,10 @@ impl SubCompiler for CssCompiler {
         let generated_name = generated_source.borrow().get_name().to_string();
         source.borrow_mut().add_file_include(generated_name);
         {
-            let a = asc_compilation_unit.borrow();
+            let mut a = asc_compilation_unit.borrow_mut();
             let mut c = css_compilation_unit.borrow_mut();
             transfer::meta_data(&a, &mut c);
+            transfer::generated_sources(&mut a, &mut c);
             transfer::definitions(&a, &mut c);
             transfer::inheritance(&a, &mut c);
         }
@@ -339,6 +353,10 @@ impl SubCompiler for CssCompiler {
         let asc = self.delegate_unit(unit);
         transfer::inheritance(&unit.borrow(), &mut asc.borrow_mut());
         self.delegate.parse2(&asc, symbol_table);
+        let mut a = asc.borrow_mut();
+        let mut u = unit.borrow_mut();
+        transfer::assets(&a, &mut u);
+        transfer::generated_sources(&mut a, &mut u);
     }
 
     fn analyze1(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
@@ -396,8 +414,9 @@ impl SubCompiler for CssCompiler {
         if toolkit::error_count() > 0 {
             return;
         }
-        let a = asc.borrow();
+        let mut a = asc.borrow_mut();
         let mut u = unit.borrow_mut();
+        transfer::generated_sources(&mut a, &mut u);
         transfer::bytecodes(&a, &mut u);
     }
 

@@ -15,12 +15,13 @@ pub struct DoAbc {
     pub abc: Vec<u8>,
 }
 
-/// `flash.swf.Frame`, without assets.
+/// `flash.swf.Frame`.
 #[derive(Default)]
 pub struct Frame {
     pub label: Option<String>,
     pub do_abcs: Vec<DoAbc>,
     pub pos: i32,
+    pub assets: crate::asc::flex2::flash::swf::movie_encoder::FrameAssets,
 }
 
 /// `flash.swf.Movie` as `SimpleMovie` fills it in.
@@ -259,6 +260,24 @@ fn traverse(defs: &[String], state: &mut LinkState, allow_external: bool, export
     Ok(())
 }
 
+/// The asset half of `SimpleMovie.exportUnitOnFrame`: symbol classes, exports and fonts.
+fn export_assets_on_frame(unit: &UnitRef, f: &mut Frame) {
+    let u = unit.borrow();
+    if !u.has_assets() {
+        return;
+    }
+    for (class_name, info) in u.assets.iter() {
+        let tag = info.define_tag.clone();
+        f.assets.add_symbol_class(&format_symbol_class_name(Some(class_name)).unwrap(), tag.clone());
+        if tag.borrow().name.is_some() {
+            f.assets.add_export(&tag);
+        }
+    }
+    for font in u.assets.get_fonts() {
+        f.assets.add_font(font);
+    }
+}
+
 /// `NameFormatter.nameFromSource`.
 fn name_from_source(unit: &UnitRef) -> String {
     let u = unit.borrow();
@@ -370,7 +389,7 @@ fn flex_movie_generate(movie: &mut Movie, units: &[UnitRef], configuration: &Con
     let mut libraries_processed: Vec<String> = Vec::new();
     let count = frame_info_list.len();
     for (n, (label, frame_classes)) in frame_info_list.iter().enumerate() {
-        let mut f = Frame { label: Some(label.clone()), do_abcs: Vec::new(), pos: n as i32 + 1 };
+        let mut f = Frame { label: Some(label.clone()), do_abcs: Vec::new(), pos: n as i32 + 1, ..Default::default() };
         let last = n + 1 == count;
         traverse(frame_classes, &mut state, last, last, &mut |unit: &UnitRef| {
             let (internal, swc) = {
@@ -382,6 +401,7 @@ fn flex_movie_generate(movie: &mut Movie, units: &[UnitRef], configuration: &Con
             if internal {
                 return;
             }
+            export_assets_on_frame(unit, &mut f);
             let name = name_from_source(unit);
             let flag = if lazy_init { 1 } else { 0 };
             f.do_abcs.push(DoAbc { name, flag, abc: unit.borrow().get_byte_codes().to_vec() });

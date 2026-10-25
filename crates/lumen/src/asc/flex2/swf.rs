@@ -58,12 +58,14 @@ pub fn tags(m: &Movie) -> Vec<Tag> {
     tags.push(Tag::new(code::PRODUCT_INFO, b));
 
     let mut associate_root_class = m.top_level_class.is_some();
+    let mut assets = super::flash::swf::movie_encoder::MovieEncoder::new(m.version, m.debug_uuid.is_some());
     for frame in &m.frames {
         if let Some(label) = &frame.label {
             let mut b = Vec::new();
             string(&mut b, label);
             tags.push(Tag::new(code::FRAME_LABEL, b));
         }
+        tags.extend(parse_tags(&assets.frame_definitions(&frame.assets)));
         for abc in &frame.do_abcs {
             let mut b = Vec::with_capacity(abc.abc.len() + abc.name.len() + 5);
             b.extend_from_slice(&(abc.flag as u32).to_le_bytes());
@@ -71,18 +73,21 @@ pub fn tags(m: &Movie) -> Vec<Tag> {
             b.extend_from_slice(&abc.abc);
             tags.push(Tag::new(code::DO_ABC2, b));
         }
-        if associate_root_class {
-            let mut b = Vec::new();
-            b.extend_from_slice(&1u16.to_le_bytes());
-            b.extend_from_slice(&0u16.to_le_bytes());
-            string(&mut b, m.top_level_class.as_deref().unwrap());
-            tags.push(Tag::new(code::SYMBOL_CLASS, b));
+        if associate_root_class || frame.assets.has_symbol_classes() {
+            let top = if associate_root_class { m.top_level_class.as_deref() } else { None };
+            tags.extend(parse_tags(&assets.symbol_class(&frame.assets, top)));
         }
         associate_root_class = false;
         tags.push(Tag::new(code::SHOW_FRAME, Vec::new()));
     }
     tags.push(Tag::new(code::END, Vec::new()));
     tags
+}
+
+/// Tags `TagEncoder` wrote, with the headers it chose.
+fn parse_tags(bytes: &[u8]) -> Vec<Tag> {
+    let mut r = crate::io::Reader::new(bytes);
+    crate::tags::Timeline::parse(&mut r, 0, 16).tags
 }
 
 /// The movie as a `Swf`, uncompressed in memory.

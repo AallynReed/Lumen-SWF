@@ -39,6 +39,7 @@ pub struct SwcScript {
     deps: SwcDependencySet,
     modtime: i64,
     abc: RefCell<Option<Rc<Vec<u8>>>>,
+    symbol_classes: RefCell<Option<JHashSet<String>>>,
 }
 
 impl SwcScript {
@@ -66,9 +67,17 @@ impl SwcScript {
         &self.deps
     }
 
-    /// Symbol classes come from asset tags in the library, which pure-ActionScript libraries do not have.
+    /// `getSymbolClasses()`: the classes of the library symbols this script's symbols refer to.
     pub fn get_symbol_classes(&self) -> Vec<String> {
-        Vec::new()
+        if self.symbol_classes.borrow().is_none() {
+            let mut set = JHashSet::new();
+            let lib = self.get_library();
+            for d in &self.defs {
+                lib.get_symbol_classes(d, &mut set);
+            }
+            *self.symbol_classes.borrow_mut() = Some(set);
+        }
+        self.symbol_classes.borrow().as_ref().unwrap().iter().cloned().collect()
     }
 
     pub fn get_abc(&self) -> Rc<Vec<u8>> {
@@ -88,6 +97,7 @@ pub struct SwcLibrary {
     scripts: RefCell<Vec<Rc<SwcScript>>>,
     metadata: RefCell<JHashSet<String>>,
     parsed: Cell<bool>,
+    def2symbol: RefCell<Option<JHashMap<String, crate::asc::flex2::flash::swf::tags::TagRef>>>,
 }
 
 impl SwcLibrary {
@@ -118,6 +128,42 @@ impl SwcLibrary {
             if let Some(s) = scripts.iter().find(|s| s.name == name) {
                 *s.abc.borrow_mut() = Some(Rc::new(rest[nul + 1..].to_vec()));
             }
+        }
+        let mut def2symbol = JHashMap::new();
+        for (class_name, tag) in crate::asc::flex2::flash::swf::tag_decoder::decode_lenient(&bytes).symbol_classes {
+            def2symbol.insert(class_name, tag);
+        }
+        *self.def2symbol.borrow_mut() = Some(def2symbol);
+    }
+
+    /// `getSymbol(name)`: the asset tag a `SymbolClass` gives the definition.
+    pub fn get_symbol(&self, name: &str) -> Option<crate::asc::flex2::flash::swf::tags::TagRef> {
+        self.def2symbol.borrow().as_ref().and_then(|m| m.get(&name.replace(':', ".")).cloned())
+    }
+
+    /// `getSymbolClasses(def, symbolClasses)` through `getReferencedSymbolClasses`.
+    fn get_symbol_classes(&self, def: &str, out: &mut JHashSet<String>) {
+        let t = self.get_symbol(def);
+        let mut visited = crate::asc::flex2::flash::swf::dictionary::TagMap::<()>::default();
+        self.referenced_symbol_classes(t, out, &mut visited);
+    }
+
+    fn referenced_symbol_classes(&self, t: Option<crate::asc::flex2::flash::swf::tags::TagRef>, out: &mut JHashSet<String>, visited: &mut crate::asc::flex2::flash::swf::dictionary::TagMap<()>) {
+        let Some(t) = t else { return };
+        if visited.contains(&t) {
+            return;
+        }
+        visited.put(&t, ());
+        let refs = t.borrow().get_references();
+        for r in refs {
+            if let Some(m) = self.def2symbol.borrow().as_ref() {
+                for (class_name, tag) in m.iter() {
+                    if Rc::ptr_eq(tag, &r) {
+                        out.insert(super::util::name_formatter::to_colon(class_name));
+                    }
+                }
+            }
+            self.referenced_symbol_classes(Some(r), out, visited);
         }
     }
 }
@@ -160,6 +206,7 @@ impl Swc {
                 scripts: RefCell::new(Vec::new()),
                 metadata: RefCell::new(JHashSet::new()),
                 parsed: Cell::new(false),
+                def2symbol: RefCell::new(None),
             });
             for child in lib.children().filter(|n| n.is_element()) {
                 if child.has_tag_name("script") {
@@ -186,6 +233,7 @@ impl Swc {
                         deps,
                         modtime,
                         abc: RefCell::new(None),
+                        symbol_classes: RefCell::new(None),
                     });
                     library.scripts.borrow_mut().push(script);
                 } else if child.has_tag_name("keep-as3-metadata") {
@@ -212,10 +260,11 @@ impl Swc {
             scripts: RefCell::new(Vec::new()),
             metadata: RefCell::new(JHashSet::new()),
             parsed: Cell::new(true),
+            def2symbol: RefCell::new(None),
         });
         for (name, mut defs, deps, abc) in scripts {
             defs.sort_by(|a, b| java_compare(a, b));
-            let script = Rc::new(SwcScript { library: Rc::downgrade(&library), name, defs, deps, modtime: 0, abc: RefCell::new(Some(Rc::new(abc))) });
+            let script = Rc::new(SwcScript { library: Rc::downgrade(&library), name, defs, deps, modtime: 0, abc: RefCell::new(Some(Rc::new(abc))), symbol_classes: RefCell::new(None) });
             library.scripts.borrow_mut().push(script);
         }
         Rc::new(Swc { location: location.to_string(), last_modified: 0, libraries: vec![library] })

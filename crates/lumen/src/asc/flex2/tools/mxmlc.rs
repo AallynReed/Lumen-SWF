@@ -26,16 +26,29 @@ pub fn source_path_mime_types() -> [&'static str; 3] {
     [mime_mappings::AS, mime_mappings::MXML, mime_mappings::FXG]
 }
 
+/// `WebTierAPI.getCompilers`, with the ported extensions.
 pub fn compilers(config: &Rc<Configuration>) -> Vec<Box<dyn SubCompiler>> {
-    vec![Box::new(As3Compiler::new(config.clone())), Box::new(AbcCompiler), css_compiler(config)]
+    let transcoders: crate::asc::flex2::compiler::transcoder::Transcoders = Rc::new(std::cell::RefCell::new(crate::asc::flex2::compiler::media::get_transcoders(config)));
+    let mut asc = As3Compiler::new(config.clone());
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders, config.generated_directory.clone(), config.show_deprecation_warnings)));
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::style_evaluator::StyleExtension));
+    vec![Box::new(asc), Box::new(AbcCompiler), css_compiler(config)]
 }
 
-/// `new CssCompiler(compilerConfig, transcoders, mappings)`: its own `As3Compiler`.
+/// `new CssCompiler(compilerConfig, transcoders, mappings)`: its own `As3Compiler` with an `EmbedExtension`.
 fn css_compiler(config: &Rc<Configuration>) -> Box<dyn SubCompiler> {
-    let asc = As3Compiler::new(config.clone());
+    let transcoders: crate::asc::flex2::compiler::transcoder::Transcoders = Rc::new(std::cell::RefCell::new(crate::asc::flex2::compiler::media::get_transcoders(config)));
+    let mut asc = As3Compiler::new(config.clone());
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders, config.generated_directory.clone(), config.show_deprecation_warnings)));
     let css_config = Rc::new(config.css.compiler_configuration(config.debug, config.generated_directory.clone()));
     let mappings = Rc::new(crate::asc::flex2::compiler::util::name_mappings::get_name_mappings(&config.css.namespaces));
     Box::new(crate::asc::flex2::compiler::css::css_compiler::CssCompiler::new(css_config, Box::new(asc), Some(mappings)))
+}
+
+/// The per-run `ThreadLocalToolkit` state transcoding uses, as a new mxmlc process starts with it.
+fn reset_transcoding(configuration: &Configuration) {
+    crate::asc::flex2::compiler::transcoder::reset();
+    crate::asc::flex2::compiler::transcoder::set_source_path_dirs(configuration.source_path.iter().filter(|p| p.is_dir()).map(|p| canonical_path(p)).collect());
 }
 
 /// `CompilerAPI.compile` with `PreLink`, then `LinkerAPI.link` (with `PostLink` when optimizing a release build).
@@ -59,6 +72,7 @@ pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<c
     if toolkit::error_count() > 0 {
         return fail;
     }
+    reset_transcoding(&configuration);
     let config_rc = Rc::new(configuration.clone());
     let mut api = CompilerApi {
         sources: Vec::new(),
@@ -99,6 +113,7 @@ pub fn compile_unit(mut configuration: Configuration, root: crate::asc::flex2::c
             names.extend(script.get_definitions().first().map(|d| Name::M(MultiName::parse(d))));
         }
     }
+    reset_transcoding(&configuration);
     let config_rc = Rc::new(configuration.clone());
     let compilers = compilers(&config_rc).into_iter().map(|c| Box::new(Depending { inner: c, root: root.clone(), names: names.clone() }) as Box<dyn SubCompiler>).collect();
     let mut api = CompilerApi {

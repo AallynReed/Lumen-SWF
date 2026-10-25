@@ -296,11 +296,14 @@ impl CompilerApi {
                 } else if w & PARSE1 == 0 {
                     self.parse1(i);
                     self.resolve_inheritance(i);
+                    self.add_generated_sources(i, i + 1);
                 } else if w & PARSE2 == 0 {
                     self.parse2(i);
+                    self.add_generated_sources(i, i + 1);
                 } else if w & ANALYZE1 == 0 {
                     self.analyze(i, 1);
                     self.resolve_dependencies(i, Deps::Namespaces, false);
+                    self.add_generated_sources(i, i + 1);
                 } else if w & ANALYZE2 == 0 {
                     self.analyze(i, 2);
                     self.resolve_type(i);
@@ -314,6 +317,7 @@ impl CompilerApi {
                     self.analyze(i, 4);
                 } else if w & GENERATE == 0 {
                     self.generate(i);
+                    self.add_generated_sources(i, i + 1);
                     self.resolve_expression(i);
                     self.mark_done(i);
                 }
@@ -564,6 +568,7 @@ impl CompilerApi {
             return;
         }
         let local = LocalLogger::new();
+        local.set_source(&s);
         s.borrow_mut().set_logger(Some(local.clone()));
         match self.get_compiler(&s) {
             Some(_) => {
@@ -803,6 +808,30 @@ impl CompilerApi {
         }
         for q in q_names.iter() {
             set.insert(Name::Q(q.clone()));
+        }
+    }
+
+    /// `addGeneratedSources(sources, igraph, ..., start, end)`: the sources a unit generated (embed classes, ...)
+    /// join the batch, owned by the `ResourceContainer`, and become expression dependencies of the unit.
+    fn add_generated_sources(&mut self, start: usize, end: usize) {
+        for i in start..end {
+            let Some(u) = unit_of(&self.sources[i]) else { continue };
+            let generated: Option<Vec<(QName, SourceRef)>> = u.borrow().get_generated_sources().map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
+            let Some(generated) = generated else { continue };
+            for (q_name, g_source) in generated {
+                let m_name = MultiName::new(q_name.get_namespace(), q_name.get_local_part());
+                let g_name = g_source.borrow().get_name().to_string();
+                if !self.igraph.contains_vertex(&g_name) {
+                    g_source.borrow_mut().set_owner(super::source::Owner::ResourceContainer);
+                    let gu = unit_of(&g_source);
+                    self.add_vertex_to_graphs(&g_source, gu);
+                    self.sources.push(g_source.clone());
+                    self.symbol_table.register_multi_name(&m_name, &q_name);
+                    self.symbol_table.register_qname(&q_name, &g_source);
+                }
+                u.borrow_mut().expressions.insert(Name::M(m_name));
+            }
+            u.borrow_mut().clear_generated_sources();
         }
     }
 

@@ -147,6 +147,12 @@ fn create_source(script: &Rc<SwcScript>) -> SourceRef {
         for d in script.get_symbol_classes() {
             u.expressions.insert(Name::M(MultiName::parse(&d)));
         }
+        let lib = script.get_library();
+        for d in script.get_definitions() {
+            if let Some(tag) = lib.get_symbol(d) {
+                u.assets.add(d, super::assets::AssetInfo::from_tag(tag));
+            }
+        }
     }
     s
 }
