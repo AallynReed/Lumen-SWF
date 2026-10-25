@@ -116,7 +116,7 @@ npx tauri build --bundles msi
 
 The MSI ends up in `target/release/bundle/msi/`. For development, run `npx tauri dev`.
 
-The corpus tests read the test corpus from `corpus/`, the repository the CI workflow checks out (see `.github/workflows/build.yml`), and skip when it is missing:
+Tests run locally before each push; CI only builds. The corpus tests read the test corpus from `corpus/` and skip when it is missing:
 
 ```
 cargo test -p lumen --release

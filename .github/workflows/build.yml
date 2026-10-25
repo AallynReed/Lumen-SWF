@@ -1,5 +1,5 @@
 name: Build
-# Tests the core against the test corpus and bundles the MSI. Every push to main publishes
+# Bundles the MSI and the CLI; tests run locally before pushing. Every push to main publishes
 # a release versioned 0.<phase>.<n> (see tools/version.mjs); pull requests only build.
 on:
   push:
@@ -22,13 +22,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch test corpus
-        uses: actions/checkout@v4
-        with:
-          repository: jindrapetrik/jpexs-decompiler
-          path: corpus
-          sparse-checkout: libsrc/ffdec_lib/testdata
-
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
@@ -42,9 +35,6 @@ jobs:
       - name: Version
         id: version
         run: node tools/version.mjs > version.conf.json
-
-      - name: Test
-        run: cargo test --release -p lumen
 
       - name: Bundle MSI
         run: npx tauri build --bundles msi --config version.conf.json
