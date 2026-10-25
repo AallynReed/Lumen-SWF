@@ -5,6 +5,7 @@ pub mod compiler;
 pub mod linker;
 pub mod swf;
 pub mod tools;
+pub mod velocity;
 
 use std::path::PathBuf;
 
