@@ -400,7 +400,9 @@ pub fn to_graph_target_items(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, c
     ldn.local_reg_names = names.clone();
     let param_names: Vec<String> = (0..r).map(|ir| ldn.reg_name(ir as i32)).collect();
     let killed = code.ins.iter().filter(|i| i.code == op::KILL).map(|i| i.op(0) as i32).collect();
-    let mut st = DeclState { killed, declared_slots: Vec::new(), declared_slots_dec: Vec::new(), declared_props: Vec::new(), declared_props_dec: Vec::new() };
+    let real: Vec<usize> = (0..code.ins.len()).filter(|&i| !matches!(code.ins[i].code, op::DEBUG | op::DEBUGLINE | op::DEBUGFILE)).collect();
+    let peephole = real.windows(2).filter(|w| code.ins[w[0]].code == op::DUP && code.ins[w[1]].code == op::SETLOCAL && code.ins[w[1]].op(0) > 3).map(|w| w[1]).collect();
+    let mut st = DeclState { killed, peephole, declared_slots: Vec::new(), declared_slots_dec: Vec::new(), declared_props: Vec::new(), declared_props_dec: Vec::new() };
     inject_declarations(ctx, req.method, 0, &param_names, &list, 1, &mut d, &mut st);
     unite_locals_declaration_types(&d, &list);
     fold_needs_init(&list, &needs_init_stores(ctx, req.method, code));
@@ -903,6 +905,8 @@ fn package_script_slots(ctx: &Ctx, list: &List, init: &[Trait]) {
 struct DeclState {
     /// Registers the code `kill`s: the temporaries mxmlc's code generator allocates.
     killed: HashSet<i32>,
+    /// `setlocal N` instructions, N > 3, right after a `dup`: mxmlc's peephole form of `setlocal N; getlocal N`.
+    peephole: HashSet<usize>,
     declared_slots: Vec<usize>,
     declared_slots_dec: Vec<It>,
     declared_props: Vec<String>,
@@ -996,6 +1000,10 @@ fn handle_declare_reg(minreg: usize, assignment: &It, d: &mut [Option<It>], reg:
             assignment.clone()
         }
     }
+}
+
+fn is_compound_set(it: &It) -> bool {
+    matches!(&it.borrow().k, K::SetLocal { set, .. } if set.compound_op.is_some())
 }
 
 /// Whether `sub`'s value is first stored in a temporary register the code later kills, as mxmlc's code generator
@@ -1112,7 +1120,7 @@ fn inject_declarations(ctx: &Ctx, method: usize, level: usize, param_names: &[St
         for sub in on_line {
             if let Some(reg) = super::avm2graph::set_local_reg(&sub) {
                 let dec = handle_declare_reg(minreg, &sub, d, reg as usize);
-                if same(&dec, &sub) && !same(&sub, &current) && super::avm2graph::set_local_reg(&current) != Some(reg) && stored_through_temporary(&sub, &st.killed) && split_chain(&current, &sub, reg) {
+                if same(&dec, &sub) && !same(&sub, &current) && super::avm2graph::set_local_reg(&current) != Some(reg) && (stored_through_temporary(&sub, &st.killed) || (is_compound_set(&sub) && sub.borrow().src.is_some_and(|ip| st.peephole.contains(&ip)))) && split_chain(&current, &sub, reg) {
                     // `a = r = v` with `r` already declared: `r = v; a = r;` is what mxmlc compiles to the same code.
                     items.borrow_mut().insert(i, sub.clone());
                     i += 1;
