@@ -127,3 +127,14 @@ fn replaces_a_class_of_a_flex_build() {
         assert_eq!(entry_source(&new_index, &after, &n, &ctx), entry_source(&old_index, &before, e, &ctx), "{}", e.full_name());
     }
 }
+
+/// A decompile prints `[Embed(source=..., symbol=...)]` above a class the SWF binds to a symbol; replacing that class
+/// keeps the binding instead of transcoding a file that does not exist.
+#[test]
+fn symbol_embed_on_a_replaced_class_is_kept() {
+    let root = std::env::temp_dir().join(format!("lumen_keep_embed_{}", std::process::id()));
+    let source = "package { import flash.display.MovieClip; [Embed(source=\"/_assets/assets.swf\", symbol=\"symbol16\")] public dynamic class crosshair extends MovieClip { public function crosshair() { super(); } } }".to_string();
+    let opts = |keep: Vec<String>| lumen::asc::flex2::UnitOptions { source: source.clone(), path: root.join("crosshair.as"), root: root.clone(), keep_embedded: keep, app: lumen::asc::flex2::ApplicationOptions { playerglobal: true, ..Default::default() }, ..Default::default() };
+    assert!(lumen::asc::flex2::compile_unit(&opts(Vec::new())).is_err());
+    assert!(lumen::asc::flex2::compile_unit(&opts(vec!["crosshair".into()])).is_ok());
+}

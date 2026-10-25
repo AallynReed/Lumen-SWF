@@ -61,6 +61,18 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
     }
     file.push(format!("{name}.as"));
     shown.push(format!("{name}.as"));
+    // The pack's classes are already bound to their symbols in this SWF, so a decompile's [Embed] on them is kept as it is.
+    let keep_embedded: Vec<String> = pack
+        .iter()
+        .filter_map(|&t| match (&s.traits[t].data, &abc.constants.multinames[s.traits[t].name]) {
+            (TraitData::Class { .. }, Multiname::QName { ns, name, .. }) => {
+                let (p, n) = (abc.str(abc.constants.namespaces[*ns].name).to_string(), abc.str(*name).to_string());
+                let (p, n) = (names.to_placeholder(&p).unwrap_or(p), names.to_placeholder(&n).unwrap_or(n));
+                Some(if p.is_empty() { n } else { format!("{p}.{n}") })
+            }
+            _ => None,
+        })
+        .collect();
     let plan = Plan::new(abc, script, &pack, simple)?;
     let opts = UnitOptions {
         source,
@@ -68,6 +80,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         root,
         abcs: context(abcs, selected, plan.script_blocks(), &names),
         same_build: true,
+        keep_embedded,
         app: ApplicationOptions { playerglobal: true, omit_trace_statements: !keeps_traces(abc), ..Default::default() },
         ..Default::default()
     };

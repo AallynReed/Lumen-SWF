@@ -179,6 +179,8 @@ pub struct UnitOptions {
     /// references to it then act as a referencing source's would, which inherits the unit's slots, and the unit is
     /// generated only after them, as it was after the sources that pulled it in.
     pub same_build: bool,
+    /// Classes (`pkg.Name`) whose class-level `[Embed]` keeps the symbol the target SWF already binds them to.
+    pub keep_embedded: Vec<String>,
     pub source_path: Vec<PathBuf>,
     pub library_path: Vec<PathBuf>,
     pub external_library_path: Vec<PathBuf>,
@@ -226,7 +228,9 @@ pub fn compile_unit(opts: &UnitOptions) -> Result<CompiledUnit, Vec<Diagnostic>>
         if opts.app.playerglobal {
             libraries.insert(0, (compiler::abc_library::playerglobal(), true));
         }
+        compiler::as3::embed_evaluator::KEEP_EMBEDDED.with(|k| *k.borrow_mut() = opts.keep_embedded.iter().cloned().collect());
         let compiled = tools::mxmlc::compile_unit(configuration.clone(), root.clone(), libraries, &depends_on);
+        compiler::as3::embed_evaluator::KEEP_EMBEDDED.with(|k| k.borrow_mut().clear());
         let diagnostics = compiler::toolkit::take_diagnostics();
         if diagnostics.iter().any(|d| d.level == Level::Error) {
             return Err(diagnostics);

@@ -17,6 +17,11 @@ use crate::asc::parser::node::{GetExpressionNode, IdentifierNode, Kind, LiteralS
 use crate::asc::util::context::ContextRef;
 use crate::asc::util::jhash::JHashMap;
 
+thread_local! {
+    /// Classes whose class-level `[Embed]` is left as the target SWF already binds it, instead of being transcoded.
+    pub static KEEP_EMBEDDED: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+}
+
 /// `EmbedData`: the variable-level embeds of one class.
 struct EmbedData {
     reference_class_name: String,
@@ -202,6 +207,9 @@ impl<'a> EmbedEvaluator<'a> {
                     let name = c.name.as_ref().and_then(|n| n.borrow().identifier().map(|i| i.name.clone())).unwrap_or_default();
                     if pkg.is_empty() { name } else { format!("{pkg}.{name}") }
                 };
+                if KEEP_EMBEDDED.with(|k| k.borrow().contains(&cls)) {
+                    return;
+                }
                 let mut values = self.get_meta_data_values(node, cx);
                 put_file(&mut values);
                 let asset = embed_util::transcode(&self.transcoders, &self.unit, Some(self.symbol_table), &cls, &mut values, line, col, false);
