@@ -2609,7 +2609,12 @@ impl Parser {
             result
         }));
 
-        outcome.unwrap_or(None)
+        match outcome {
+            Ok(r) => r,
+            // an Error such as StackOverflowError is not an Exception, so Java's catch lets it through
+            Err(e) if e.downcast_ref::<&str>() == Some(&"StackOverflowError") => panic::resume_unwind(e),
+            Err(_) => None,
+        }
     }
 
     fn parse_annotated_directive_or_statement(&mut self, mode: i32) -> Option<NodeRef> {
