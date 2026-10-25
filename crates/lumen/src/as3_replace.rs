@@ -68,7 +68,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         root,
         abcs: context(abcs, selected, plan.script_blocks(), &names),
         same_build: true,
-        app: ApplicationOptions { playerglobal: true, omit_trace_statements: false, ..Default::default() },
+        app: ApplicationOptions { playerglobal: true, omit_trace_statements: !keeps_traces(abc), ..Default::default() },
         ..Default::default()
     };
     let unit = compile_unit(&opts).map_err(|d| report(&d, &canonical_path(&file), &names.to_written(&shown.to_string_lossy()), &names))?;
@@ -85,6 +85,16 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
     }
     let unit = optimize(bytes, &metadata_names(abc))?;
     plan.link(script, &unit)
+}
+
+/// Whether the ABC was built with trace calls kept: a `-debug` build, or code that still names `trace`.
+fn keeps_traces(abc: &Abc) -> bool {
+    let named_trace = abc.constants.multinames.iter().any(|m| match m {
+        Multiname::QName { name, .. } | Multiname::Multiname { name, .. } => abc.constants.strings.get(*name).is_some_and(|s| s == "trace"),
+        _ => false,
+    });
+    let dialect = Dialect::of(abc.major, abc.minor);
+    named_trace || abc.bodies.iter().any(|b| decode(&b.code, dialect).is_ok_and(|code| code.iter().any(|i| i.code == 0xf0)))
 }
 
 /// `PostLink`'s merge of the unit on its own: debug information and unkept metadata dropped, peephole optimizer on.

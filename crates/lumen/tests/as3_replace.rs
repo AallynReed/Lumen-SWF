@@ -44,11 +44,17 @@ fn replace(swf: &mut Swf, path: &[usize], class: &str, text: &str) -> Result<(),
 const MAIN: &str = "package { import flash.display.Sprite; import a.Helper; public class Main extends Sprite { public function Main() { var h:Helper = new Helper(); h.n = Helper.twice(h.n); trace(h.label()); } } }";
 const HELPER: &str = "package a { public class Helper { public static const NAME:String = \"helper\"; public var n:int = 2; public function Helper() {} public static function twice(x:int):int { return x * 2; } public function label():String { return NAME + n; } } }\nclass Hidden { }";
 
-/// An application built by the mxmlc port with its bundled playerglobal: replacing either class with its own source
-/// gives the ABC back unchanged but for file-internal namespace numbers.
+/// An application built by the mxmlc port with its bundled playerglobal, as a default release build (traces
+/// stripped) and with traces kept: replacing either class with its own source gives the ABC back unchanged but for
+/// file-internal namespace numbers.
 #[test]
 fn own_source_gives_the_same_abc() {
-    let dir = std::env::temp_dir().join(format!("lumen_as3_replace_{}", std::process::id())).join("src");
+    own_source_round_trip(true);
+    own_source_round_trip(false);
+}
+
+fn own_source_round_trip(omit_trace_statements: bool) {
+    let dir = std::env::temp_dir().join(format!("lumen_as3_replace_{}_{omit_trace_statements}", std::process::id())).join("src");
     std::fs::create_dir_all(dir.join("a")).unwrap();
     std::fs::write(dir.join("Main.as"), MAIN).unwrap();
     std::fs::write(dir.join("a/Helper.as"), HELPER).unwrap();
@@ -56,7 +62,7 @@ fn own_source_gives_the_same_abc() {
         main: dir.join("Main.as"),
         source_path: vec![dir.clone()],
         playerglobal: true,
-        omit_trace_statements: false,
+        omit_trace_statements,
         compile_date: Some(0),
         ..Default::default()
     };
@@ -67,7 +73,7 @@ fn own_source_gives_the_same_abc() {
     for (class, text) in [("a.Helper", HELPER), ("Main", MAIN)] {
         let mut edited = Swf::parse(&app.swf).unwrap();
         replace(&mut edited, &path, class, text).unwrap_or_else(|e| panic!("{class}: line {}: {}", e.line, e.message));
-        assert_eq!(without_file_numbers(tag_abc(edited.tag(&path).unwrap()).unwrap().0), before, "{class}");
+        assert_eq!(without_file_numbers(tag_abc(edited.tag(&path).unwrap()).unwrap().0), before, "{class}, omit traces {omit_trace_statements}");
     }
 }
 
