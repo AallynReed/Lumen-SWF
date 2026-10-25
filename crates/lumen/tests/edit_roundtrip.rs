@@ -1,29 +1,8 @@
-use std::path::{Path, PathBuf};
+mod common;
+
+use std::path::Path;
 
 use lumen::action::{self, scripts};
-
-fn corpus() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
-    let mut out = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("swf")) {
-                out.push(p);
-            }
-        }
-    }
-    out.sort();
-    out
-}
-
-fn swfs() -> impl Iterator<Item = (PathBuf, lumen::Swf)> {
-    corpus().into_iter().filter_map(|f| lumen::Swf::parse(&std::fs::read(&f).ok()?).ok().map(|s| (f, s)))
-}
 
 fn report(name: &str, total: usize, bad: &[String]) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
@@ -35,8 +14,8 @@ fn report(name: &str, total: usize, bad: &[String]) {
 /// Every ABC must re-serialize byte for byte.
 #[test]
 fn abc_write_is_identity() {
-    let (mut total, mut bad) = (0, Vec::new());
-    for (f, swf) in swfs() {
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         swf.walk(|path, t| {
             let Some((data, _)) = lumen::abc::tag_abc(t) else { return };
             let Ok(abc) = lumen::abc::Abc::parse(data) else { return };
@@ -47,7 +26,12 @@ fn abc_write_is_identity() {
                 bad.push(format!("{} {path:?}: differs at {at} of {} (wrote {})", f.display(), data.len(), out.len()));
             }
         });
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("abc_write", total, &bad);
     assert!(bad.is_empty(), "{} ABCs differ", bad.len());
 }
@@ -55,8 +39,8 @@ fn abc_write_is_identity() {
 /// Writing an action list and reading it back must give the same p-code.
 #[test]
 fn action_write_round_trips() {
-    let (mut total, mut bad) = (0, Vec::new());
-    for (f, swf) in swfs() {
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         for (name, src) in scripts::export_paths(&scripts::tree(&swf)) {
             let list = src.actions(&swf);
             let before = action::pcode::to_pcode(&list);
@@ -67,7 +51,12 @@ fn action_write_round_trips() {
                 bad.push(format!("{} {name}", f.display()));
             }
         }
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("action_write", total, &bad);
     assert!(bad.is_empty(), "{} action lists differ", bad.len());
 }
@@ -75,8 +64,8 @@ fn action_write_round_trips() {
 /// Assembling printed p-code must give back the same p-code.
 #[test]
 fn pcode_assembles_to_itself() {
-    let (mut total, mut bad) = (0, Vec::new());
-    for (f, swf) in swfs() {
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         for (name, src) in scripts::export_paths(&scripts::tree(&swf)) {
             let before = action::pcode::to_pcode(&src.actions(&swf));
             total += 1;
@@ -92,7 +81,12 @@ fn pcode_assembles_to_itself() {
                 Err(e) => bad.push(format!("{} {name}: {e}", f.display())),
             }
         }
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("pcode_asm", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
 }
@@ -103,8 +97,8 @@ fn pcode_assembles_to_itself() {
 fn as3_pcode_assembles_to_itself() {
     use lumen::abc::asm::{assemble_method, TraitLoc};
     use lumen::abc::pcode::{method_pcode, trait_pcode};
-    let (mut total, mut bad) = (0, Vec::new());
-    for (f, swf) in swfs() {
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         swf.walk(|path, t| {
             let Some((data, _)) = lumen::abc::tag_abc(t) else { return };
             let Ok(orig) = lumen::abc::Abc::parse(data) else { return };
@@ -155,7 +149,12 @@ fn as3_pcode_assembles_to_itself() {
                 }
             }
         });
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("as3_asm", total, &bad);
     assert!(bad.is_empty(), "{} methods differ", bad.len());
 }
@@ -164,9 +163,9 @@ fn as3_pcode_assembles_to_itself() {
 /// record of the file readable as what was stored.
 #[test]
 fn as2_scripts_store_in_place() {
-    let (mut total, mut bad) = (0, Vec::new());
     let v = |swf: &lumen::Swf| swf.header.version;
-    for (f, mut swf) in swfs() {
+    let per = common::par_swfs(|f, mut swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         let sources = |swf: &lumen::Swf| scripts::export_paths(&scripts::tree(swf));
         let count = sources(&swf).len();
         let mut expected = Vec::new();
@@ -184,14 +183,19 @@ Pop
         total += count;
         if after.len() != count {
             bad.push(format!("{}: {count} scripts became {}", f.display(), after.len()));
-            continue;
+            return (total, bad);
         }
         for ((n, s), e) in after.iter().zip(&expected) {
             if action::pcode::to_pcode(&s.actions(&saved)) != *e {
                 bad.push(format!("{} {n}: differs", f.display()));
             }
         }
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("as2_store", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
 }
@@ -202,17 +206,17 @@ Pop
 fn as2_sources_compile_in_place() {
     use lumen::action::compile::{compile, swf_classes, Target};
     use lumen::action::scripts::Kind;
-    let (mut total, mut bad) = (0, Vec::new());
     let target = |k: Kind| match k {
         Kind::ButtonCond => Target::ButtonCond,
         Kind::ClipAction => Target::ClipAction,
         _ => Target::Actions,
     };
-    for (f, mut swf) in swfs() {
+    let per = common::par_swfs(|f, mut swf| {
+        let (mut total, mut bad) = (0, Vec::new());
         let sources = |swf: &lumen::Swf| scripts::export_paths(&scripts::tree(swf));
         let count = sources(&swf).len();
         if count == 0 {
-            continue;
+            return (total, bad);
         }
         let classes = swf_classes(&swf);
         let mut first = Vec::new();
@@ -235,7 +239,7 @@ fn as2_sources_compile_in_place() {
         let after = sources(&saved);
         if after.len() != count {
             bad.push(format!("{}: {count} scripts became {}", f.display(), after.len()));
-            continue;
+            return (total, bad);
         }
         for ((name, header, bytes), (_, src)) in first.iter().zip(&after) {
             if bytes.is_empty() {
@@ -251,7 +255,12 @@ fn as2_sources_compile_in_place() {
                 bad.push(format!("{} {name}: reads back differently", f.display()));
             }
         }
-    }
+        (total, bad)
+    });
+    let (total, bad) = per.into_iter().fold((0, Vec::new()), |(t, mut b), (t2, b2)| {
+        b.extend(b2);
+        (t + t2, b)
+    });
     report("as2_source_store", total, &bad);
     assert!(bad.is_empty(), "{} scripts differ", bad.len());
 }
@@ -260,8 +269,11 @@ fn as2_sources_compile_in_place() {
 /// them changes nothing. as3_assembled.swf is hand-assembled with placeholder limits.
 #[test]
 fn shipped_bodies_already_fit() {
-    let (mut total, mut skipped, mut bad) = (0, 0, Vec::new());
-    for (f, swf) in swfs().filter(|(f, _)| !f.ends_with("as3_assembled.swf")) {
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut skipped, mut bad) = (0, 0, Vec::new());
+        if f.ends_with("as3_assembled.swf") {
+            return (total, skipped, bad);
+        }
         swf.walk(|path, t| {
             let Some((data, _)) = lumen::abc::tag_abc(t) else { return };
             let Ok(abc) = lumen::abc::Abc::parse(data) else { return };
@@ -281,6 +293,13 @@ fn shipped_bodies_already_fit() {
                 }
             }
         });
+        (total, skipped, bad)
+    });
+    let (mut total, mut skipped, mut bad) = (0, 0, Vec::new());
+    for (t, k, b) in per {
+        total += t;
+        skipped += k;
+        bad.extend(b);
     }
     eprintln!("skipped {skipped}");
     report("body_fit", total, &bad);

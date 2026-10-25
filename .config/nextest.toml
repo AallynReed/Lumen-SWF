@@ -1,0 +1,6 @@
+[test-groups]
+corpus = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary(abc) | binary(export) | binary(roundtrip) | binary(edit_roundtrip) | test(fonts_write_back) | test(shapes_write_back)'
+test-group = 'corpus'

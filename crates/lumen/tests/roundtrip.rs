@@ -1,41 +1,22 @@
-use std::path::{Path, PathBuf};
-
-fn corpus() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata");
-    let mut out = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("swf")) {
-                out.push(p);
-            }
-        }
-    }
-    out.sort();
-    out
-}
+mod common;
 
 /// Unmodified files must decompress and re-save byte for byte.
 #[test]
 fn corpus_roundtrip() {
-    let files = corpus();
+    let files = common::swf_files();
     if files.is_empty() {
         eprintln!("test corpus not found; skipping");
         return;
     }
-    let mut failures = Vec::new();
-    for f in &files {
+    let failures: Vec<String> = common::par_map(&files, |f| {
+        let mut failures = Vec::new();
         let data = std::fs::read(f).unwrap();
         let swf = match lumen::Swf::parse(&data) {
             Ok(s) => s,
-            Err(lumen::Error::BadSignature(_)) => continue,
+            Err(lumen::Error::BadSignature(_)) => return failures,
             Err(e) => {
                 failures.push(format!("{}: parse: {e}", f.display()));
-                continue;
+                return failures;
             }
         };
         lumen::tree::resource_tree(&swf);
@@ -50,7 +31,7 @@ fn corpus_roundtrip() {
         expected.extend_from_slice(&reference.trailer);
         if saved != expected {
             failures.push(format!("{}: body differs", f.display()));
-            continue;
+            return failures;
         }
         if swf.header.compression == lumen::Compression::None && !swf.header.encrypted && saved != data {
             failures.push(format!("{}: file differs", f.display()));
@@ -62,7 +43,9 @@ fn corpus_roundtrip() {
                 failures.push(format!("{}: {c:?} recompression differs", f.display()));
             }
         }
-    }
+        failures
+    })
+    .concat();
     eprintln!("{} files checked", files.len());
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }

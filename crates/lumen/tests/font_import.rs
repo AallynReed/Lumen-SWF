@@ -1,33 +1,17 @@
-use std::path::{Path, PathBuf};
+mod common;
+
+use std::path::Path;
 
 use lumen::font_edit::Font2;
 use lumen::shape::Record;
 use lumen::tags::code::{DEFINE_FONT2, DEFINE_FONT3};
 
-fn corpus() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut stack = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/libsrc/ffdec_lib/testdata")];
-    while let Some(dir) = stack.pop() {
-        for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("swf")) {
-                out.push(p);
-            }
-        }
-    }
-    out.sort();
-    out
-}
-
 /// Corpus fonts written back read the same; glyph shapes written with minimal field sizes are
 /// not always the original bytes.
 #[test]
 fn fonts_write_back() {
-    let (mut total, mut same, mut bad) = (0, 0, Vec::new());
-    for f in corpus() {
-        let Ok(swf) = lumen::Swf::parse(&std::fs::read(&f).unwrap()) else { continue };
+    let per = common::par_swfs(|f, swf| {
+        let (mut total, mut same, mut bad) = (0, 0, Vec::new());
         swf.walk(|path, t| {
             if t.code != DEFINE_FONT2 && t.code != DEFINE_FONT3 {
                 return;
@@ -40,6 +24,13 @@ fn fonts_write_back() {
                 Err(e) => bad.push(format!("{} {path:?}: {e}", f.display())),
             }
         });
+        (total, same, bad)
+    });
+    let (mut total, mut same, mut bad) = (0, 0, Vec::new());
+    for (t, k, b) in per {
+        total += t;
+        same += k;
+        bad.extend(b);
     }
     eprintln!("fonts: {}/{total} read back the same, {same} byte-identical", total - bad.len());
     assert!(bad.is_empty(), "{bad:#?}");
