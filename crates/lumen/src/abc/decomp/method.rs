@@ -399,7 +399,8 @@ pub fn to_graph_target_items(ctx: &Ctx, req: &MethodReq, cd: &mut ConvertData, c
     let mut ldn = LocalData::new(ctx);
     ldn.local_reg_names = names.clone();
     let param_names: Vec<String> = (0..r).map(|ir| ldn.reg_name(ir as i32)).collect();
-    let mut st = DeclState { declared_slots: Vec::new(), declared_slots_dec: Vec::new(), declared_props: Vec::new(), declared_props_dec: Vec::new() };
+    let killed = code.ins.iter().filter(|i| i.code == op::KILL).map(|i| i.op(0) as i32).collect();
+    let mut st = DeclState { killed, declared_slots: Vec::new(), declared_slots_dec: Vec::new(), declared_props: Vec::new(), declared_props_dec: Vec::new() };
     inject_declarations(ctx, req.method, 0, &param_names, &list, 1, &mut d, &mut st);
     unite_locals_declaration_types(&d, &list);
     fold_needs_init(&list, &needs_init_stores(ctx, req.method, code));
@@ -425,7 +426,7 @@ fn default_value_type(ctx: &Ctx, s: &[(usize, &super::code::Ins)]) -> Option<(It
 
 /// The stores ASC's code generator puts at method entry for the locals its flow analysis marks `needs_init`, by
 /// instruction index, with the type whose default each one stores.
-fn needs_init_stores(ctx: &Ctx, method: usize, code: &Code) -> HashMap<usize, It> {
+pub(super) fn needs_init_stores(ctx: &Ctx, method: usize, code: &Code) -> HashMap<usize, It> {
     let abc = ctx.abc;
     let mut out = HashMap::new();
     let (Some(body), mi) = (abc.body(method), &abc.methods[method]) else { return out };
@@ -900,6 +901,8 @@ fn package_script_slots(ctx: &Ctx, list: &List, init: &[Trait]) {
 }
 
 struct DeclState {
+    /// Registers the code `kill`s: the temporaries mxmlc's code generator allocates.
+    killed: HashSet<i32>,
     declared_slots: Vec<usize>,
     declared_slots_dec: Vec<It>,
     declared_props: Vec<String>,
@@ -993,6 +996,22 @@ fn handle_declare_reg(minreg: usize, assignment: &It, d: &mut [Option<It>], reg:
             assignment.clone()
         }
     }
+}
+
+/// Whether `sub`'s value is first stored in a temporary register the code later kills, as mxmlc's code generator
+/// does for `r op= v;` followed by a read of `r`.
+fn stored_through_temporary(sub: &It, killed: &HashSet<i32>) -> bool {
+    let mut v = sub.borrow().value.clone();
+    while let Some(x) = v {
+        if let K::SetLocal { reg, .. } = &x.borrow().k {
+            return killed.contains(reg);
+        }
+        if !matches!(x.borrow().k, K::Coerce { .. } | K::Convert { .. }) {
+            return false;
+        }
+        v = x.borrow().value.clone();
+    }
+    false
 }
 
 /// Turns `a = r = v`, where `r` is first set here, into a read of `r` so that `var r = v;` can come first: mxmlc's
@@ -1093,7 +1112,11 @@ fn inject_declarations(ctx: &Ctx, method: usize, level: usize, param_names: &[St
         for sub in on_line {
             if let Some(reg) = super::avm2graph::set_local_reg(&sub) {
                 let dec = handle_declare_reg(minreg, &sub, d, reg as usize);
-                if !same(&dec, &sub) {
+                if same(&dec, &sub) && !same(&sub, &current) && super::avm2graph::set_local_reg(&current) != Some(reg) && stored_through_temporary(&sub, &st.killed) && split_chain(&current, &sub, reg) {
+                    // `a = r = v` with `r` already declared: `r = v; a = r;` is what mxmlc compiles to the same code.
+                    items.borrow_mut().insert(i, sub.clone());
+                    i += 1;
+                } else if !same(&dec, &sub) {
                     if same(&sub, &current) {
                         items.borrow_mut()[i] = dec;
                     } else {

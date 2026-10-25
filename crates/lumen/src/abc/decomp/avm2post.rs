@@ -422,7 +422,9 @@ impl<'t, 'c, 'a> G<'t, 'c, 'a> {
                     }
                 }
                 let n = list.borrow().len();
-                let returns_reg = |y: &It| matches!(y.borrow().k, K::ReturnValue | K::Throw) && local_reg(&value(y)) == Some(reg);
+                // A local ASC declared (its needs_init default stored at entry) keeps its store, as mxmlc compiles it.
+                let declared = self.act.is_none() && super::method::needs_init_stores(self.tr.ctx, self.tr.method, &self.tr.code).keys().any(|&ip| self.tr.code.ins[ip].set_local_reg() == Some(reg));
+                let returns_reg = |y: &It| !declared && matches!(y.borrow().k, K::ReturnValue | K::Throw) && local_reg(&value(y)) == Some(reg);
                 if i + 1 < n {
                     let y = list.borrow()[i + 1].clone();
                     if returns_reg(&y) {
