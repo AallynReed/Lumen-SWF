@@ -466,12 +466,14 @@ fn place_object(code: u16, r: &mut Reader, out: &mut Out) -> Result<()> {
         out.f("Character ID", r.u16()?);
     }
     if f1 & 0x04 != 0 {
-        skip_matrix(r)?;
-        out.f("Matrix", "yes");
+        let m = crate::types::Matrix::read(r)?;
+        out.f("Matrix", format!("scaleX {} scaleY {} rotateSkew0 {} rotateSkew1 {} translateX {} translateY {} (twips)", m.a, m.d, m.b, m.c, m.tx, m.ty));
     }
     if f1 & 0x08 != 0 {
-        skip_cxform(r, true)?;
-        out.f("Color transform", "yes");
+        let c = crate::types::ColorTransform::read(r, true)?;
+        let [rm, gm, bm, am] = c.mult;
+        let [ra, ga, ba, aa] = c.add;
+        out.f("Color transform", format!("redMultTerm {rm} greenMultTerm {gm} blueMultTerm {bm} alphaMultTerm {am} redAddTerm {ra} greenAddTerm {ga} blueAddTerm {ba} alphaAddTerm {aa}"));
     }
     if f1 & 0x10 != 0 {
         out.f("Ratio", r.u16()?);
