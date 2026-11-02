@@ -577,8 +577,19 @@ impl CompilerApi {
         local.set_source(&s);
         s.borrow_mut().set_logger(Some(local.clone()));
         match self.get_compiler(&s) {
-            Some(_) => {
-                s.borrow_mut().set_preprocessed();
+            Some(c) => {
+                let original = toolkit::get_logger();
+                toolkit::set_logger(Some(local.clone()));
+                let r = self.compilers[c].preprocess(s.clone());
+                toolkit::set_logger(original);
+                match r {
+                    Some(n) if local.error_count() == 0 => {
+                        n.borrow_mut().set_preprocessed();
+                        self.sources[i] = n;
+                    }
+                    Some(n) => n.borrow_mut().disconnect_logger(),
+                    None => {}
+                }
             }
             None => {
                 let name = s.borrow().get_name_for_reporting().to_string();
