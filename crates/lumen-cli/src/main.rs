@@ -422,6 +422,24 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
             "incremental" => {
                 on(inline)?;
             }
+            "fonts.local-fonts-snapshot" => {
+                let p = take(1, false).pop().map(PathBuf::from).filter(|p| p.exists());
+                o.flex.fonts.local_fonts_snapshot = p.map(|p| lumen::asc::flex2::compiler::transcoder::local_name(&p));
+            }
+            "fonts.managers" => set(o.flex.fonts.managers.get_or_insert_with(Vec::new), append, take(0, true)),
+            "fonts.advanced-anti-aliasing" | "fonts.flash-type" => o.flex.fonts.flash_type = on(inline)?,
+            "fonts.max-cached-fonts" => o.flex.fonts.max_cached_fonts = take(1, false).pop(),
+            "fonts.max-glyphs-per-face" => o.flex.fonts.max_glyphs_per_face = take(1, false).pop(),
+            "fonts.local-font-paths" => {
+                let v = take(0, true).into_iter().map(PathBuf::from).filter(|p| p.exists()).map(|p| lumen::asc::flex2::compiler::transcoder::local_name(&p));
+                set(o.flex.fonts.local_font_paths.get_or_insert_with(Vec::new), append, v);
+            }
+            "fonts.languages.language-range" => {
+                let v = take(2, false);
+                let [lang, range] = v.as_slice() else { return Err(anyhow!("-compiler.fonts.languages.language-range takes a language and a range")) };
+                o.flex.fonts.set_language_range(lang, range);
+            }
+            "show-shadowed-device-font-warnings" => o.flex.show_shadowed_device_font_warnings = on(inline)?,
             "compatibility-version" | "mxml.compatibility-version" => {
                 let n: Vec<i32> = take(1, false).pop().unwrap_or_default().split('.').map(|p| p.parse().unwrap_or(0)).collect();
                 o.css.compatibility_version = Some((n.first().copied().unwrap_or(0), n.get(1).copied().unwrap_or(0), n.get(2).copied().unwrap_or(0)));

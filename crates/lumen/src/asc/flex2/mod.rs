@@ -4,6 +4,7 @@
 pub mod batik;
 pub mod compiler;
 pub mod flash;
+pub mod fonts;
 pub mod linker;
 pub mod swf;
 pub mod tools;

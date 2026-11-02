@@ -217,7 +217,7 @@ impl<'a> EmbedEvaluator<'a> {
                     Ok(None) if values.contains_key(transcoder::SOURCE) => {
                         error2(cx, Level::Error, pos, format!("Unable to transcode {}.", values.get(transcoder::SOURCE).unwrap()));
                     }
-                    Err(Uncaught(_)) => error2(cx, Level::Error, pos, format!("Unable to create source {cls}.")),
+                    Err(Uncaught(m)) => error2(cx, Level::Error, pos, format!("Unable to create source {cls}.: {m}")),
                     _ => {}
                 }
             }
@@ -301,7 +301,7 @@ impl<'a> EmbedEvaluator<'a> {
                     error2_at(cx, Level::Error, &name_for_reporting, line, col, format!("Unable to transcode {what}."), Some(""));
                 }
             }
-            Err(Uncaught(_)) => error2_at(cx, Level::Error, &name_for_reporting, line, col, format!("Unable to create source {full}."), None),
+            Err(Uncaught(m)) => error2_at(cx, Level::Error, &name_for_reporting, line, col, format!("Unable to create source {full}.: {m}"), None),
         }
     }
 

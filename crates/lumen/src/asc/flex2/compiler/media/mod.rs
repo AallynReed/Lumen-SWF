@@ -2,6 +2,7 @@
 
 pub mod abstract_transcoder;
 pub mod data_transcoder;
+pub mod font_transcoder;
 pub mod image_transcoder;
 pub mod jpeg_transcoder;
 pub mod lossless_image_transcoder;
@@ -34,9 +35,7 @@ pub fn get_transcoders(cfg: &Configuration) -> Vec<Box<dyn Transcoder>> {
     }
     t.push(Box::new(sound_transcoder::SoundTranscoder::new()));
     t.push(Box::new(movie_transcoder::MovieTranscoder::new()));
-    if let Some(f) = FONT_TRANSCODER.get() {
-        t.push(f(cfg));
-    }
+    t.push(FONT_TRANSCODER.get_or_init(|| font_transcoder::factory)(cfg));
     t.push(Box::new(data_transcoder::DataTranscoder::new()));
     t.push(Box::new(xml_transcoder::XmlTranscoder::new()));
     t.push(Box::new(skin_transcoder::SkinTranscoder::new()));
