@@ -60,6 +60,8 @@ pub struct Configuration {
     pub generated_directory: Option<String>,
     /// The style options (`-defaults-css-url`, `-theme`, namespaces, ...).
     pub css: super::css::options::CssOptions,
+    /// The Flex options PreLink, i18n and MXML read (locales, frames, RSLs, ...).
+    pub flex: super::flex_options::FlexOptions,
 }
 
 impl Default for Configuration {
@@ -114,6 +116,7 @@ impl Default for Configuration {
             flex_build: 23188,
             generated_directory: None,
             css: Default::default(),
+            flex: Default::default(),
         }
     }
 }
@@ -126,6 +129,11 @@ impl Configuration {
         } else {
             crate::asc::emit::features::DIALECT_ES3
         }
+    }
+
+    /// `CompilerConfiguration.getGenerateAbstractSyntaxTree()`: keeping generated ActionScript turns it off.
+    pub fn get_generate_abstract_syntax_tree(&self) -> bool {
+        self.flex.generate_abstract_syntax_tree && self.generated_directory.is_none()
     }
 
     pub fn add_externs(&mut self, externs: impl IntoIterator<Item = String>) {

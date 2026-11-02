@@ -316,6 +316,17 @@ pub mod name_formatter {
         }
     }
 
+    pub fn to_dot_star(pkg: &str) -> String {
+        format!("{pkg}.*")
+    }
+
+    pub fn retrieve_package_name(n: &str) -> String {
+        match to_dot(n).rfind('.') {
+            None => String::new(),
+            Some(i) => n[..i].to_string(),
+        }
+    }
+
     pub fn to_qname(n: &str) -> QName {
         match to_dot(n).rfind('.') {
             Some(i) => QName::new(&n[..i], &n[i + 1..]),
@@ -339,6 +350,7 @@ pub mod mime_mappings {
     pub const FXG: &str = "text/fxg";
     pub const ABC: &str = "application/x-actionscript-bytecode";
     pub const CSS: &str = "text/css";
+    pub const PROPERTIES: &str = "text/properties";
 
     pub fn get_extension(mime_type: &str) -> &'static str {
         match mime_type {
@@ -347,14 +359,16 @@ pub mod mime_mappings {
             FXG => ".fxg",
             ABC => ".abc",
             CSS => ".css",
+            PROPERTIES => ".properties",
             _ => "",
         }
     }
 
     pub fn get_mime_type(name: &str) -> Option<&'static str> {
         let lower = name.to_ascii_lowercase();
-        [MXML, AS, FXG, ABC, CSS].into_iter().find(|m| lower.ends_with(get_extension(m)))
+        [MXML, AS, FXG, ABC, CSS, PROPERTIES].into_iter().find(|m| lower.ends_with(get_extension(m)))
     }
 }
 
 pub mod name_mappings;
+pub mod ordered_properties;

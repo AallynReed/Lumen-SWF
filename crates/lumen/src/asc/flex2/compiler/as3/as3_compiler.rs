@@ -50,8 +50,12 @@ pub trait SubCompiler {
     fn postprocess(&mut self, _unit: &UnitRef, _symbol_table: &mut SymbolTable) {}
 }
 
-/// `As3Compiler.CompilerHandler`: ASC's messages go to the current logger.
-pub struct As3CompilerHandler;
+/// `As3Compiler.CompilerHandler`: ASC's messages go to the current logger; includes resolve against the source's
+/// fragments (MXML script blocks).
+#[derive(Default)]
+pub struct As3CompilerHandler {
+    pub source: Option<std::rc::Weak<RefCell<Source>>>,
+}
 
 impl CompilerHandler for As3CompilerHandler {
     fn error(&mut self, filename: &str, ln: i32, col: i32, msg: &str, source: &str, code: i32) {
@@ -65,6 +69,19 @@ impl CompilerHandler for As3CompilerHandler {
     }
     fn warning_no_code(&mut self, filename: &str, ln: i32, col: i32, msg: &str, source: &str) {
         toolkit::log_asc(Level::Warning, filename, ln, col, msg, source, -1);
+    }
+    fn find_file_include(&mut self, parent_path: Option<&str>, filespec: Option<&str>) -> Option<crate::asc::util::context::FileInclude> {
+        let s = self.source.as_ref()?.upgrade()?;
+        let obj = s.borrow().get_source_fragment(filespec?)?;
+        let f = obj.downcast_ref::<super::super::source::VirtualFile>()?;
+        if f.get_parent().as_deref() != parent_path {
+            return None;
+        }
+        let (text, in_) = match f.get_text() {
+            Some(t) => (Some(t.as_ref().clone()), None),
+            None => (None, Some(f.to_byte_array().ok()?)),
+        };
+        Some(crate::asc::util::context::FileInclude { in_, text, fixed_filespec: f.get_name_for_reporting().to_string(), parent_path: parent_path.unwrap_or_default().to_string() })
     }
 }
 
@@ -205,19 +222,11 @@ pub fn transfer_dependencies(unresolved: Vec<ReferenceValue>, target: &mut JHash
 /// `typeTable.createClasses(node.clsdefs, unit.topLevelDefinitions)`, registered as `analyze4` does.
 pub fn register_classes(unit: &UnitRef, node: &NodeRef, symbol_table: &mut SymbolTable) {
     let clsdefs: Vec<NodeRef> = node.borrow().program().unwrap().clsdefs.as_ref().map(|l| l.borrow().clone()).unwrap_or_default();
-    for clsdef in clsdefs {
-        let q = {
-            let b = clsdef.borrow();
-            let c = b.class_definition().unwrap();
-            c.cframe.as_ref().and_then(|f| f.builder()).and_then(|bu| bu.classname())
-        };
-        let Some(q) = q else { continue };
-        let ns = q.ns().map(|n| n.name()).unwrap_or_default();
-        if unit.borrow().top_level_definitions.contains(&ns, q.name()) {
-            let cls = Rc::new(AbcClass::from_class_definition(&clsdef));
-            symbol_table.register_class(&cls.name.clone(), cls.clone());
-            unit.borrow_mut().class_table.insert(cls.name.clone(), cls);
-        }
+    let type_table = super::reflect::type_table::TypeTable::new(symbol_table);
+    let class_map = type_table.create_classes(&clsdefs, &unit.borrow().top_level_definitions);
+    for (class_name, c) in class_map.iter() {
+        symbol_table.register_class(class_name, c.clone());
+        unit.borrow_mut().class_table.insert(class_name.clone(), c.clone());
     }
 }
 
@@ -229,7 +238,7 @@ pub fn evaluate_loader_class_base(unit: &UnitRef, symbol_table: &SymbolTable) {
         if let Some(super_type_name) = &c.super_type_name {
             if let Some(sc) = symbol_table.get_class(Some(&name_formatter::to_colon(super_type_name))) {
                 let lookup = |n: &str| symbol_table.get_class(Some(n));
-                let inherited = sc.get_meta_data("Frame", true, &lookup);
+                let inherited = sc.get_meta_data_with("Frame", true, &lookup);
                 let lc = inherited.iter().find_map(|md| md.get_value_key("factoryClass"));
                 unit.borrow_mut().loader_class_base = lc.map(|lc| normalize_class_name(&lc));
             }
@@ -264,7 +273,7 @@ impl As3Compiler {
         true
     }
 
-    /// `processCoachSettings()` with `CompilerConfiguration`'s `warn-*` defaults.
+    /// `processCoachSettings()` with `CompilerConfiguration`'s `warn-*` defaults and the configured `warn-*` values.
     fn process_coach_settings(config: &Configuration) -> std::collections::HashMap<i32, bool> {
         use crate::asc::embedding::warning_constants::*;
         let mut m = LintEvaluator::get_warning_defaults();
@@ -313,6 +322,48 @@ impl As3Compiler {
             (kWarning_XML_ClassHasChanged, false),
         ] {
             m.insert(k, v);
+        }
+        for (name, v) in &config.flex.warn {
+            let k = match name.as_str() {
+                "array-tostring-changes" => kWarning_ArrayToStringChanges,
+                "assignment-within-conditional" => kWarning_AssignmentWithinConditional,
+                "bad-array-cast" => kWarning_BadArrayCast,
+                "bad-bool-assignment" => kWarning_BadBoolAssignment,
+                "bad-date-cast" => kWarning_BadDateCast,
+                "bad-es3-type-method" => kWarning_BadES3TypeMethod,
+                "bad-es3-type-prop" => kWarning_BadES3TypeProp,
+                "bad-nan-comparison" => kWarning_BadNaNComparision,
+                "bad-null-assignment" => kWarning_BadNullAssignment,
+                "bad-null-comparison" => kWarning_BadNullComparision,
+                "bad-undefined-comparison" => kWarning_BadUndefinedComparision,
+                "boolean-constructor-with-no-args" => kWarning_BooleanConstructorWithNoArgs,
+                "changes-in-resolve" => kWarning_ChangesInResolve,
+                "class-is-sealed" => kWarning_ClassIsSealed,
+                "const-not-initialized" => kWarning_ConstNotInitialized,
+                "constructor-returns-value" => kWarning_ConstructorReturnsValue,
+                "deprecated-event-handler-error" => kWarning_DepricatedEventHandlerError,
+                "deprecated-function-error" => kWarning_DepricatedFunctionError,
+                "deprecated-property-error" => kWarning_DepricatedPropertyError,
+                "duplicate-argument-names" => kWarning_DuplicateArgumentNames,
+                "duplicate-variable-def" => kWarning_DuplicateVariableDef,
+                "for-var-in-changes" => kWarning_ForVarInChanges,
+                "import-hides-class" => kWarning_ImportHidesClass,
+                "instance-of-changes" => kWarning_InstanceOfChanges,
+                "internal-error" => kWarning_InternalError,
+                "level-not-supported" => kWarning_LevelNotSupported,
+                "missing-namespace-decl" => kWarning_MissingNamespaceDecl,
+                "negative-uint-literal" => kWarning_NegativeUintLiteral,
+                "no-constructor" => kWarning_NoConstructor,
+                "no-explicit-super-call-in-constructor" => kWarning_NoExplicitSuperCallInConstructor,
+                "no-type-decl" => kWarning_NoTypeDecl,
+                "number-from-string-changes" => kWarning_NumberFromStringChanges,
+                "scoping-change-in-this" => kWarning_ScopingChangeInThis,
+                "slow-text-field-addition" => kWarning_SlowTextFieldAddition,
+                "unlikely-function-value" => kWarning_UnlikelyFunctionValue,
+                "xml-class-has-changed" => kWarning_XML_ClassHasChanged,
+                _ => continue,
+            };
+            m.insert(k, *v);
         }
         m
     }
@@ -390,21 +441,34 @@ impl SubCompiler for As3Compiler {
             }
         }
         let path = source.borrow().get_name().to_string();
-        let cx = new_unit_context(source, symbol_table, Rc::new(RefCell::new(As3CompilerHandler)));
-        cx.borrow_mut().config_vars.extend(self.config.defines.iter().cloned());
-        let bytes = match source.borrow().to_byte_array() {
-            Ok(b) => b,
-            Err(e) => {
-                toolkit::log_path(Level::Error, &path, &e.to_string(), -1);
-                return None;
+        let pre_built = existing.as_ref().and_then(|u| u.borrow().get_syntax_tree());
+        let (node, cx) = match pre_built {
+            Some(node) => {
+                let cx = node.borrow().program().and_then(|p| p.cx.clone()).expect("NullPointerException");
+                (node, cx)
+            }
+            None => {
+                let cx = new_unit_context(source, symbol_table, Rc::new(RefCell::new(As3CompilerHandler { source: Some(Rc::downgrade(source)) })));
+                cx.borrow_mut().config_vars.extend(self.config.defines.iter().cloned());
+                let bytes = match source.borrow().to_byte_array() {
+                    Ok(b) => b,
+                    Err(e) => {
+                        toolkit::log_path(Level::Error, &path, &e.to_string(), -1);
+                        return None;
+                    }
+                };
+                let text = source.borrow().get_input_text();
+                let node = match text {
+                    Some(text) => Parser::new(&cx, &text, &path).parse_program(),
+                    None => Parser::new_stream(&cx, &bytes, &path).parse_program(),
+                };
+                clean_node_factory(&cx);
+                if toolkit::error_count() > 0 {
+                    return None;
+                }
+                (node?, cx)
             }
         };
-        let node = Parser::new_stream(&cx, &bytes, &path).parse_program();
-        clean_node_factory(&cx);
-        if toolkit::error_count() > 0 {
-            return None;
-        }
-        let node = node?;
         evaluate(&node, &cx, &mut ConfigurationEvaluator::new());
         if toolkit::error_count() > 0 {
             return None;
@@ -605,7 +669,9 @@ impl SubCompiler for As3Compiler {
     fn analyze4(&mut self, unit: &UnitRef, symbol_table: &mut SymbolTable) {
         if unit.borrow().has_type_info {
             let classes: Vec<(String, Rc<AbcClass>)> = unit.borrow().class_table.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let type_table = super::reflect::type_table::TypeTable::new(symbol_table);
             for (k, c) in classes {
+                c.set_type_table(type_table.clone());
                 symbol_table.register_class(&k, c);
             }
             super::style_evaluator::register_unit_styles(unit, symbol_table);

@@ -163,7 +163,7 @@ pub fn swc_file(swc: &Swc, path: &str) -> Option<CssFile> {
 
 /// `SwcPathResolver.resolve`: `swcGroup.getFiles().get(path)` (the newest SWC's file of that name), then
 /// `swcGroup.getFile("x.swc$path")`.
-fn swc_resolve(path: &str) -> Option<CssFile> {
+pub fn swc_resolve(path: &str) -> Option<CssFile> {
     let swcs = swcs();
     let mut best: Option<(i64, CssFile)> = None;
     for swc in &swcs {

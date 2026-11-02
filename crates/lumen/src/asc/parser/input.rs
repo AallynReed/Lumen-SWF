@@ -16,6 +16,63 @@ pub struct InputBuffer {
     pub report_pos: bool,
     cached_last_line_map_pos: i32,
     cached_last_line_map_index: i32,
+    /// Set when this buffer is a `flex2.compiler.as3.CodeFragmentsInputBuffer`.
+    pub code_fragments: Option<CodeFragments>,
+}
+
+/// `flex2.compiler.as3.CodeFragmentsInputBuffer`: maps positions in parsed code fragments and generated nodes back to
+/// MXML line numbers.
+pub struct CodeFragments {
+    code_fragments: Vec<CodeFragment>,
+    length: i32,
+    position_to_line_number_map: std::collections::HashMap<i32, i32>,
+}
+
+struct CodeFragment {
+    start_position: i32,
+    end_position: i32,
+    input_buffer: std::rc::Rc<std::cell::RefCell<InputBuffer>>,
+    line_number_offset: i32,
+}
+
+impl CodeFragments {
+    pub fn add_code_fragment(&mut self, fragment_length: i32, input_buffer: std::rc::Rc<std::cell::RefCell<InputBuffer>>, line_number_offset: i32) {
+        let start_position = self.length;
+        let end_position = self.length + fragment_length;
+        self.code_fragments.push(CodeFragment { start_position, end_position, input_buffer, line_number_offset: line_number_offset - 1 });
+        self.length = end_position;
+    }
+
+    pub fn get_length(&self) -> i32 {
+        self.length
+    }
+
+    pub fn add_line_number(&mut self, line_number: i32) {
+        self.position_to_line_number_map.insert(self.length, line_number);
+        self.length += 1;
+    }
+
+    fn lookup_code_fragment(&self, pos: i32) -> Option<&CodeFragment> {
+        if pos == -1 {
+            return None;
+        }
+        self.code_fragments.iter().find(|f| f.start_position <= pos && pos < f.end_position)
+    }
+
+    fn get_ln_num(&self, pos: i32) -> i32 {
+        if let Some(&line_number) = self.position_to_line_number_map.get(&pos) {
+            return line_number;
+        }
+        match self.lookup_code_fragment(pos) {
+            Some(f) => f.input_buffer.borrow_mut().get_ln_num(pos) + f.line_number_offset,
+            None => -1,
+        }
+    }
+
+    fn get_line_text(&self, pos: i32) -> Option<String> {
+        let f = self.lookup_code_fragment(pos)?;
+        Some(f.input_buffer.borrow_mut().get_line_text(pos - f.start_position))
+    }
 }
 
 impl InputBuffer {
@@ -39,6 +96,14 @@ impl InputBuffer {
         Self::init(in_, origin, 0, 0)
     }
 
+    /// `new CodeFragmentsInputBuffer(path)`.
+    pub fn new_code_fragments(path: &str) -> InputBuffer {
+        let mut b = Self::init(Vec::new(), None, 0, 0);
+        b.origin = Some(path.to_string());
+        b.code_fragments = Some(CodeFragments { code_fragments: Vec::new(), length: 1, position_to_line_number_map: std::collections::HashMap::new() });
+        b
+    }
+
     fn init(text: Vec<u16>, origin: Option<String>, start_pos: i32, start_line: i32) -> InputBuffer {
         InputBuffer {
             text,
@@ -51,6 +116,7 @@ impl InputBuffer {
             report_pos: true,
             cached_last_line_map_pos: 0,
             cached_last_line_map_index: 0,
+            code_fragments: None,
         }
     }
 
@@ -151,6 +217,9 @@ impl InputBuffer {
     }
 
     pub fn get_ln_num(&mut self, src_pos: i32) -> i32 {
+        if let Some(f) = &self.code_fragments {
+            return f.get_ln_num(src_pos);
+        }
         let mut l = self.get_line_map_index(src_pos);
         if l == 0 {
             l = 1;
@@ -273,6 +342,9 @@ impl InputBuffer {
     }
 
     pub fn position_of_mark(&self) -> i32 {
+        if self.code_fragments.is_some() {
+            return 0;
+        }
         if !self.report_pos {
             return -1;
         }
@@ -485,11 +557,18 @@ impl InputBuffer {
     }
 
     pub fn get_col_pos(&mut self, src_pos: i32) -> i32 {
+        if self.code_fragments.is_some() {
+            return -1;
+        }
         let start = self.get_line_start_pos(src_pos);
         (src_pos - start) + 1
     }
 
+    /// Java returns null for a position outside every code fragment; that comes back as `""` here.
     pub fn get_line_text(&mut self, src_pos: i32) -> String {
+        if let Some(f) = &self.code_fragments {
+            return f.get_line_text(src_pos).unwrap_or_default();
+        }
         let start = self.get_line_start_pos(src_pos);
 
         let mut i = start;

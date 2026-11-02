@@ -30,6 +30,8 @@ pub struct CompilerContext {
     pub constant_evaluator: Option<ConstantEvaluator>,
     pub processed: Option<std::collections::HashSet<String>>,
     pub main_definition: Option<String>,
+    /// The rest of Java's attribute map (the MXML compiler's state), by attribute name.
+    pub attributes: HashMap<&'static str, Rc<dyn std::any::Any>>,
 }
 
 impl CompilerContext {
@@ -47,6 +49,22 @@ impl CompilerContext {
 
     pub fn clear(&mut self) {
         *self = CompilerContext::default();
+    }
+
+    pub fn get_attribute(&self, name: &str) -> Option<Rc<dyn std::any::Any>> {
+        self.attributes.get(name).cloned()
+    }
+
+    pub fn get_attribute_as<T: 'static>(&self, name: &str) -> Option<Rc<T>> {
+        self.attributes.get(name).cloned().and_then(|a| a.downcast::<T>().ok())
+    }
+
+    pub fn set_attribute(&mut self, name: &'static str, value: Rc<dyn std::any::Any>) {
+        self.attributes.insert(name, value);
+    }
+
+    pub fn remove_attribute(&mut self, name: &str) -> Option<Rc<dyn std::any::Any>> {
+        self.attributes.remove(name)
     }
 }
 
@@ -82,6 +100,7 @@ pub struct CompilationUnit {
     pub expression_history: MultiNameMap,
     pub skin_states: Option<std::collections::HashSet<String>>,
     pub host_component_meta_data: Option<NodeRef>,
+    pub host_component_owner_class: Option<String>,
     pub has_type_info: bool,
     pub type_info: Option<ObjectValue>,
     pub class_table: HashMap<String, Rc<AbcClass>>,
@@ -92,6 +111,22 @@ pub struct CompilationUnit {
     /// Only MXML components set it (`setStylesContainer`).
     pub styles_container: Option<Rc<super::css::styles_container::StylesContainer>>,
     pub style_name: Option<String>,
+    /// `accessibilityClasses`, from `[AccessibilityClass]`.
+    pub accessibility_classes: Option<JHashSet<String>>,
+    /// `auxGenerateInfo`: what the MXML compiler tells `PreLink` about the loader class to generate.
+    pub aux_generate_info: Option<AuxGenerateInfo>,
+}
+
+/// `CompilationUnit.auxGenerateInfo`'s entries.
+#[derive(Clone, Debug, Default)]
+pub struct AuxGenerateInfo {
+    pub generate_loader_class: String,
+    pub base_loader_class: String,
+    pub window_class: String,
+    /// `rootAttributes`, `rootAttributeEmbedVars`, `rootAttributeEmbedNames` in their maps' iteration order.
+    pub root_attributes: Option<Vec<(String, String)>>,
+    pub root_attribute_embed_vars: Option<Vec<(String, String)>>,
+    pub root_attribute_embed_names: Option<Vec<(String, String)>>,
 }
 
 impl CompilationUnit {
@@ -128,6 +163,7 @@ impl CompilationUnit {
             expression_history: MultiNameMap::with_capacity(8),
             skin_states: None,
             host_component_meta_data: None,
+            host_component_owner_class: None,
             has_type_info: false,
             type_info: None,
             class_table: HashMap::new(),
@@ -137,6 +173,8 @@ impl CompilationUnit {
             styles: super::css::styles::Styles::new(2),
             styles_container: None,
             style_name: None,
+            accessibility_classes: None,
+            aux_generate_info: None,
         }))
     }
 
@@ -177,6 +215,8 @@ impl CompilationUnit {
         self.has_type_info = false;
         self.type_info = None;
         self.class_table.clear();
+        self.aux_generate_info = None;
+        self.accessibility_classes = None;
     }
 
     pub fn is_root(&self) -> bool {
@@ -242,6 +282,14 @@ impl CompilationUnit {
 
     pub fn clear_generated_sources(&mut self) {
         self.generated_sources = None;
+    }
+
+    /// `addAccessibilityClass(metadata)` with the metadata's `implementation`.
+    pub fn add_accessibility_class(&mut self, accessibility_class: String) {
+        let set = self.accessibility_classes.get_or_insert_with(JHashSet::new);
+        if !set.contains(&accessibility_class) {
+            set.insert(accessibility_class);
+        }
     }
 
     pub fn has_assets(&self) -> bool {

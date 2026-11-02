@@ -18,9 +18,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Compile an AS3 application into a SWF, taking mxmlc's own arguments
+    /// Compile an AS3 or MXML application into a SWF, taking mxmlc's own arguments
     #[command(after_help = "Takes the arguments mxmlc.jar takes, for example:
-  lumen-swf-cli mxmlc -load-config= -external-library-path=playerglobal.swc -target-player=11.2 -swf-version=15 -default-size 601 502 -default-frame-rate 24 -default-background-color=0 -source-path src lib -output out.swf src/Main.as")]
+  lumen-swf-cli mxmlc -load-config= -external-library-path=playerglobal.swc -target-player=11.2 -swf-version=15 -default-size 601 502 -default-frame-rate 24 -default-background-color=0 -source-path src lib -output out.swf src/Main.as
+With a Flex SDK (FLEX_HOME, or +flexlib=<sdk>/frameworks) the SDK's flex-config.xml applies first, as with mxmlc:
+  lumen-swf-cli mxmlc -static-link-runtime-shared-libraries=true src/App.mxml")]
     Mxmlc {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -245,11 +247,49 @@ enum Cmd {
 }
 
 /// mxmlc's command line: `-name=value`, `-name+=value`, or `-name` followed by its values, with the source to
-/// compile last. Returns the options and the output path.
-fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptions, PathBuf)> {
+/// compile last. With an SDK (`+flexlib=<frameworks>` or `FLEX_HOME`) and no `-load-config=`, the SDK's
+/// `flex-config.xml` applies first, as mxmlc's default `-load-config` does. Returns the options, the output path and
+/// the configuration files loaded.
+fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptions, PathBuf, Vec<PathBuf>)> {
+    use lumen::asc::flex2::compiler::file_configurator;
+    let mut flexlib: Option<PathBuf> = std::env::var_os("FLEX_HOME").map(|h| PathBuf::from(h).join("frameworks"));
+    let mut configs: Option<Vec<PathBuf>> = None;
+    let mut extra_configs: Vec<PathBuf> = Vec::new();
+    let mut rest: Vec<String> = Vec::new();
+    for a in args {
+        if let Some(v) = a.strip_prefix("+flexlib=") {
+            flexlib = Some(PathBuf::from(v));
+        } else if let Some(v) = a.strip_prefix("-load-config+=").or_else(|| a.strip_prefix("--load-config+=")) {
+            extra_configs.push(PathBuf::from(v));
+        } else if let Some(v) = a.strip_prefix("-load-config=").or_else(|| a.strip_prefix("--load-config=")) {
+            configs = Some(if v.is_empty() { Vec::new() } else { vec![PathBuf::from(v)] });
+        } else {
+            rest.push(a.clone());
+        }
+    }
     let mut o = lumen::asc::flex2::ApplicationOptions::default();
+    let mut loaded = Vec::new();
+    let flex_mode = flexlib.is_some() && configs.as_ref().is_none_or(|c| !c.is_empty());
+    if let Some(fw) = &flexlib {
+        let files = configs.clone().unwrap_or_else(|| vec![fw.join("flex-config.xml")]);
+        if !files.is_empty() || !extra_configs.is_empty() {
+            file_configurator::load_defaults(&mut o, fw);
+        } else {
+            // DefaultsConfigurator's locale and resource-bundle defaults still apply with -load-config=.
+            o.flex.locales = vec!["en_US".to_string()];
+            o.flex.use_resource_bundle_metadata = true;
+        }
+        for f in files.iter().chain(extra_configs.iter()) {
+            file_configurator::load(&mut o, f, fw).map_err(|e| anyhow!("unable to open '{}': {e}", f.display()))?;
+            loaded.push(f.clone());
+        }
+    } else if configs.as_ref().is_some_and(|c| !c.is_empty()) || !extra_configs.is_empty() {
+        return Err(anyhow!("-load-config with a file needs the SDK: pass +flexlib=<sdk>/frameworks or set FLEX_HOME"));
+    }
     let mut output = None;
     let mut files = Vec::new();
+    let mut keep_generated = false;
+    let args = &rest;
     let mut i = 0;
     let flag = |v: &str| -> Result<bool> {
         match v {
@@ -257,6 +297,32 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
             "false" => Ok(false),
             _ => Err(anyhow!("'{v}' is not a valid boolean")),
         }
+    };
+    fn set<T>(dst: &mut Vec<T>, append: bool, items: impl IntoIterator<Item = T>) {
+        if !append {
+            dst.clear();
+        }
+        dst.extend(items);
+    }
+    let paths = |v: Vec<String>| v.into_iter().map(PathBuf::from).collect::<Vec<_>>();
+    // A library-path directory without a catalog.xml stands for its .swc files, as SwcCache.getSwcs reads it.
+    let swcs = |v: Vec<String>| -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        for p in v.into_iter().map(PathBuf::from) {
+            if p.is_dir() && !p.join("catalog.xml").exists() {
+                if let Ok(rd) = std::fs::read_dir(&p) {
+                    for e in rd.flatten() {
+                        let lower = e.file_name().to_string_lossy().to_lowercase();
+                        if e.path().is_file() && lower.ends_with(".swc") {
+                            out.push(e.path());
+                        }
+                    }
+                }
+            } else {
+                out.push(p);
+            }
+        }
+        out
     };
     while i < args.len() {
         let arg = &args[i];
@@ -266,6 +332,7 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
             continue;
         };
         let opt = opt.trim_start_matches('-');
+        let append = opt.contains("+=");
         let (name, inline) = match opt.split_once("+=").or_else(|| opt.split_once('=')) {
             Some((n, v)) => (n, Some(v.to_string())),
             None => (opt, None),
@@ -282,11 +349,13 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
             }
             out
         };
+        let on = |inline: Option<String>| flag(&inline.unwrap_or_default());
         match name {
-            "source-path" | "sp" => o.source_path.extend(take(0, true).into_iter().map(PathBuf::from)),
-            "library-path" | "l" => o.library_path.extend(take(0, true).into_iter().map(PathBuf::from)),
-            "external-library-path" | "el" => o.external_library_path.extend(take(0, true).into_iter().map(PathBuf::from)),
-            "includes" => o.includes.extend(take(0, true)),
+            "source-path" | "sp" => set(&mut o.source_path, append, paths(take(0, true))),
+            "library-path" | "l" => set(&mut o.library_path, append, swcs(take(0, true))),
+            "external-library-path" | "el" => set(&mut o.external_library_path, append, swcs(take(0, true))),
+            "include-libraries" => set(&mut o.flex.include_libraries, append, swcs(take(0, true))),
+            "includes" => set(&mut o.flex.includes, append, take(0, true)),
             "output" | "o" => output = take(1, false).pop().map(PathBuf::from),
             "target-player" => o.target_player = take(1, false).pop().unwrap_or_default(),
             "swf-version" => o.swf_version = take(1, false).pop().unwrap_or_default().parse()?,
@@ -314,18 +383,50 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
                     _ => return Err(anyhow!("-define takes NAMESPACE::name,value")),
                 }
             }
-            "debug" => o.debug = flag(&inline.unwrap_or_default())?,
-            "strict" => o.strict = flag(&inline.unwrap_or_default())?,
-            "optimize" => o.optimize = flag(&inline.unwrap_or_default())?,
-            "omit-trace-statements" => o.omit_trace_statements = flag(&inline.unwrap_or_default())?,
-            "warnings" => o.warnings = flag(&inline.unwrap_or_default())?,
-            "compress" => o.compress = flag(&inline.unwrap_or_default())?,
-            "static-link-runtime-shared-libraries" => {
-                flag(&inline.unwrap_or_default())?;
+            "locale" => set(&mut o.flex.locales, append, take(0, true)),
+            "theme" => set(&mut o.css.theme, append, paths(take(0, true))),
+            "defaults-css-url" => o.css.defaults_css_url = take(1, false).pop().map(PathBuf::from),
+            "namespace" | "namespaces.namespace" => {
+                let v = take(2, false);
+                let [uri, manifest] = v.as_slice() else { return Err(anyhow!("-namespace takes a URI and a manifest")) };
+                if !append {
+                    o.css.namespaces.clear();
+                }
+                o.css.namespaces.push((uri.clone(), vec![PathBuf::from(manifest)]));
             }
-            "load-config" | "theme" | "fonts.local-fonts-snapshot" => {
-                if inline.as_deref().is_some_and(|v| !v.is_empty()) {
-                    return Err(anyhow!("-{name} with a file is not supported; pass the options directly"));
+            "debug" => o.debug = on(inline)?,
+            "strict" => o.strict = on(inline)?,
+            "optimize" => o.optimize = on(inline)?,
+            "omit-trace-statements" => o.omit_trace_statements = on(inline)?,
+            "warnings" | "show-actionscript-warnings" => o.warnings = on(inline)?,
+            "compress" => o.compress = on(inline)?,
+            "accessible" => o.flex.accessible = on(inline)?,
+            "show-binding-warnings" => o.flex.show_binding_warnings = on(inline)?,
+            "show-deprecation-warnings" => o.flex.show_deprecation_warnings = on(inline)?,
+            "verbose-stacktraces" => o.flex.verbose_stacktraces = on(inline)?,
+            "use-network" => o.flex.use_network = on(inline)?,
+            "allow-source-path-overlap" => o.flex.allow_source_path_overlap = on(inline)?,
+            "keep-all-type-selectors" => o.css.keep_all_type_selectors = on(inline)?,
+            "show-unused-type-selector-warnings" => o.css.show_unused_type_selector_warnings = on(inline)?,
+            "keep-generated-actionscript" => keep_generated = on(inline)?,
+            "static-link-runtime-shared-libraries" => {
+                o.flex.static_link_rsl = on(inline)?;
+                if o.flex.static_link_rsl {
+                    o.flex.rsl_path_info.clear();
+                }
+            }
+            n if n.starts_with("warn-") => {
+                let v = on(inline)?;
+                o.flex.warn.push((n["warn-".len()..].to_string(), v));
+            }
+            "incremental" => {
+                on(inline)?;
+            }
+            "compatibility-version" | "mxml.compatibility-version" => {
+                let n: Vec<i32> = take(1, false).pop().unwrap_or_default().split('.').map(|p| p.parse().unwrap_or(0)).collect();
+                o.css.compatibility_version = Some((n.first().copied().unwrap_or(0), n.get(1).copied().unwrap_or(0), n.get(2).copied().unwrap_or(0)));
+                if n.first().copied().unwrap_or(0) <= 3 {
+                    o.css.qualified_type_selectors = false;
                 }
             }
             _ => return Err(anyhow!("unknown configuration variable '{name}'")),
@@ -335,10 +436,22 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
     if !files.is_empty() {
         return Err(anyhow!("only one source file can be compiled"));
     }
-    o.playerglobal = o.external_library_path.is_empty();
+    if keep_generated {
+        // ToolsConfiguration.createOutputDirectory: beside -output, else beside the source.
+        let parent = match &output {
+            Some(out) => out.parent().map(Path::to_path_buf),
+            None => main.parent().map(Path::to_path_buf),
+        };
+        let dir = parent.filter(|p| !p.as_os_str().is_empty()).unwrap_or_default().join("generated");
+        let _ = std::fs::create_dir_all(&dir);
+        o.generated_directory = Some(std::fs::canonicalize(&dir).map(|d| PathBuf::from(d.display().to_string().trim_start_matches(r"\\?\"))).unwrap_or(dir));
+    }
+    if !flex_mode {
+        o.playerglobal = o.external_library_path.is_empty();
+    }
     let output = output.unwrap_or_else(|| main.with_extension("swf"));
     o.main = main;
-    Ok((o, output))
+    Ok((o, output, loaded))
 }
 
 fn open(path: &PathBuf) -> Result<Swf> {
@@ -400,7 +513,11 @@ fn main() -> Result<()> {
     lumen::set_auto_deobfuscate(cli.deobfuscate);
     match cli.cmd {
         Cmd::Mxmlc { args } => {
-            let (opts, output) = mxmlc_options(&args)?;
+            let (opts, output, configs) = mxmlc_options(&args)?;
+            for c in &configs {
+                let shown = std::fs::canonicalize(c).unwrap_or(c.clone());
+                println!("Loading configuration file {}", shown.display().to_string().trim_start_matches(r"\\?\"));
+            }
             let errors = match lumen::asc::flex2::compile_application(&opts) {
                 Ok(app) => {
                     for d in &app.diagnostics {

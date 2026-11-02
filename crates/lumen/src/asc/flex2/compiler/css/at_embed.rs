@@ -244,7 +244,7 @@ impl AtEmbed {
         }
     }
 
-    fn create_resolved(per_compile_data: &Rc<RefCell<ContextStatics>>, source: &SourceRef, value: &str, path: &str, line: i32, prefix: &str, log_invalid_embed_on_missing_file: bool) -> Option<AtEmbed> {
+    pub fn create_resolved(per_compile_data: &Rc<RefCell<ContextStatics>>, source: &SourceRef, value: &str, path: &str, line: i32, prefix: &str, log_invalid_embed_on_missing_file: bool) -> Option<AtEmbed> {
         let meta_data = parse_meta_data(per_compile_data, source, line, value)?;
         let mut source_value: Option<String> = None;
         let mut values = EmbedParams::new();

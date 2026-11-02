@@ -45,6 +45,8 @@ pub struct ApplicationOptions {
     pub generated_directory: Option<PathBuf>,
     /// The style options: `-defaults-css-url`, `-theme`, the namespace manifests, ...
     pub css: compiler::css::options::CssOptions,
+    /// The Flex options: locales, accessibility, frames, RSLs, metadata, ...
+    pub flex: compiler::flex_options::FlexOptions,
 }
 
 impl Default for ApplicationOptions {
@@ -71,6 +73,7 @@ impl Default for ApplicationOptions {
             playerglobal: false,
             generated_directory: None,
             css: Default::default(),
+            flex: Default::default(),
         }
     }
 }
@@ -104,7 +107,7 @@ impl ApplicationOptions {
         c.library_path = self.library_path.clone();
         c.external_library_path = self.external_library_path.clone();
         // `cfgIncludes`: `toQNameString`, so `a.b.C` is looked up as `a.b:C`.
-        c.includes = self.includes.iter().map(|i| compiler::util::name_formatter::to_colon(i)).collect();
+        c.includes = self.flex.includes.iter().chain(&self.includes).map(|i| compiler::util::name_formatter::to_colon(i)).collect();
         c.defines = self
             .defines
             .iter()
@@ -116,6 +119,14 @@ impl ApplicationOptions {
         c.compile_date = self.compile_date;
         c.generated_directory = self.generated_directory.as_ref().map(|p| p.to_string_lossy().into_owned());
         c.css = self.css.clone();
+        c.flex = self.flex.clone();
+        c.use_network = self.flex.use_network;
+        c.allow_source_path_overlap = self.flex.allow_source_path_overlap;
+        c.verbose_stacktraces = self.flex.verbose_stacktraces;
+        c.show_deprecation_warnings = self.flex.show_deprecation_warnings;
+        c.keep_as3_metadata = self.flex.keep_as3_metadata.clone();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+        c.metadata = self.flex.metadata.to_rdf(&compiler::flex_options::java_medium_date(now));
         c
     }
 }

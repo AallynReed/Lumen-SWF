@@ -51,8 +51,8 @@ struct SymbolTableTypes<'a> {
 
 /// `TypeTable.TypeHelper`: a class's inherited `[Style]` and `[Exclude]` metadata.
 struct TypeHelper {
-    styles: Vec<crate::asc::semantics::meta_data::MetaData>,
-    excludes: Vec<crate::asc::semantics::meta_data::MetaData>,
+    styles: Vec<crate::asc::flex2::compiler::as3::reflect::meta_data::MetaData>,
+    excludes: Vec<crate::asc::flex2::compiler::as3::reflect::meta_data::MetaData>,
     theme_names: Vec<String>,
 }
 
@@ -88,7 +88,7 @@ impl CssTypeTable for SymbolTableTypes<'_> {
     fn get_type(&self, class_name: &str) -> Option<Rc<dyn CssType>> {
         let class_info = self.symbol_table.get_class(Some(class_name))?;
         let lookup = |n: &str| self.symbol_table.get_class(Some(n));
-        Some(Rc::new(TypeHelper { styles: class_info.get_meta_data("Style", true, &lookup), excludes: class_info.get_meta_data("Exclude", true, &lookup), theme_names: self.theme_names.to_vec() }))
+        Some(Rc::new(TypeHelper { styles: class_info.get_meta_data_with("Style", true, &lookup), excludes: class_info.get_meta_data_with("Exclude", true, &lookup), theme_names: self.theme_names.to_vec() }))
     }
 }
 

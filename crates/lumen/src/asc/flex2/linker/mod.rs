@@ -364,6 +364,7 @@ fn flex_movie_generate(movie: &mut Movie, units: &[UnitRef], configuration: &Con
     }
     let mut frame_info_list: Vec<(String, Vec<String>)> = Vec::new();
     build_frames(&def2unit, &main_def, &mut Vec::new(), &mut frame_info_list)?;
+    frame_info_list.extend(configuration.flex.frame_list.iter().map(|f| (f.label.clone(), f.frame_classes.clone())));
     if let Some((_, classes)) = frame_info_list.first() {
         movie.top_level_class = format_symbol_class_name(Some(&classes[0]));
     }

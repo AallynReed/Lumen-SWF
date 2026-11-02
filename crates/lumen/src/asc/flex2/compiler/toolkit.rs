@@ -71,6 +71,18 @@ impl LocalLogger {
         (s.get_name_for_reporting() != p && !s.is_included_file(p)).then(|| s.get_name_for_reporting().to_string())
     }
 
+    /// `checkPath` for a message whose path may be null (a null path is never the source's).
+    fn misrouted_opt(&self, p: Option<&str>) -> Option<String> {
+        match p {
+            Some(p) => self.misrouted(p),
+            None => {
+                let s = self.source.borrow().as_ref()?.upgrade()?;
+                let name = s.borrow().get_name_for_reporting().to_string();
+                Some(name)
+            }
+        }
+    }
+
     pub fn error_count(&self) -> i32 {
         self.error_count.get()
     }
@@ -152,10 +164,10 @@ fn line_pointer(col: i32, source: Option<&str>) -> String {
 }
 
 /// `FileUtil.readLine(path, line)`.
-fn line_text(path: &str, line: i32) -> String {
+pub fn line_text(path: &str, line: i32) -> String {
     let Ok(bytes) = std::fs::read(path) else { return String::new() };
+    // Java's "UTF8" reader keeps a byte-order mark.
     let text = String::from_utf8_lossy(&bytes);
-    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     // `FileUtil.readLine` reads the first line for any line below 2.
     let line = line.max(1);
     let mut n = 1;
@@ -224,52 +236,26 @@ fn forward(level: Level) -> bool {
     })
 }
 
-/// `logError(path, line, col, error, source, errorCode)` and its warning twin, as ASC's handler calls them.
-pub fn log_asc(level: Level, path: &str, line: i32, col: i32, msg: &str, source: &str, code: i32) {
-    if !forward(level) {
-        return;
-    }
+/// `ConsoleLogger.logError(path, line, col, error, source)` and its warning twin.
+fn sink_asc(level: Level, path: &str, line: i32, col: i32, msg: &str, source: &str, code: i32) {
     let text = format!("{}({}): col: {} {}: {}\n\n{}\n{}", path, line, col, level_word(level), msg, source, line_pointer(col, Some(source)));
     console(Diagnostic { level, path: Some(path.to_string()), line, col, message: msg.to_string(), code, text });
 }
 
-/// `logError(path, error)` / `logWarning(path, warning)`.
-pub fn log_path(level: Level, path: &str, msg: &str, code: i32) {
-    if !forward(level) {
-        return;
-    }
+/// `ConsoleLogger.logError(path, error)` / `logWarning(path, warning)`.
+fn sink_path(level: Level, path: &str, msg: &str, code: i32) {
     let text = format!("{}\n\n{}: {}", path, level_word(level), msg);
     console(Diagnostic { level, path: Some(path.to_string()), line: -1, col: -1, message: msg.to_string(), code, text });
 }
 
-/// `logError(error)`.
-pub fn log_plain(level: Level, msg: &str) {
-    if !forward(level) {
-        return;
-    }
+/// `ConsoleLogger.logError(error)`.
+fn sink_plain(level: Level, msg: &str) {
     let text = if level == Level::Info { msg.to_string() } else { format!("{}: {}", level_word(level), msg) };
     console(Diagnostic { level, path: None, line: -1, col: -1, message: msg.to_string(), code: -1, text });
 }
 
-/// `ThreadLocalToolkit.log(message, path, line, col, source)`, and the shorter overloads with `None`s.
-pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, source: Option<&str>) {
-    if let Some(p) = path {
-        m.path = Some(p.to_string());
-        m.line = line;
-        m.col = col;
-    }
-    let mut source = source;
-    if let Some(p) = &m.path {
-        if let Some(name) = get_logger().and_then(|l| l.misrouted(p)) {
-            m.path = Some(name);
-            m.line = -1;
-            m.col = -1;
-            source = None;
-        }
-    }
-    if !forward(m.level) {
-        return;
-    }
+/// `ConsoleLogger.log(m, source)`.
+fn sink_message(m: CompilerMessage, source: Option<&str>) {
     let mut prefix = String::new();
     if let Some(p) = &m.path {
         prefix.push_str(p);
@@ -287,7 +273,6 @@ pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, sour
         Level::Info => {}
     }
     let mut ex = String::new();
-    let mut src_owned = None;
     if let (Some(p), true) = (&m.path, m.line != -1) {
         let s = match source {
             Some(s) => s.to_string(),
@@ -295,11 +280,11 @@ pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, sour
         };
         ex.push_str("\n\n");
         ex.push_str(&s);
-        src_owned = Some(s);
     }
     if m.col != -1 {
         ex.push('\n');
-        ex.push_str(&line_pointer(m.col, source.or(src_owned.as_deref())));
+        // `ConsoleLogger.log(m, source)` points along `source` itself, so tabs are kept only when one is given.
+        ex.push_str(&line_pointer(m.col, source));
     }
     let text = format!("{prefix}{}{ex}", m.text);
     console(Diagnostic { level: m.level, path: m.path.clone(), line: m.line, col: m.col, message: m.text, code: -1, text });
@@ -310,12 +295,167 @@ pub fn log_for(m: CompilerMessage, name_for_reporting: &str) {
     log(m, Some(name_for_reporting), -1, -1, None);
 }
 
-/// `logError(path, line, error)` / `logWarning(path, line, warning)` (CSS parser messages).
-pub fn log_path_line(level: Level, path: &str, line: i32, msg: &str) {
-    if !forward(level) {
-        return;
-    }
+/// `ConsoleLogger.logError(path, line, error)` / `logWarning(path, line, warning)`.
+fn sink_path_line(level: Level, path: &str, line: i32, msg: &str) {
     let sep = if level == Level::Error { ":  " } else { ": " };
     let text = format!("{}({}){}{}: {}\n\n{}", path, line, sep, level_word(level), msg, line_text(path, line));
     console(Diagnostic { level, path: Some(path.to_string()), line, col: -1, message: msg.to_string(), code: -1, text });
+}
+
+/// `ConsoleLogger.logError(path, line, col, error)`: the line is read from `path` for the pointer.
+fn sink_path_line_col(level: Level, path: &str, line: i32, col: i32, msg: &str) {
+    let source = line_text(path, line);
+    let text = format!("{}({}): col: {} {}: {}\n\n{}\n{}", path, line, col, level_word(level), msg, source, line_pointer(col, Some(&source)));
+    console(Diagnostic { level, path: Some(path.to_string()), line, col, message: msg.to_string(), code: -1, text });
+}
+
+/// One call on a Java `Logger`, so adapters can rewrite it before it reaches the `LocalLogger` and the console.
+#[derive(Clone, Debug)]
+pub enum LogCall {
+    /// `logError(error)`.
+    Text { level: Level, msg: String },
+    /// `logError(path, error[, errorCode])`.
+    Path { level: Level, path: String, msg: String, code: Option<i32> },
+    /// `logError(path, line, error[, errorCode])`.
+    PathLine { level: Level, path: String, line: i32, msg: String, code: Option<i32> },
+    /// `logError(path, line, col, error)`.
+    PathLineCol { level: Level, path: String, line: i32, col: i32, msg: String },
+    /// `logError(path, line, col, error, source[, errorCode])`.
+    PathLineColSource { level: Level, path: String, line: i32, col: i32, msg: String, source: String, code: Option<i32> },
+    /// `log(message[, source])`.
+    Message { m: CompilerMessage, source: Option<String> },
+}
+
+/// A `Logger` installed with `ThreadLocalToolkit.setLogger` over another (`AbstractLogAdapter`): it passes each call on,
+/// possibly rewritten, to its original with `forward_log`.
+pub trait LogAdapter {
+    fn log(&self, call: LogCall);
+}
+
+thread_local! {
+    static ADAPTER: RefCell<Option<Rc<dyn LogAdapter>>> = const { RefCell::new(None) };
+}
+
+/// `ThreadLocalToolkit.getLogger()` when it is an adapter; `None` means the `LocalLogger`/console chain.
+pub fn get_log_adapter() -> Option<Rc<dyn LogAdapter>> {
+    ADAPTER.with(|a| a.borrow().clone())
+}
+
+/// `ThreadLocalToolkit.setLogger(adapter)`; `None` restores the `LocalLogger`/console chain.
+pub fn set_log_adapter(adapter: Option<Rc<dyn LogAdapter>>) {
+    ADAPTER.with(|a| *a.borrow_mut() = adapter);
+}
+
+/// `original.logX(...)` from an adapter whose original was `original`.
+pub fn forward_log(original: &Option<Rc<dyn LogAdapter>>, call: LogCall) {
+    match original {
+        Some(a) => a.log(call),
+        None => deliver(call),
+    }
+}
+
+fn dispatch(call: LogCall) {
+    let adapter = get_log_adapter();
+    forward_log(&adapter, call);
+}
+
+/// `LocalLogger.checkPath`'s marker for a message about a file other than the source.
+fn misroute_info(p: &str, line: i32, col: i32) -> String {
+    format!(" [Generated code (use -keep to save): Path: {p}, Line: {line}, Column: {col}]")
+}
+
+/// The `LocalLogger` (counts, `checkPath` misrouting) and then the `ConsoleLogger`.
+pub fn deliver(call: LogCall) {
+    let local = get_logger();
+    let misrouted = |p: Option<&str>| local.as_ref().and_then(|l| l.misrouted_opt(p));
+    match call {
+        LogCall::Text { level, msg } => {
+            if forward(level) {
+                sink_plain(level, &msg);
+            }
+        }
+        LogCall::Path { level, path, msg, code } => {
+            if forward(level) {
+                match misrouted(Some(&path)) {
+                    None => sink_path(level, &path, &msg, code.unwrap_or(-1)),
+                    Some(name) => sink_path(level, &name, &format!("{msg}{}", misroute_info(&path, 0, 0)), -1),
+                }
+            }
+        }
+        LogCall::PathLine { level, path, line, msg, code } => {
+            if forward(level) {
+                match misrouted(Some(&path)) {
+                    None => sink_path_line(level, &path, line, &msg),
+                    Some(name) => sink_path(level, &name, &format!("{msg}{}", misroute_info(&path, line, 0)), code.unwrap_or(-1)),
+                }
+            }
+        }
+        LogCall::PathLineCol { level, path, line, col, msg } => {
+            if forward(level) {
+                match misrouted(Some(&path)) {
+                    None => sink_path_line_col(level, &path, line, col, &msg),
+                    Some(name) => sink_path(level, &name, &format!("{msg}{}", misroute_info(&path, line, col)), -1),
+                }
+            }
+        }
+        LogCall::PathLineColSource { level, path, line, col, msg, source, code } => {
+            if forward(level) {
+                match misrouted(Some(&path)) {
+                    None => sink_asc(level, &path, line, col, &msg, &source, code.unwrap_or(-1)),
+                    Some(name) => sink_path(level, &name, &format!("{msg}{}", misroute_info(&path, line, col)), code.unwrap_or(-1)),
+                }
+            }
+        }
+        LogCall::Message { mut m, mut source } => {
+            if let Some(name) = misrouted(m.path.as_deref()) {
+                m.path = Some(name);
+                m.line = -1;
+                m.col = -1;
+                source = None;
+            }
+            if forward(m.level) {
+                sink_message(m, source.as_deref());
+            }
+        }
+    }
+}
+
+/// `logError(path, line, col, error, source, errorCode)` and its warning twin, as ASC's handler calls them.
+pub fn log_asc(level: Level, path: &str, line: i32, col: i32, msg: &str, source: &str, code: i32) {
+    dispatch(LogCall::PathLineColSource { level, path: path.into(), line, col, msg: msg.into(), source: source.into(), code: Some(code) });
+}
+
+/// `logError(path, error)` / `logWarning(path, warning)`.
+pub fn log_path(level: Level, path: &str, msg: &str, code: i32) {
+    dispatch(LogCall::Path { level, path: path.into(), msg: msg.into(), code: (code != -1).then_some(code) });
+}
+
+/// `logError(error)`.
+pub fn log_plain(level: Level, msg: &str) {
+    dispatch(LogCall::Text { level, msg: msg.into() });
+}
+
+/// `ThreadLocalToolkit.log(message, path, line, col, source)`, and the shorter overloads with `None`s.
+pub fn log(mut m: CompilerMessage, path: Option<&str>, line: i32, col: i32, source: Option<&str>) {
+    if let Some(p) = path {
+        m.path = Some(p.to_string());
+        m.line = line;
+        m.col = col;
+    }
+    dispatch(LogCall::Message { m, source: source.map(str::to_string) });
+}
+
+/// `logError(path, line, error)` / `logWarning(path, line, warning)` (CSS parser messages).
+pub fn log_path_line(level: Level, path: &str, line: i32, msg: &str) {
+    dispatch(LogCall::PathLine { level, path: path.into(), line, msg: msg.into(), code: None });
+}
+
+/// `logError(path, line, col, error)` / `logWarning(path, line, col, warning)`.
+pub fn log_path_line_col(level: Level, path: &str, line: i32, col: i32, msg: &str) {
+    dispatch(LogCall::PathLineCol { level, path: path.into(), line, col, msg: msg.into() });
+}
+
+/// `ThreadLocalToolkit.getLogger().logX(...)` for an explicit call shape.
+pub fn log_call(call: LogCall) {
+    dispatch(call);
 }

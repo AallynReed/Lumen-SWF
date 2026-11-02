@@ -133,10 +133,21 @@ fn child_of(parent: &Path, child: &str) -> PathBuf {
 
 fn local_file(p: &Path) -> Option<VirtualFile> {
     if p.exists() {
-        Some(VirtualFile::local(p))
+        let f = VirtualFile::local(p);
+        RAW_PATHS.with(|m| m.borrow_mut().insert(f.get_name().to_string(), p.to_path_buf()));
+        Some(f)
     } else {
         None
     }
+}
+
+thread_local! {
+    static RAW_PATHS: RefCell<HashMap<String, PathBuf>> = RefCell::new(HashMap::new());
+}
+
+/// The `java.io.File` path a resolved `LocalFile` was made from (`..` kept), as `LocalFile.getURL()` shows it.
+pub fn raw_path(name: &str) -> Option<PathBuf> {
+    RAW_PATHS.with(|m| m.borrow().get(name).cloned())
 }
 
 impl SinglePathResolver {
@@ -157,13 +168,18 @@ impl SinglePathResolver {
                 let rel = path.strip_prefix('/')?;
                 dirs.iter().find_map(|d| local_file(&child_of(Path::new(d), rel)))
             }
-            SinglePathResolver::LocalFilePath | SinglePathResolver::Toolkit => {
+            SinglePathResolver::LocalFilePath => {
                 let p = Path::new(path);
                 if p.is_absolute() {
                     local_file(p)
                 } else {
                     None
                 }
+            }
+            SinglePathResolver::Toolkit => {
+                let p = Path::new(path);
+                let local = if p.is_absolute() { local_file(p) } else { None };
+                local.or_else(|| crate::asc::flex2::compiler::css::css_file::swc_resolve(path).map(|f| f.to_virtual_file()))
             }
         }
     }
@@ -211,6 +227,7 @@ pub fn get_resolved_path(path: &str) -> Option<VirtualFile> {
 /// `CompilerAPI.removePathResolver()`'s `resetResolvedPaths`, and the per-JVM state a new mxmlc run starts without.
 pub fn reset() {
     RESOLVED_PATHS.with(|m| m.borrow_mut().clear());
+    RAW_PATHS.with(|m| m.borrow_mut().clear());
     crate::asc::flex2::flash::graphics::images::reset();
 }
 

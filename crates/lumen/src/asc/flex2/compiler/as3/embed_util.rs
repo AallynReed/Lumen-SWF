@@ -50,6 +50,13 @@ pub fn transcode(
                     }
                 }
             }
+            let mut delegate = source.borrow().get_delegate();
+            while let Some(d) = delegate {
+                if let Some(backing) = backing_file_resolver(&d) {
+                    context.add_single_path_resolver(backing);
+                }
+                delegate = d.borrow().get_delegate();
+            }
             if let Some(backing) = backing_file_resolver(&source) {
                 context.add_single_path_resolver(backing);
             }
@@ -83,7 +90,7 @@ pub fn transcode(
 fn backing_file_resolver(source: &SourceRef) -> Option<SinglePathResolver> {
     match source.borrow().get_backing_file() {
         VirtualFile::Local { name, .. } => Some(SinglePathResolver::LocalFile(name.clone())),
-        VirtualFile::InMemory { .. } => None,
+        VirtualFile::InMemory { .. } | VirtualFile::Text { .. } => None,
     }
 }
 

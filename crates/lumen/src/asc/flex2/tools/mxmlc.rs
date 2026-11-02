@@ -30,9 +30,19 @@ pub fn source_path_mime_types() -> [&'static str; 3] {
 pub fn compilers(config: &Rc<Configuration>) -> Vec<Box<dyn SubCompiler>> {
     let transcoders: crate::asc::flex2::compiler::transcoder::Transcoders = Rc::new(std::cell::RefCell::new(crate::asc::flex2::compiler::media::get_transcoders(config)));
     let mut asc = As3Compiler::new(config.clone());
-    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders, config.generated_directory.clone(), config.show_deprecation_warnings)));
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders.clone(), config.generated_directory.clone(), config.show_deprecation_warnings)));
     asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::style_evaluator::StyleExtension));
-    vec![Box::new(asc), Box::new(AbcCompiler), css_compiler(config)]
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::host_component_extension::HostComponentExtension::new(config.flex.report_missing_required_skin_parts_as_warnings)));
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::binding::bindable_extension::BindableExtension::new(config.generated_directory.clone(), config.get_generate_abstract_syntax_tree(), false)));
+    asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::skin_part_extension::SkinPartExtension));
+    let mxmlc = {
+        let mappings = Rc::new(crate::asc::flex2::compiler::util::name_mappings::get_name_mappings(&config.css.namespaces));
+        crate::asc::flex2::compiler::mxml::mxml_compiler::MxmlCompiler::new(config.clone(), mappings, transcoders.clone())
+    };
+    let i18n = crate::asc::flex2::compiler::i18n::i18n_compiler::I18nCompiler::new(config.clone(), transcoders);
+    let mut compilers: Vec<Box<dyn SubCompiler>> = vec![Box::new(asc), Box::new(AbcCompiler), Box::new(i18n), css_compiler(config)];
+    compilers.insert(1, Box::new(mxmlc));
+    compilers
 }
 
 /// `new CssCompiler(compilerConfig, transcoders, mappings)`: its own `As3Compiler` with an `EmbedExtension`.
@@ -47,6 +57,8 @@ fn css_compiler(config: &Rc<Configuration>) -> Box<dyn SubCompiler> {
 
 /// The per-run `ThreadLocalToolkit` state transcoding uses, as a new mxmlc process starts with it.
 fn reset_transcoding(configuration: &Configuration) {
+    super::pre_link_css::reset();
+    crate::asc::flex2::compiler::i18n::resource_file::reset();
     crate::asc::flex2::compiler::transcoder::reset();
     crate::asc::flex2::compiler::transcoder::set_source_path_dirs(configuration.source_path.iter().filter(|p| p.is_dir()).map(|p| canonical_path(p)).collect());
 }
@@ -54,7 +66,6 @@ fn reset_transcoding(configuration: &Configuration) {
 /// `CompilerAPI.compile` with `PreLink`, then `LinkerAPI.link` (with `PostLink` when optimizing a release build).
 pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<crate::asc::flex2::compiler::swc::Swc>, bool)>) -> Compiled {
     let fail = Compiled { sources: Vec::new(), units: Vec::new(), movie: None };
-    super::pre_link_css::reset();
     if !main.is_file() {
         toolkit::log(CompilerMessage::error(format!("unable to open '{}'", main.display())), None, -1, -1, None);
         return fail;
@@ -86,12 +97,7 @@ pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<c
         configuration,
     };
     let units = api.compile(&mut |api: &mut CompilerApi| {
-        let units: Vec<UnitRef> = api.units.iter().flatten().cloned().collect();
-        let rerun = super::pre_link::run(&units, &mut api.configuration) | super::pre_link_css::process_main_unit_styles(api);
-        if !rerun {
-            super::pre_link_css::post_run_styles(api);
-        }
-        rerun
+        super::pre_link::pre_link(api)
     });
     let Ok(units) = units else { return Compiled { sources: api.sources, ..fail } };
     api.configuration.add_externs(crate::asc::flex2::compiler::css::css_compiler::take_externs());
@@ -128,12 +134,7 @@ pub fn compile_unit(mut configuration: Configuration, root: crate::asc::flex2::c
         configuration,
     };
     let units = api.compile(&mut |api: &mut CompilerApi| {
-        let units: Vec<UnitRef> = api.units.iter().flatten().cloned().collect();
-        let rerun = super::pre_link::run(&units, &mut api.configuration) | super::pre_link_css::process_main_unit_styles(api);
-        if !rerun {
-            super::pre_link_css::post_run_styles(api);
-        }
-        rerun
+        super::pre_link::pre_link(api)
     });
     Compiled { units: units.unwrap_or_default(), sources: api.sources, movie: None }
 }

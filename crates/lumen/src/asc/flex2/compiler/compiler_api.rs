@@ -246,6 +246,7 @@ impl CompilerApi {
                 break;
             }
         }
+        self.check_resource_bundles()?;
         Ok(self.units.iter().flatten().cloned().collect())
     }
 
@@ -1068,7 +1069,14 @@ impl CompilerApi {
     }
 
     fn get_include_classes(&mut self) {
-        let includes = self.configuration.includes.clone();
+        let mut includes = self.configuration.includes.clone();
+        for f in &self.configuration.flex.frame_list {
+            for c in &f.frame_classes {
+                if !includes.contains(c) {
+                    includes.push(c.clone());
+                }
+            }
+        }
         for class_name in includes {
             let m = MultiName::parse(&super::util::name_formatter::to_colon(&class_name));
             match self.resolve_multi_name(Some("include"), &m) {
@@ -1101,10 +1109,13 @@ impl CompilerApi {
                 }
             }
             let history: Vec<String> = u.borrow().resource_bundle_history.iter().cloned().collect();
-            for rb in history {
-                if !self.configuration.resource_bundles.contains(&rb) {
-                    self.configuration.resource_bundles.push(rb);
+            for rb in &history {
+                if !self.configuration.resource_bundles.contains(rb) {
+                    self.configuration.resource_bundles.push(rb.clone());
                 }
+            }
+            if self.configuration.flex.use_resource_bundle_metadata && !history.is_empty() {
+                self.process_resource_bundles(&reporting, &history);
             }
             let extra: Vec<String> = u.borrow().extra_classes.iter().cloned().collect();
             for class_name in extra {
@@ -1119,6 +1130,110 @@ impl CompilerApi {
             }
             u.borrow_mut().set_workflow(EXTRA_SOURCES);
         }
+    }
+}
+
+impl CompilerApi {
+    /// The resource bundle part of `getExtraSources(u, ...)`.
+    fn process_resource_bundles(&mut self, reporting: &str, history: &[String]) {
+        let locales = self.configuration.flex.locales.clone();
+        for rb in history {
+            let rb_name = super::util::name_formatter::to_colon(rb);
+            let q_names = self.resolve_resource_bundle_name(&rb_name);
+            if q_names.is_some() {
+                let source = self.symbol_table.find_source_by_resource_bundle_name(&rb_name).unwrap();
+                let su = unit_of(&source);
+                self.add_vertex_to_graphs(&source, su);
+                continue;
+            }
+            let m_name = MultiName::parse(&rb_name);
+            if let Some(q) = self.resolve_multi_name(Some(reporting), &m_name) {
+                let source = self.symbol_table.find_source_by_qname(&q).unwrap();
+                let su = unit_of(&source);
+                self.add_vertex_to_graphs(&source, su);
+                self.symbol_table.register_resource_bundle_name(&rb_name, q_names, Some(&source));
+                continue;
+            }
+            let m_name = MultiName::parse(&format!("{rb_name}{}", super::i18n::i18n_utils::CLASS_SUFFIX));
+            if let Some(q) = self.resolve_multi_name(Some(reporting), &m_name) {
+                let source = self.symbol_table.find_source_by_qname(&q).unwrap();
+                let su = unit_of(&source);
+                self.add_vertex_to_graphs(&source, su);
+                self.symbol_table.register_resource_bundle_name(&rb_name, q_names, Some(&source));
+            } else if locales.len() == 1 {
+                toolkit::log(CompilerMessage::error(format!("Unable to resolve resource bundle \"{rb_name}\" for locale \"{}\".", locales[0])), None, -1, -1, None);
+            } else if locales.len() > 1 {
+                toolkit::log(CompilerMessage::error(format!("Unable to resolve resource bundle \"{rb_name}\".")), None, -1, -1, None);
+            }
+        }
+    }
+
+    /// `resolveResourceBundleName(rbName, sources, null, bundlePath, null, swcContext, symbolTable, locales)`.
+    pub fn resolve_resource_bundle_name(&mut self, rb_name: &str) -> Option<Vec<QName>> {
+        if let Some(q) = self.symbol_table.is_resource_bundle_resolved(rb_name) {
+            return Some(q);
+        }
+        let locales = self.configuration.flex.locales.clone();
+        let mut q_names = None;
+        let mut source = self.symbol_table.find_source_by_resource_bundle_name(rb_name);
+        if source.is_none() {
+            let bundle_name = QName::parse(rb_name);
+            if let Some(w) = self.find_resource_bundle(&locales, bundle_name.get_namespace(), bundle_name.get_local_part()) {
+                source = Some(self.sources[w].clone());
+                q_names = Some(locales.iter().map(|l| QName::new(bundle_name.get_namespace(), &format!("{l}${}{}", bundle_name.get_local_part(), super::i18n::i18n_utils::CLASS_SUFFIX))).collect());
+            }
+        }
+        self.symbol_table.register_resource_bundle_name(rb_name, q_names.clone(), source.as_ref());
+        q_names
+    }
+
+    /// `findResourceBundle(sources, null, bundlePath, swcContext, locales, namespaceURI, localPart)`.
+    fn find_resource_bundle(&mut self, locales: &[String], namespace_uri: &str, local_part: &str) -> Option<usize> {
+        use super::i18n::resource_file::{resource_file_of, ResourceBundlePath};
+        if self.swc_context.resource_bundles.bundle_path.is_none() {
+            let app = self.sources.iter().find(|s| s.borrow().is_root()).map(|s| std::path::PathBuf::from(s.borrow().get_name()));
+            self.swc_context.resource_bundles.bundle_path = Some(ResourceBundlePath::new(locales, &self.configuration.source_path, app.as_deref()));
+        }
+        let mut s1 = self.swc_context.resource_bundles.bundle_path.as_mut().unwrap().find_source(namespace_uri, local_part);
+        let rf1 = s1.as_ref().and_then(resource_file_of);
+        if !rf1.as_ref().is_some_and(|r| r.complete()) {
+            let s3 = self.swc_context.resource_bundles.get_resource_bundle(locales, namespace_uri, local_part);
+            let rf3 = s3.as_ref().and_then(resource_file_of);
+            match &rf1 {
+                Some(r) => r.merge(rf3.as_deref()),
+                None => s1 = s3,
+            }
+        }
+        let s = s1?;
+        match self.sources.iter().position(|x| Rc::ptr_eq(x, &s)) {
+            Some(w) => Some(w),
+            None => {
+                self.sources.push(s);
+                Some(self.sources.len() - 1)
+            }
+        }
+    }
+
+    /// `checkResourceBundles(sources, symbolTable)`.
+    fn check_resource_bundles(&mut self) -> Result<(), ()> {
+        for s in self.sources.clone() {
+            let Some(u) = unit_of(&s) else { continue };
+            let history: Vec<String> = u.borrow().resource_bundle_history.iter().cloned().collect();
+            for rb_name in history {
+                if let Some(rb_source) = self.symbol_table.find_source_by_resource_bundle_name(&rb_name) {
+                    if let Some(rb_unit) = unit_of(&rb_source) {
+                        let defs: Vec<String> = rb_unit.borrow().top_level_definitions.iter().map(|q| q.to_string()).collect();
+                        for d in defs {
+                            u.borrow_mut().resource_bundles.insert(d);
+                        }
+                    }
+                }
+            }
+        }
+        if toolkit::error_count() > 0 {
+            return Err(());
+        }
+        Ok(())
     }
 }
 

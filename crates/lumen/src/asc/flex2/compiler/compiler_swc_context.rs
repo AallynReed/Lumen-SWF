@@ -20,6 +20,8 @@ pub struct CompilerSwcContext {
     def2script: JHashMap<QName, Rc<SwcScript>>,
     package_names: JHashSet<String>,
     externs: JHashSet<String>,
+    /// `rb2file`/`rb2source`: the libraries' `locale/<locale>/*.properties` bundles.
+    pub resource_bundles: super::i18n::resource_file::SwcResourceBundles,
 }
 
 impl CompilerSwcContext {
@@ -75,6 +77,9 @@ impl CompilerSwcContext {
             return 0;
         }
         let group = SwcGroup::new(swcs, &rsl_locations);
+        crate::asc::flex2::compiler::util::name_mappings::set_swc_components(&group.swcs);
+        super::css::css_file::set_swcs(group.swcs.clone());
+        self.resource_bundles.update(&group.swcs);
         for (def, script) in group.def2script.iter() {
             let q = QName::parse(def);
             self.package_names.insert(q.get_namespace().to_string());

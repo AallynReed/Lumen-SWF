@@ -137,5 +137,35 @@ pub fn get_name_mappings(manifests: &[(String, Vec<std::path::PathBuf>)]) -> Nam
             parse_manifest(ns, f, &mappings);
         }
     }
+    SWC_COMPONENTS.with(|c| {
+        if let Some(group) = c.borrow().as_ref() {
+            mappings.add_mappings(group);
+        }
+    });
     mappings
+}
+
+thread_local! {
+    /// `SwcGroup.getNameMappings()` of the loaded libraries, which `CompilerSwcContext.load` adds to the mappings.
+    static SWC_COMPONENTS: RefCell<Option<NameMappings>> = const { RefCell::new(None) };
+}
+
+/// `SwcGroup.updateNameMappings()`: each SWC's catalog `<component>`s with a namespace URI.
+pub fn set_swc_components(swcs: &[std::rc::Rc<crate::asc::flex2::compiler::swc::Swc>]) {
+    let group = NameMappings::new();
+    for swc in swcs {
+        let Ok(bytes) = (crate::asc::flex2::compiler::css::css_file::CssFile::Zip { swc: swc.location.clone(), entry: "catalog.xml".to_string() }).to_byte_array() else { continue };
+        let text = String::from_utf8_lossy(&bytes);
+        let Ok(doc) = roxmltree::Document::parse(&text) else { continue };
+        for n in doc.descendants().filter(|n| n.has_tag_name("component") && n.parent().is_some_and(|p| p.has_tag_name("components"))) {
+            let Some(uri) = n.attribute("uri") else { continue };
+            if uri.is_empty() {
+                continue;
+            }
+            let Some(class_name) = n.attribute("className") else { continue };
+            let name = n.attribute("name").map(str::to_string).unwrap_or_else(|| super::name_formatter::retrieve_class_name(class_name));
+            group.add_class(uri, &name, class_name);
+        }
+    }
+    SWC_COMPONENTS.with(|c| *c.borrow_mut() = Some(group));
 }

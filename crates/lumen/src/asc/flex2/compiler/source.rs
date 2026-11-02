@@ -38,6 +38,8 @@ pub enum VirtualFile {
     Local { name: String, last_modified: i64 },
     /// `InMemoryFile`; `TextFile` sources are this with an AS mime type.
     InMemory { bytes: Rc<Vec<u8>>, name: String, mime_type: &'static str, last_modified: i64 },
+    /// `TextFile`, with its own parent and name for reporting.
+    Text { text: Rc<String>, name: String, name_for_reporting: String, parent: Option<String>, mime_type: &'static str, last_modified: i64 },
 }
 
 impl VirtualFile {
@@ -47,25 +49,46 @@ impl VirtualFile {
 
     pub fn get_name(&self) -> &str {
         match self {
-            VirtualFile::Local { name, .. } | VirtualFile::InMemory { name, .. } => name,
+            VirtualFile::Local { name, .. } | VirtualFile::InMemory { name, .. } | VirtualFile::Text { name, .. } => name,
         }
     }
 
     pub fn get_name_for_reporting(&self) -> &str {
-        self.get_name()
+        match self {
+            VirtualFile::Text { name_for_reporting, .. } => name_for_reporting,
+            _ => self.get_name(),
+        }
+    }
+
+    /// `new TextFile(text, name, nameForReporting, parent, mimeType, lastModified)`.
+    pub fn text(text: String, name: &str, name_for_reporting: Option<&str>, parent: Option<String>, mime_type: &'static str, last_modified: i64) -> VirtualFile {
+        VirtualFile::Text { text: Rc::new(text), name: name.to_string(), name_for_reporting: name_for_reporting.unwrap_or(name).to_string(), parent, mime_type, last_modified }
+    }
+
+    pub fn is_text_based(&self) -> bool {
+        matches!(self, VirtualFile::Text { .. })
+    }
+
+    /// `TextFile.toString()`.
+    pub fn get_text(&self) -> Option<Rc<String>> {
+        match self {
+            VirtualFile::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        }
     }
 
     pub fn get_parent(&self) -> Option<String> {
         match self {
             VirtualFile::Local { name, .. } => Path::new(name).parent().map(|p| p.to_string_lossy().into_owned()),
             VirtualFile::InMemory { .. } => None,
+            VirtualFile::Text { parent, .. } => parent.clone(),
         }
     }
 
     pub fn get_last_modified(&self) -> i64 {
         match self {
             VirtualFile::Local { name, .. } => last_modified(Path::new(name)),
-            VirtualFile::InMemory { last_modified, .. } => *last_modified,
+            VirtualFile::InMemory { last_modified, .. } | VirtualFile::Text { last_modified, .. } => *last_modified,
         }
     }
 
@@ -73,13 +96,14 @@ impl VirtualFile {
         match self {
             VirtualFile::Local { name, .. } => std::fs::metadata(name).map_or(0, |m| m.len() as i64),
             VirtualFile::InMemory { bytes, .. } => bytes.len() as i64,
+            VirtualFile::Text { text, .. } => crate::asc::util::jstr::utf16_len(text) as i64,
         }
     }
 
     pub fn get_mime_type(&self) -> Option<&'static str> {
         match self {
             VirtualFile::Local { name, .. } => mime_mappings::get_mime_type(name),
-            VirtualFile::InMemory { mime_type, .. } => Some(mime_type),
+            VirtualFile::InMemory { mime_type, .. } | VirtualFile::Text { mime_type, .. } => Some(mime_type),
         }
     }
 
@@ -87,6 +111,7 @@ impl VirtualFile {
         match self {
             VirtualFile::Local { name, .. } => std::fs::read(name),
             VirtualFile::InMemory { bytes, .. } => Ok(bytes.as_ref().clone()),
+            VirtualFile::Text { text, .. } => Ok(text.as_bytes().to_vec()),
         }
     }
 }
@@ -117,6 +142,10 @@ pub struct Source {
     file_includes: Vec<String>,
     /// The `BytecodeEmitter` view of this source, made on first use.
     emitter_view: Option<Rc<crate::asc::emit::bytecode_emitter::Source>>,
+    delegate: Option<SourceRef>,
+    /// `fragments` / `fragmentLineMaps`: MXML's embedded scripts (`VirtualFile`), inline component trees and their maps.
+    fragments: Option<crate::asc::util::jhash::JHashMap<String, Rc<dyn std::any::Any>>>,
+    fragment_line_maps: Option<crate::asc::util::jhash::JHashMap<String, Rc<dyn std::any::Any>>>,
 }
 
 impl Source {
@@ -147,7 +176,88 @@ impl Source {
             logger: None,
             file_includes: Vec::new(),
             emitter_view: None,
+            delegate: None,
+            fragments: None,
+            fragment_line_maps: None,
         }))
+    }
+
+    /// `new Source(file, original)`.
+    pub fn new_from(file: VirtualFile, original: &SourceRef) -> SourceRef {
+        let s = {
+            let o = original.borrow();
+            Source::new(file, o.path_root.clone(), &o.relative_path, &o.short_name, o.owner.clone(), o.is_internal, o.is_root, o.is_debuggable)
+        };
+        s.borrow_mut().delegate = Some(original.clone());
+        s
+    }
+
+    /// `new Source(file, original, shortName, isInternal, isRoot)`.
+    pub fn new_derived(file: VirtualFile, original: &SourceRef, short_name: &str, is_internal: bool, is_root: bool) -> SourceRef {
+        let s = {
+            let o = original.borrow();
+            Source::new(file, o.path_root.clone(), &o.relative_path, short_name, Owner::None, is_internal, is_root, true)
+        };
+        s.borrow_mut().delegate = Some(original.clone());
+        s
+    }
+
+    pub fn get_delegate(&self) -> Option<SourceRef> {
+        self.delegate.clone()
+    }
+
+    pub fn is_text_based(&self) -> bool {
+        self.file.is_text_based()
+    }
+
+    /// `getInputText()`.
+    pub fn get_input_text(&self) -> Option<Rc<String>> {
+        self.file.get_text()
+    }
+
+    /// `addSourceFragment(n, f, m)`.
+    pub fn add_source_fragment(&mut self, n: &str, f: Rc<dyn std::any::Any>, m: Option<Rc<dyn std::any::Any>>) {
+        if self.fragments.is_none() {
+            self.fragments = Some(Default::default());
+            self.fragment_line_maps = Some(Default::default());
+        }
+        self.fragments.as_mut().unwrap().insert(n.to_string(), f);
+        if let Some(m) = m {
+            self.fragment_line_maps.as_mut().unwrap().insert(n.to_string(), m);
+        }
+    }
+
+    /// `getSourceFragment(n)`: this source's before the delegate's.
+    pub fn get_source_fragment(&self, n: &str) -> Option<Rc<dyn std::any::Any>> {
+        let obj = self.fragments.as_ref().and_then(|f| f.get(n).cloned());
+        match obj {
+            None => self.delegate.as_ref().and_then(|d| d.borrow().get_source_fragment(n)),
+            o => o,
+        }
+    }
+
+    /// `getSourceFragmentLineMaps()`.
+    pub fn get_source_fragment_line_maps(&self) -> Option<Vec<Rc<dyn std::any::Any>>> {
+        if let Some(m) = &self.fragment_line_maps {
+            Some(m.values().cloned().collect())
+        } else if let Some(d) = &self.delegate {
+            d.borrow().get_source_fragment_line_maps()
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_source_fragments(&mut self) {
+        self.fragments = None;
+    }
+
+    /// `addFileIncludes(source)`.
+    pub fn add_file_includes(&mut self, other: &Source) {
+        for f in &other.file_includes {
+            if !self.file_includes.contains(f) {
+                self.file_includes.push(f.clone());
+            }
+        }
     }
 
     pub fn new_compilation_unit(this: &SourceRef, syntax_tree: Option<crate::asc::parser::node::NodeRef>) -> UnitRef {
@@ -255,7 +365,7 @@ impl Source {
     pub fn exists(&self) -> bool {
         match &self.file {
             VirtualFile::Local { name, .. } => Path::new(name).exists(),
-            VirtualFile::InMemory { .. } => true,
+            VirtualFile::InMemory { .. } | VirtualFile::Text { .. } => true,
         }
     }
 
@@ -325,4 +435,149 @@ impl Source {
         }
         self.emitter_view.clone().unwrap()
     }
+}
+
+/// `Source.transferDefinitions(from, to)` and the other static `transfer*` helpers the delegating compilers use.
+pub fn transfer_definitions(from: &CompilationUnit, to: &mut CompilationUnit) {
+    for q in from.top_level_definitions.0.iter() {
+        to.top_level_definitions.add(q.clone());
+    }
+}
+
+pub fn transfer_type_info(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.type_info = from.type_info.clone();
+}
+
+pub fn clear_dependencies(unit: &mut CompilationUnit) {
+    unit.inheritance.clear();
+    unit.types.clear();
+    unit.expressions.clear();
+    unit.namespaces.clear();
+    unit.import_package_statements.clear();
+    unit.import_definition_statements.clear();
+}
+
+fn put_all(to: &mut super::util::MultiNameMap, from: &super::util::MultiNameMap) {
+    for (k, v) in from.iter() {
+        to.put(k.clone(), v.clone());
+    }
+}
+
+pub fn transfer_inheritance(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.inheritance.clear();
+    for n in from.inheritance.iter() {
+        to.inheritance.insert(n.clone());
+    }
+    put_all(&mut to.inheritance_history, &from.inheritance_history);
+}
+
+pub fn transfer_dependencies(from: &CompilationUnit, to: &mut CompilationUnit) {
+    clear_dependencies(to);
+    for n in from.inheritance.iter() {
+        to.inheritance.insert(n.clone());
+    }
+    for n in from.types.iter() {
+        to.types.insert(n.clone());
+    }
+    for n in from.expressions.iter() {
+        to.expressions.insert(n.clone());
+    }
+    for n in from.namespaces.iter() {
+        to.namespaces.insert(n.clone());
+    }
+    for n in from.import_package_statements.iter() {
+        to.import_package_statements.insert(n.clone());
+    }
+    for n in from.import_definition_statements.iter() {
+        to.import_definition_statements.insert(n.clone());
+    }
+    put_all(&mut to.inheritance_history, &from.inheritance_history);
+    put_all(&mut to.type_history, &from.type_history);
+    put_all(&mut to.expression_history, &from.expression_history);
+    put_all(&mut to.namespace_history, &from.namespace_history);
+}
+
+pub fn transfer_namespaces(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.namespaces.clear();
+    for n in from.namespaces.iter() {
+        to.namespaces.insert(n.clone());
+    }
+    put_all(&mut to.namespace_history, &from.namespace_history);
+}
+
+pub fn transfer_expressions(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.expressions.clear();
+    for n in from.expressions.iter() {
+        to.expressions.insert(n.clone());
+    }
+    put_all(&mut to.expression_history, &from.expression_history);
+}
+
+pub fn transfer_assets(from: &CompilationUnit, to: &mut CompilationUnit) {
+    if from.has_assets() {
+        to.assets.add_all(&from.assets);
+    }
+}
+
+pub fn transfer_meta_data(from: &CompilationUnit, to: &mut CompilationUnit) {
+    for m in &from.metadata {
+        if !to.metadata.iter().any(|x| Rc::ptr_eq(x, m)) {
+            to.metadata.push(m.clone());
+        }
+    }
+    to.swf_meta_data = from.swf_meta_data.clone();
+    to.icon = from.icon.clone();
+    to.loader_class = from.loader_class.clone();
+    for c in from.extra_classes.iter() {
+        to.extra_classes.insert(c.clone());
+    }
+    if let Some(a) = &from.accessibility_classes {
+        for c in a.iter() {
+            to.add_accessibility_class(c.clone());
+        }
+    }
+    for (k, v) in from.licensed_class_reqs.iter() {
+        to.licensed_class_reqs.insert(k.clone(), v.clone());
+    }
+    for (k, v) in from.remote_class_aliases.iter() {
+        to.remote_class_aliases.insert(k.clone(), v.clone());
+    }
+    for (k, v) in from.effect_triggers.iter() {
+        to.effect_triggers.insert(k.clone(), v.clone());
+    }
+    for m in from.mixins.iter() {
+        to.mixins.insert(m.clone());
+    }
+    for r in from.resource_bundles.iter() {
+        to.resource_bundles.insert(r.clone());
+    }
+    for r in from.resource_bundle_history.iter() {
+        to.resource_bundle_history.insert(r.clone());
+    }
+}
+
+pub fn transfer_generated_sources(from: &mut CompilationUnit, to: &mut CompilationUnit) {
+    if let Some(g) = from.get_generated_sources().cloned() {
+        to.add_generated_sources(g);
+    }
+    from.clear_generated_sources();
+}
+
+pub fn transfer_class_table(from: &CompilationUnit, to: &mut CompilationUnit) {
+    for (k, v) in from.class_table.iter() {
+        to.class_table.insert(k.clone(), v.clone());
+    }
+}
+
+pub fn transfer_loader_class_base(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.loader_class_base = from.loader_class_base.clone();
+}
+
+pub fn transfer_bytecodes(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.bytes.clear();
+    to.bytes.extend_from_slice(&from.bytes);
+}
+
+pub fn transfer_styles(from: &CompilationUnit, to: &mut CompilationUnit) {
+    to.styles = from.styles.clone();
 }
