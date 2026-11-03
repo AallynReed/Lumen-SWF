@@ -275,9 +275,7 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
     let flex_mode = flexlib.is_some() && configs.as_ref().is_none_or(|c| !c.is_empty());
     if let Some(fw) = &flexlib {
         let files = configs.clone().unwrap_or_else(|| vec![fw.join("flex-config.xml")]);
-        if !files.is_empty() || !extra_configs.is_empty() {
-            file_configurator::load_defaults(&mut o, fw);
-        }
+        file_configurator::load_defaults(&mut o, fw);
         for f in files.iter().chain(extra_configs.iter()) {
             file_configurator::load(&mut o, f, fw).map_err(|e| anyhow!("unable to open '{}': {e}", f.display()))?;
             loaded.push(f.clone());
