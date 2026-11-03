@@ -168,9 +168,174 @@ pub struct Xerces<'h, H: SaxHandler> {
     seen_doctype_decl: bool,
     ns: NamespaceSupport,
     standalone: bool,
+    opts: super::Options,
+    dtd: Dtd,
+}
+
+/// The declarations an internal or external DTD subset gave (only with `Options::dtd`).
+#[derive(Default)]
+struct Dtd {
+    entities: Vec<(String, String)>,
+    attlists: Vec<(String, String, String)>,
+}
+
+fn dtd_quote(c: char) -> bool {
+    c == '"' || c == '\''
+}
+
+impl Dtd {
+    fn entity(&self, name: &str) -> Option<&str> {
+        self.entities.iter().find(|e| e.0 == name).map(|e| e.1.as_str())
+    }
+
+    /// The `<!ENTITY>` and `<!ATTLIST>` declarations of a subset's text; the first declaration of a name wins.
+    fn parse(&mut self, text: &str) {
+        let c: Vec<char> = text.chars().collect();
+        let mut i = 0;
+        let sp = |i: &mut usize| {
+            while *i < c.len() && c[*i].is_whitespace() {
+                *i += 1;
+            }
+        };
+        let name = |i: &mut usize| {
+            let st = *i;
+            while *i < c.len() && !c[*i].is_whitespace() && !"<>()|,".contains(c[*i]) && !dtd_quote(c[*i]) {
+                *i += 1;
+            }
+            c[st..*i].iter().collect::<String>()
+        };
+        let quoted = |i: &mut usize| {
+            let q = c[*i];
+            *i += 1;
+            let st = *i;
+            while *i < c.len() && c[*i] != q {
+                *i += 1;
+            }
+            let v: String = c[st..(*i).min(c.len())].iter().collect();
+            *i += 1;
+            v
+        };
+        let starts = |i: usize, t: &str| c[i..].iter().take(t.chars().count()).copied().eq(t.chars());
+        let skip_decl = |i: &mut usize| {
+            while *i < c.len() && c[*i] != '>' {
+                if dtd_quote(c[*i]) {
+                    quoted(i);
+                } else {
+                    *i += 1;
+                }
+            }
+            *i += 1;
+        };
+        while i < c.len() {
+            sp(&mut i);
+            if i >= c.len() {
+                break;
+            }
+            if starts(i, "<!--") {
+                while i < c.len() && !starts(i, "-->") {
+                    i += 1;
+                }
+                i += 3;
+            } else if starts(i, "<!ENTITY") {
+                i += 8;
+                sp(&mut i);
+                let pe = i < c.len() && c[i] == '%';
+                if pe {
+                    i += 1;
+                    sp(&mut i);
+                }
+                let n = name(&mut i);
+                sp(&mut i);
+                if i < c.len() && dtd_quote(c[i]) {
+                    let v = expand_char_refs(&quoted(&mut i));
+                    if !pe && self.entity(&n).is_none() {
+                        self.entities.push((n, v));
+                    }
+                }
+                skip_decl(&mut i);
+            } else if starts(i, "<!ATTLIST") {
+                i += 9;
+                sp(&mut i);
+                let elem = name(&mut i);
+                loop {
+                    sp(&mut i);
+                    if i >= c.len() || c[i] == '>' {
+                        i += 1;
+                        break;
+                    }
+                    let attr = name(&mut i);
+                    if attr.is_empty() {
+                        skip_decl(&mut i);
+                        break;
+                    }
+                    sp(&mut i);
+                    if i < c.len() && c[i] == '(' {
+                        while i < c.len() && c[i] != ')' {
+                            i += 1;
+                        }
+                        i += 1;
+                    } else {
+                        let t = name(&mut i);
+                        sp(&mut i);
+                        if t == "NOTATION" && i < c.len() && c[i] == '(' {
+                            while i < c.len() && c[i] != ')' {
+                                i += 1;
+                            }
+                            i += 1;
+                        }
+                    }
+                    sp(&mut i);
+                    let mut default = None;
+                    if i < c.len() && c[i] == '#' {
+                        let k = name(&mut i);
+                        sp(&mut i);
+                        if k == "#FIXED" && i < c.len() && dtd_quote(c[i]) {
+                            default = Some(quoted(&mut i));
+                        }
+                    } else if i < c.len() && dtd_quote(c[i]) {
+                        default = Some(quoted(&mut i));
+                    }
+                    if let Some(d) = default {
+                        if !self.attlists.iter().any(|a| a.0 == elem && a.1 == attr) {
+                            self.attlists.push((elem.clone(), attr, expand_char_refs(&d)));
+                        }
+                    }
+                }
+            } else if c[i] == '<' {
+                skip_decl(&mut i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+}
+
+fn expand_char_refs(v: &str) -> String {
+    let mut out = String::new();
+    let mut rest = v;
+    while let Some(p) = rest.find("&#") {
+        out.push_str(&rest[..p]);
+        let r = &rest[p + 2..];
+        let Some(e) = r.find(';') else {
+            out.push_str(&rest[p..]);
+            return out;
+        };
+        let code = if let Some(h) = r[..e].strip_prefix('x') { u32::from_str_radix(h, 16).ok() } else { r[..e].parse().ok() };
+        match code.and_then(char::from_u32) {
+            Some(ch) => out.push(ch),
+            None => out.push_str(&rest[p..p + 3 + e]),
+        }
+        rest = &r[e + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 pub fn parse<H: SaxHandler>(bytes: Vec<u8>, h: &mut H) -> Result<(), Stop<H::Error>> {
+    parse_with(bytes, h, super::Options::default())
+}
+
+pub fn parse_with<H: SaxHandler>(bytes: Vec<u8>, h: &mut H, opts: super::Options) -> Result<(), Stop<H::Error>> {
     let mut x = Xerces {
         h,
         entity: None,
@@ -189,6 +354,8 @@ pub fn parse<H: SaxHandler>(bytes: Vec<u8>, h: &mut H) -> Result<(), Stop<H::Err
         seen_doctype_decl: false,
         ns: NamespaceSupport::default(),
         standalone: false,
+        opts,
+        dtd: Dtd::default(),
     };
     x.ns.reset();
     match x.run(bytes) {
@@ -1189,7 +1356,10 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
                             "lt" => buf.push('<' as u16),
                             "gt" => buf.push('>' as u16),
                             "quot" => buf.push('"' as u16),
-                            _ => return fatal("EntityNotDeclared", &[name]),
+                            _ => match self.dtd.entity(&name) {
+                                Some(v) if self.opts.dtd => buf.extend(v.encode_utf16().map(|u| if u == 0x9 || u == 0xA || u == 0xD { 0x20 } else { u })),
+                                _ => return fatal("EntityNotDeclared", &[name]),
+                            },
                         }
                     }
                 } else if c == '<' as i32 {
@@ -1254,6 +1424,26 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
                 return fatal("ElementUnterminated", &[rawname]);
             }
             self.scan_ns_attribute()?;
+        }
+        if self.opts.dtd {
+            let defaults: Vec<(String, String)> = self.dtd.attlists.iter().filter(|a| a.0 == rawname).map(|a| (a.1.clone(), a.2.clone())).collect();
+            for (an, av) in defaults {
+                if self.attributes.iter().any(|a| a.name.rawname == an) {
+                    continue;
+                }
+                let (prefix, localpart) = match an.find(':') {
+                    Some(i) => (Some(an[..i].to_string()), an[i + 1..].to_string()),
+                    None => (None, an.clone()),
+                };
+                let mut aq = QName { prefix, localpart, rawname: an.clone(), uri: None };
+                let p = aq.prefix.clone().unwrap_or_default();
+                if p == "xmlns" || (p.is_empty() && aq.localpart == "xmlns") {
+                    let np = if aq.localpart != "xmlns" { aq.localpart.clone() } else { String::new() };
+                    self.ns.declare_prefix(&np, if av.is_empty() { None } else { Some(av.clone()) });
+                    aq.uri = self.ns.get_uri("xmlns");
+                }
+                self.attributes.push(Attr { name: aq, value: av });
+            }
         }
         if qn.prefix.as_deref() == Some("xmlns") {
             return fatal("ElementXMLNSPrefix", &[qn.rawname.clone()]);
@@ -1385,7 +1575,7 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
         let attrs: Vec<SaxAttr> = self
             .attributes
             .iter()
-            .filter(|a| !(a.name.prefix.as_deref() == Some("xmlns") || a.name.rawname == "xmlns"))
+            .filter(|a| self.opts.namespace_prefixes || !(a.name.prefix.as_deref() == Some("xmlns") || a.name.rawname == "xmlns"))
             .map(|a| SaxAttr { uri: a.name.uri.clone().unwrap_or_default(), local: a.name.localpart.clone(), qname: a.name.rawname.clone(), value: a.value.clone() })
             .collect();
         let r = self.h.start_element(qn.uri.as_deref().unwrap_or(""), &qn.localpart, &qn.rawname, &attrs, loc);
@@ -1520,7 +1710,17 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
             "gt" => '>',
             "quot" => '"',
             "apos" => '\'',
-            _ => return fatal("EntityNotDeclared", &[name]),
+            _ => {
+                let Some(v) = self.dtd.entity(&name).filter(|_| self.opts.dtd).map(|v| v.encode_utf16().collect::<Vec<u16>>()) else {
+                    return fatal("EntityNotDeclared", &[name]);
+                };
+                let loc = self.locator();
+                let r = self.h.start_entity(&name, loc);
+                self.handler(r)?;
+                self.characters(&v)?;
+                let r = self.h.end_entity(&name, loc);
+                return self.handler(r);
+            }
         };
         let loc = self.locator();
         let r = self.h.start_entity(&name, loc);
@@ -1645,6 +1845,7 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
         let name = self.scan_name()?;
         let Some(name) = name else { return fatal("MSG_ROOT_ELEMENT_TYPE_REQUIRED", &[]) };
         let mut external = false;
+        let mut ids: Vec<String> = Vec::new();
         if self.skip_spaces()? {
             for keyword in ["SYSTEM", "PUBLIC"] {
                 if self.skip_string(keyword)? {
@@ -1661,6 +1862,7 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
                             }
                             b.push(c as u16);
                         }
+                        ids.push(to_string(&b));
                     }
                     break;
                 }
@@ -1670,6 +1872,43 @@ impl<'h, H: SaxHandler> Xerces<'h, H> {
         let loc = self.locator();
         let r = self.h.start_dtd(&name, loc);
         self.handler(r)?;
+        if self.opts.dtd {
+            if self.skip_char('[' as i32)? {
+                let mut b: Vec<u16> = Vec::new();
+                let mut q = 0;
+                loop {
+                    let c = self.scan_char()?;
+                    if c == -1 {
+                        return fatal("DoctypedeclUnterminated", &[name]);
+                    }
+                    if q == 0 && c == ']' as i32 {
+                        break;
+                    }
+                    if q != 0 && c == q {
+                        q = 0;
+                    } else if q == 0 && (c == '"' as i32 || c == '\'' as i32) {
+                        q = c;
+                    }
+                    b.push(c as u16);
+                }
+                self.dtd.parse(&to_string(&b));
+                self.skip_spaces()?;
+            }
+            if !self.skip_char('>' as i32)? {
+                return fatal("DoctypedeclUnterminated", &[name]);
+            }
+            self.markup_depth -= 1;
+            if external {
+                let (public, system) = if ids.len() == 2 { (Some(ids[0].as_str()), Some(ids[1].as_str())) } else { (None, ids.first().map(String::as_str)) };
+                match self.h.resolve_entity(public, system) {
+                    Some(text) => self.dtd.parse(&text),
+                    None => return Err(Stop::Io(s("java.io.FileNotFoundException: external DTDs are not read"))),
+                }
+            }
+            let loc = self.locator();
+            let r = self.h.end_dtd(loc);
+            return self.handler(r);
+        }
         if self.skip_char('[' as i32)? {
             return Err(Stop::Io(s("DTD internal subsets are not supported")));
         }

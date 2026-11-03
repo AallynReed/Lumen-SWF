@@ -11,6 +11,7 @@ pub mod movie_transcoder;
 pub mod pbj_transcoder;
 pub mod skin_transcoder;
 pub mod sound_transcoder;
+pub mod svg_transcoder;
 #[cfg(test)]
 mod tests;
 pub mod velocity_boundary;
@@ -27,12 +28,10 @@ pub static SVG_TRANSCODER: std::sync::OnceLock<TranscoderFactory> = std::sync::O
 /// `new FontTranscoder(cfg)`, set once by the font port.
 pub static FONT_TRANSCODER: std::sync::OnceLock<TranscoderFactory> = std::sync::OnceLock::new();
 
-/// `WebTierAPI.getTranscoders(cfg)`, in its order; the SVG and font slots stay empty until their ports register.
+/// `WebTierAPI.getTranscoders(cfg)`, in its order.
 pub fn get_transcoders(cfg: &Configuration) -> Vec<Box<dyn Transcoder>> {
     let mut t: Vec<Box<dyn Transcoder>> = vec![Box::new(jpeg_transcoder::JpegTranscoder::new()), Box::new(lossless_image_transcoder::LosslessImageTranscoder::new())];
-    if let Some(f) = SVG_TRANSCODER.get() {
-        t.push(f(cfg));
-    }
+    t.push(SVG_TRANSCODER.get_or_init(|| svg_transcoder::factory)(cfg));
     t.push(Box::new(sound_transcoder::SoundTranscoder::new()));
     t.push(Box::new(movie_transcoder::MovieTranscoder::new()));
     t.push(FONT_TRANSCODER.get_or_init(|| font_transcoder::factory)(cfg));

@@ -2,7 +2,7 @@
 
 use super::css_lexical_unit::LexicalUnitRef;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CSSSACMediaExpression {
     media_feature: String,
     expr: Option<LexicalUnitRef>,
@@ -32,7 +32,7 @@ impl CSSSACMediaExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CSSSACMediaQuery {
     not: bool,
     media_type: Option<String>,
@@ -93,7 +93,7 @@ impl std::fmt::Display for CSSSACMediaQuery {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CSSSACMediaList {
     list: Vec<CSSSACMediaQuery>,
 }

@@ -2,5 +2,6 @@
 
 pub mod css;
 pub mod graphics;
+pub mod svg;
 pub mod swf;
 pub mod util;

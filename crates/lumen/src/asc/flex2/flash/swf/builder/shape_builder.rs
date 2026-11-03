@@ -109,6 +109,11 @@ impl ShapeBuilder {
         }
     }
 
+    /// `new ShapeBuilder(origin)`.
+    pub fn with_origin(origin: Point) -> ShapeBuilder {
+        ShapeBuilder { start: origin, last_move_to: origin, pen: origin, ..ShapeBuilder::new(true) }
+    }
+
     pub fn build(self) -> Shape {
         self.shape
     }

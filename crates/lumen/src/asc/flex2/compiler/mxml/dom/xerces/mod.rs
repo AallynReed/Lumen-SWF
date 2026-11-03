@@ -57,6 +57,19 @@ pub trait SaxHandler {
     }
     /// `fatalError(SAXParseException)`, before the parse stops.
     fn fatal_error(&mut self, message: &str, loc: Locator) -> Result<(), Self::Error>;
+    /// `EntityResolver.resolveEntity` for the external DTD subset (only with `Options::dtd`); `None` loads nothing.
+    fn resolve_entity(&mut self, _public_id: Option<&str>, _system_id: Option<&str>) -> Option<String> {
+        None
+    }
+}
+
+/// Parser features beyond the ones `MxmlScanner` uses.
+#[derive(Clone, Copy, Default)]
+pub struct Options {
+    /// `namespace-prefixes`: report `xmlns` attributes.
+    pub namespace_prefixes: bool,
+    /// Read the internal subset and the resolved external subset: general entities and attribute defaults.
+    pub dtd: bool,
 }
 
 /// How a parse ended other than normally.
@@ -71,7 +84,12 @@ pub enum ParseFailure<E> {
 
 /// `SAXParser.parse(in, handler)`.
 pub fn parse<H: SaxHandler>(bytes: Vec<u8>, handler: &mut H) -> Result<(), ParseFailure<H::Error>> {
-    match scanner::parse(bytes, handler) {
+    parse_with(bytes, handler, Options::default())
+}
+
+/// `parse` with extra parser features.
+pub fn parse_with<H: SaxHandler>(bytes: Vec<u8>, handler: &mut H, opts: Options) -> Result<(), ParseFailure<H::Error>> {
+    match scanner::parse_with(bytes, handler, opts) {
         Ok(()) => Ok(()),
         Err(scanner::Stop::Fatal(m)) => Err(ParseFailure::Fatal(m)),
         Err(scanner::Stop::Io(m)) => Err(ParseFailure::Io(m)),
