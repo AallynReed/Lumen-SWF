@@ -269,15 +269,14 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
     }
     let mut o = lumen::asc::flex2::ApplicationOptions::default();
     let mut loaded = Vec::new();
+    // DefaultsConfigurator's locale and resource-bundle defaults apply even with -load-config= and no SDK.
+    o.flex.locales = vec!["en_US".to_string()];
+    o.flex.use_resource_bundle_metadata = true;
     let flex_mode = flexlib.is_some() && configs.as_ref().is_none_or(|c| !c.is_empty());
     if let Some(fw) = &flexlib {
         let files = configs.clone().unwrap_or_else(|| vec![fw.join("flex-config.xml")]);
         if !files.is_empty() || !extra_configs.is_empty() {
             file_configurator::load_defaults(&mut o, fw);
-        } else {
-            // DefaultsConfigurator's locale and resource-bundle defaults still apply with -load-config=.
-            o.flex.locales = vec!["en_US".to_string()];
-            o.flex.use_resource_bundle_metadata = true;
         }
         for f in files.iter().chain(extra_configs.iter()) {
             file_configurator::load(&mut o, f, fw).map_err(|e| anyhow!("unable to open '{}': {e}", f.display()))?;
