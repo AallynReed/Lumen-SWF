@@ -337,7 +337,7 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
         let name = name.strip_prefix("compiler.").unwrap_or(name);
         let mut take = |n: usize, list: bool| -> Vec<String> {
             if let Some(v) = &inline {
-                return if list { v.split(',').filter(|s| !s.is_empty()).map(String::from).collect() } else { vec![v.clone()] };
+                return if list || n > 1 { v.split(',').filter(|s| !s.is_empty()).map(String::from).collect() } else { vec![v.clone()] };
             }
             let mut out = Vec::new();
             while i < args.len() && (list || out.len() < n) && !args[i].starts_with('-') {
