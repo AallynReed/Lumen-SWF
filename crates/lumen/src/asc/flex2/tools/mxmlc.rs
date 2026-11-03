@@ -1,4 +1,5 @@
-//! Port of `flex2.tools.Mxmlc.mxmlc` for one ActionScript root: source list and path, libraries, compile, link.
+//! Port of `flex2.tools.Mxmlc.mxmlc` for one ActionScript root: source list and path, libraries, the incremental
+//! cache check, compile, link.
 
 use std::path::Path;
 use std::rc::Rc;
@@ -15,11 +16,19 @@ use crate::asc::flex2::compiler::symbol_table::SymbolTable;
 use crate::asc::flex2::compiler::toolkit::{self, CompilerMessage};
 use crate::asc::flex2::compiler::util::{mime_mappings, MultiName, Name};
 use crate::asc::flex2::linker::{self, Movie};
+use crate::asc::flex2::compiler::i18n::resource_file::ResourceBundlePath;
+use crate::asc::flex2::compiler::incremental;
+use crate::asc::flex2::compiler::persistence_store::{self, ReadResult};
+use crate::asc::flex2::tools::swc_checksums::SwcChecksums;
 
 pub struct Compiled {
     pub sources: Vec<crate::asc::flex2::compiler::source::SourceRef>,
     pub units: Vec<UnitRef>,
     pub movie: Option<Movie>,
+    /// `-incremental`: the cache to write beside the output.
+    pub cache: Option<Vec<u8>>,
+    /// `-incremental` and nothing changed (`NoUpdateMessage`).
+    pub up_to_date: bool,
 }
 
 pub fn source_path_mime_types() -> [&'static str; 3] {
@@ -30,6 +39,9 @@ pub fn source_path_mime_types() -> [&'static str; 3] {
 pub fn compilers(config: &Rc<Configuration>) -> Vec<Box<dyn SubCompiler>> {
     let transcoders: crate::asc::flex2::compiler::transcoder::Transcoders = Rc::new(std::cell::RefCell::new(crate::asc::flex2::compiler::media::get_transcoders(config)));
     let mut asc = As3Compiler::new(config.clone());
+    if !config.disable_incremental_optimizations {
+        asc.add_compiler_extension(Box::new(signature_extension(config)));
+    }
     asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders.clone(), config.generated_directory.clone(), config.show_deprecation_warnings)));
     asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::style_evaluator::StyleExtension));
     asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::host_component_extension::HostComponentExtension::new(config.flex.report_missing_required_skin_parts_as_warnings)));
@@ -43,6 +55,11 @@ pub fn compilers(config: &Rc<Configuration>) -> Vec<Box<dyn SubCompiler>> {
     let mut compilers: Vec<Box<dyn SubCompiler>> = vec![Box::new(asc), Box::new(AbcCompiler), Box::new(i18n), css_compiler(config)];
     compilers.insert(1, Box::new(mxmlc));
     compilers
+}
+
+/// `SignatureExtension.init(compilerConfig)` and `getInstance()`.
+pub fn signature_extension(config: &Configuration) -> crate::asc::flex2::compiler::as3::signature_extension::SignatureExtension {
+    crate::asc::flex2::compiler::as3::signature_extension::SignatureExtension::new(config.signature_directory.is_some(), config.signature_directory.clone())
 }
 
 /// `new CssCompiler(compilerConfig, transcoders, mappings)`: its own `As3Compiler` with an `EmbedExtension`.
@@ -65,26 +82,77 @@ fn reset_transcoding(configuration: &Configuration) {
 
 /// `CompilerAPI.compile` with `PreLink`, then `LinkerAPI.link` (with `PostLink` when optimizing a release build).
 pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<crate::asc::flex2::compiler::swc::Swc>, bool)>) -> Compiled {
-    let fail = Compiled { sources: Vec::new(), units: Vec::new(), movie: None };
+    let fail = Compiled { sources: Vec::new(), units: Vec::new(), movie: None, cache: None, up_to_date: false };
     if !main.is_file() {
         toolkit::log(CompilerMessage::error(format!("unable to open '{}'", main.display())), None, -1, -1, None);
         return fail;
     }
     let target_file = VirtualFile::local(main);
     let class_path: Vec<String> = configuration.source_path.iter().filter(|p| p.is_dir()).map(|p| canonical_path(p)).collect();
-    let source_list = match SourceList::new(std::slice::from_ref(&target_file), &class_path, Some(&target_file)) {
-        Ok(s) => s,
-        Err(_) => return fail,
-    };
-    let source_path = SourcePath::new(&class_path, Some(&target_file), &source_path_mime_types(), configuration.allow_source_path_overlap);
+    let new_source_list = || SourceList::new(std::slice::from_ref(&target_file), &class_path, Some(&target_file));
+    let overlap = configuration.allow_source_path_overlap;
+    let new_source_path = || SourcePath::new(&class_path, Some(&target_file), &source_path_mime_types(), overlap);
+    let main_name = std::path::PathBuf::from(target_file.get_name());
+    let (locales, source_dirs) = (configuration.flex.locales.clone(), configuration.source_path.clone());
+    let new_bundle_path = || ResourceBundlePath::new(&locales, &source_dirs, Some(&main_name));
+    let Ok(mut source_list) = new_source_list() else { return fail };
+    let mut source_path = new_source_path();
+    let mut bundle_path = new_bundle_path();
     let mut swc_context = CompilerSwcContext::new();
     swc_context.load_with(&configuration.library_path, &configuration.external_library_path, libraries);
+    swc_context.load_themes(&configuration.css.theme_files().0);
     configuration.add_externs(swc_context.get_externs());
     if toolkit::error_count() > 0 {
         return fail;
     }
-    reset_transcoding(&configuration);
     let config_rc = Rc::new(configuration.clone());
+    // Mxmlc's incremental branch: the cache beside the output decides whether anything needs compiling.
+    let mut recompile = true;
+    let mut swc_checksums = None;
+    if configuration.incremental {
+        let mut sc = SwcChecksums::new(&swc_context, configuration.checksum_ts, configuration.link_checksum_ts, configuration.swc_checksum);
+        let output = configuration.output.clone().unwrap_or_default();
+        let cache_name = format!("{}.cache", output.display());
+        if output.exists() {
+            let read = std::fs::read(&cache_name);
+            if let Err(e) = &read {
+                // `FileNotFoundException.getLocalizedMessage()` through `logDebug`, which mxmlc's console prints.
+                let reason = e.to_string();
+                let reason = reason.split(" (os error").next().unwrap_or("").trim_end_matches('.');
+                toolkit::log_info(&format!("{cache_name} ({reason})"));
+            }
+            if let Ok(bytes) = read {
+                let mut loaded = sc.checksums;
+                match persistence_store::read(&bytes, loaded[1]) {
+                    Err(e) => toolkit::log_info(e.0.as_deref().unwrap_or("null")),
+                    Ok(ReadResult::Obsolete) => toolkit::log_info(persistence_store::OBSOLETE_CACHE_FILE_FORMAT),
+                    Ok(ReadResult::ChecksumMismatch(_)) => toolkit::log_info(&incremental::failed_to_match(&cache_name)),
+                    Ok(ReadResult::Data(data)) => {
+                        loaded = data.checksums;
+                        if incremental::load_compilation_units(&data, &mut source_list, &mut source_path, &mut bundle_path, &mut sc) < 0 {
+                            toolkit::log_info(&incremental::failed_to_match(&cache_name));
+                        } else if !(sc.is_recompilation_needed(&loaded, &mut swc_context) && !sc.is_relink_needed(&loaded)) {
+                            recompile = false;
+                        }
+                    }
+                }
+                if recompile {
+                    let Ok(l) = new_source_list() else { return fail };
+                    source_list = l;
+                    source_path = new_source_path();
+                    bundle_path = new_bundle_path();
+                }
+            }
+        }
+        let count = incremental::validate_compilation_units(&source_list, &mut source_path, Some(&bundle_path), &swc_context, &config_rc);
+        recompile = recompile || count > 0;
+        swc_checksums = Some(sc);
+    }
+    if !recompile {
+        return Compiled { up_to_date: true, ..fail };
+    }
+    swc_context.resource_bundles.bundle_path = Some(bundle_path);
+    reset_transcoding(&configuration);
     let mut api = CompilerApi {
         sources: Vec::new(),
         units: Vec::new(),
@@ -99,10 +167,16 @@ pub fn mxmlc(mut configuration: Configuration, main: &Path, libraries: Vec<(Rc<c
     let units = api.compile(&mut |api: &mut CompilerApi| {
         super::pre_link::pre_link(api)
     });
+    api.swc_context.close();
     let Ok(units) = units else { return Compiled { sources: api.sources, ..fail } };
     api.configuration.add_externs(crate::asc::flex2::compiler::css::css_compiler::take_externs());
     let movie = linker::link(&units, &api.configuration).ok();
-    Compiled { sources: api.sources, units, movie }
+    let cache = swc_checksums.map(|mut sc| {
+        sc.save_checksums(&units, &api.swc_context);
+        let (sl, sp) = (api.source_list.as_ref().unwrap(), api.source_path.as_ref().unwrap());
+        incremental::persist_compilation_units(sl, sp, api.swc_context.resource_bundles.bundle_path.as_ref(), &api.sources, &sc, api.configuration.target_player_major)
+    });
+    Compiled { sources: api.sources, units, movie, cache, up_to_date: false }
 }
 
 /// The compile half of `mxmlc` for one root source that need not exist on disk, against extra in-memory libraries.
@@ -136,7 +210,7 @@ pub fn compile_unit(mut configuration: Configuration, root: crate::asc::flex2::c
     let units = api.compile(&mut |api: &mut CompilerApi| {
         super::pre_link::pre_link(api)
     });
-    Compiled { units: units.unwrap_or_default(), sources: api.sources, movie: None }
+    Compiled { units: units.unwrap_or_default(), sources: api.sources, movie: None, cache: None, up_to_date: false }
 }
 
 /// A sub-compiler that gives the root unit extra expression dependencies once it is parsed.

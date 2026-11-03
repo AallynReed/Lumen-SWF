@@ -78,6 +78,10 @@ pub struct CompilationUnit {
     pub metadata: Vec<NodeRef>,
     pub swf_meta_data: Option<MetaData>,
     pub icon: Option<String>,
+    /// `iconFile`: the name of the `[IconFile]` image.
+    pub icon_file: Option<String>,
+    /// `signatureChecksum`, from `SignatureExtension` or the library catalog.
+    pub signature_checksum: Option<i64>,
     pub loader_class: Option<String>,
     pub loader_class_base: Option<String>,
     pub extra_classes: JHashSet<String>,
@@ -123,6 +127,9 @@ pub struct AuxGenerateInfo {
     pub generate_loader_class: String,
     pub base_loader_class: String,
     pub window_class: String,
+    /// `preloaderClass` (empty for none) and `usePreloader`.
+    pub preloader_class: String,
+    pub use_preloader: bool,
     /// `rootAttributes`, `rootAttributeEmbedVars`, `rootAttributeEmbedNames` in their maps' iteration order.
     pub root_attributes: Option<Vec<(String, String)>>,
     pub root_attribute_embed_vars: Option<Vec<(String, String)>>,
@@ -141,6 +148,8 @@ impl CompilationUnit {
             metadata: Vec::new(),
             swf_meta_data: None,
             icon: None,
+            icon_file: None,
+            signature_checksum: None,
             loader_class: None,
             loader_class_base: None,
             extra_classes: JHashSet::new(),
@@ -184,6 +193,8 @@ impl CompilationUnit {
 
     /// `resetKeepTypeInfo()` + `removeTypeInfo()`.
     pub fn reset(&mut self) {
+        self.signature_checksum = None;
+        self.icon_file = None;
         self.state = EMPTY;
         self.workflow = 0;
         self.bytes.clear();
@@ -217,6 +228,23 @@ impl CompilationUnit {
         self.class_table.clear();
         self.aux_generate_info = None;
         self.accessibility_classes = None;
+    }
+
+    /// `removeTypeInfo()`.
+    pub fn remove_type_info(&mut self) {
+        self.has_type_info = false;
+        self.type_info = None;
+        self.class_table.clear();
+    }
+
+    /// `setState` for a unit restored from the incremental cache.
+    pub fn restore_state(&mut self, workflow: i32, state: i32) {
+        self.workflow = workflow;
+        self.state = state;
+    }
+
+    pub fn get_state(&self) -> i32 {
+        self.state
     }
 
     pub fn is_root(&self) -> bool {

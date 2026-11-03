@@ -278,12 +278,16 @@ impl SyntaxTreeEvaluator {
                     if let Some(icon) = value0() {
                         let existing = self.unit.borrow().icon.clone();
                         match existing {
-                            None => self.unit.borrow_mut().icon = Some(icon),
+                            None => self.unit.borrow_mut().icon = Some(icon.clone()),
                             Some(old) if old != icon => {
                                 let src = self.unit.borrow().get_source().borrow().get_name_for_reporting().to_string();
                                 err(&format!("IconFile metadata should not be set more than once in a file. Set to both '{old}' and '{icon}' within {src}."));
                             }
                             _ => {}
+                        }
+                        if self.unit.borrow().icon_file.is_none() {
+                            let f = crate::asc::flex2::compiler::source::resolve_from(&self.unit.borrow().get_source(), &icon);
+                            self.unit.borrow_mut().icon_file = f;
                         }
                     }
                 }

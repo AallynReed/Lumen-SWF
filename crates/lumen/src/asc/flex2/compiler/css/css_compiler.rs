@@ -161,6 +161,8 @@ pub mod transfer {
         to.metadata.extend(from.metadata.iter().cloned());
         to.swf_meta_data = from.swf_meta_data.clone();
         to.icon = from.icon.clone();
+        to.icon_file = from.icon_file.clone();
+        to.signature_checksum = from.signature_checksum;
         to.loader_class = from.loader_class.clone();
         for c in from.extra_classes.iter() {
             to.extra_classes.insert(c.clone());

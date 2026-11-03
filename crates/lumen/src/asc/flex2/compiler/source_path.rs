@@ -34,7 +34,7 @@ fn is_subdirectory_of(path: &str, directories: &[PathBuf]) -> Option<usize> {
 }
 
 /// `SourcePathBase.addApplicationParentToSourcePath`.
-fn add_application_parent(app_path: Option<&VirtualFile>, class_path: &[String], directories: &mut Vec<PathBuf>) {
+pub(crate) fn add_application_parent(app_path: Option<&VirtualFile>, class_path: &[String], directories: &mut Vec<PathBuf>) {
     if let Some(parent) = app_path.and_then(|a| a.get_parent()) {
         if Path::new(&parent).is_dir() && !is_subdirectory_of_paths(&parent, class_path) {
             directories.push(PathBuf::from(parent));
@@ -52,7 +52,7 @@ fn is_valid_identifier(s: &str) -> bool {
 }
 
 /// `SourcePathBase.addPathElements`; returns the overlap warnings.
-fn add_path_elements(class_path: &[String], directories: &mut Vec<PathBuf>, allow_overlap: bool) -> Vec<(String, String)> {
+pub(crate) fn add_path_elements(class_path: &[String], directories: &mut Vec<PathBuf>, allow_overlap: bool) -> Vec<(String, String)> {
     let mut warnings = Vec::new();
     let mut bad_paths = false;
     for path in class_path {
@@ -78,7 +78,7 @@ fn add_path_elements(class_path: &[String], directories: &mut Vec<PathBuf>, allo
 pub struct SourcePath {
     directories: Vec<PathBuf>,
     mime_types: Vec<&'static str>,
-    sources: HashMap<String, SourceRef>,
+    sources: crate::asc::util::jhash::JHashMap<String, SourceRef>,
     hits: HashSet<String>,
     misses: HashSet<String>,
     dirs: HashMap<String, String>,
@@ -93,7 +93,7 @@ impl SourcePath {
         SourcePath {
             directories,
             mime_types: mime_types.to_vec(),
-            sources: HashMap::new(),
+            sources: crate::asc::util::jhash::JHashMap::new(),
             hits: HashSet::new(),
             misses: HashSet::with_capacity(1024),
             dirs: HashMap::new(),
@@ -115,6 +115,19 @@ impl SourcePath {
 
     pub fn get_paths(&self) -> &[PathBuf] {
         &self.directories
+    }
+
+    pub fn get_mime_types(&self) -> &[&'static str] {
+        &self.mime_types
+    }
+
+    /// `sources()`: class name to source.
+    pub fn sources(&self) -> &crate::asc::util::jhash::JHashMap<String, SourceRef> {
+        &self.sources
+    }
+
+    pub fn sources_mut(&mut self) -> &mut crate::asc::util::jhash::JHashMap<String, SourceRef> {
+        &mut self.sources
     }
 
     fn new_source(&self, file: &Path, path_root: &Path, namespace_uri: &str, local_part: &str) -> SourceRef {
@@ -215,10 +228,60 @@ impl SourcePath {
                 }
             }
         }
+        if let Some(src) = s.clone() {
+            let (busy, has_unit) = {
+                let b = src.borrow();
+                let u = b.get_compilation_unit();
+                (u.as_ref().is_some_and(|u| !u.borrow().is_done()) || b.is_updated(), u.is_some())
+            };
+            if !busy && has_unit {
+                s = super::source::copy(&src);
+            }
+        }
         if s.is_none() {
             self.misses.insert(class_name);
         }
         Ok(s)
+    }
+
+    /// `checkPreference(s)`: the source is still what `findFile` finds first.
+    pub fn check_preference(&mut self, s: &SourceRef) -> bool {
+        let (name, root) = {
+            let b = s.borrow();
+            (b.get_name().to_string(), b.get_path_root().unwrap_or("").to_string())
+        };
+        let Some(mut relative_path) = name.get(root.len() + 1..).map(str::to_string) else { return true };
+        match self.mime_types.iter().map(|m| mime_mappings::get_extension(m)).find(|ext| relative_path.ends_with(ext)) {
+            Some(ext) => relative_path.truncate(relative_path.len() - ext.len()),
+            None => return true,
+        }
+        let mut this_path = false;
+        for i in 0..self.directories.len() {
+            let d = self.directories[i].clone();
+            if root == canonical_path(&d) {
+                this_path = true;
+            }
+            match self.find_file(&d, &relative_path) {
+                Err(_) => {
+                    self.remove_source(s);
+                    return false;
+                }
+                Ok(Some(_)) if !this_path => {
+                    self.remove_source(s);
+                    return false;
+                }
+                _ => {}
+            }
+        }
+        true
+    }
+
+    /// `removeSource(s)`.
+    pub fn remove_source(&mut self, s: &SourceRef) {
+        let key = self.sources.iter().find(|(_, v)| std::rc::Rc::ptr_eq(v, s)).map(|(k, _)| k.clone());
+        if let Some(k) = key {
+            self.sources.remove(&k);
+        }
     }
 
     fn find_file(&mut self, directory: &Path, relative_path: &str) -> Result<Option<PathBuf>, MoreThanOneComponentOfTheSameName> {
@@ -339,8 +402,21 @@ impl SourceList {
         String::new()
     }
 
+    /// `retrieveSources()`: a finished, unchanged source is handed out as a copy.
     pub fn retrieve_sources(&self) -> Vec<SourceRef> {
-        self.sources.iter().filter(|(_, s)| s.borrow().exists()).map(|(_, s)| s.clone()).collect()
+        let mut out = Vec::new();
+        for (_, s) in &self.sources {
+            if !s.borrow().exists() {
+                continue;
+            }
+            let u = s.borrow().get_compilation_unit();
+            if u.as_ref().is_some_and(|u| !u.borrow().is_done()) || s.borrow().is_updated() || u.is_none() {
+                out.push(s.clone());
+            } else if let Some(c) = super::source::copy(s) {
+                out.push(c);
+            }
+        }
+        out
     }
 
     pub fn find_source(&mut self, namespace_uri: &str, local_part: &str) -> Option<SourceRef> {
@@ -366,11 +442,23 @@ impl SourceList {
                 }
             }
         }
+        if let Some(src) = s.clone() {
+            let u = src.borrow().get_compilation_unit();
+            let busy = u.as_ref().is_some_and(|u| !u.borrow().is_done()) || src.borrow().is_updated();
+            if !busy && u.is_some() {
+                s = super::source::copy(&src);
+            }
+        }
         s
     }
 
     pub fn get_paths(&self) -> &[PathBuf] {
         &self.directories
+    }
+
+    /// `sources().values()`, in insertion order.
+    pub fn sources(&self) -> Vec<SourceRef> {
+        self.sources.iter().map(|(_, s)| s.clone()).collect()
     }
 }
 

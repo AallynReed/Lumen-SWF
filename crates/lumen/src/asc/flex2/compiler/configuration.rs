@@ -62,6 +62,17 @@ pub struct Configuration {
     pub css: super::css::options::CssOptions,
     /// The Flex options PreLink, i18n and MXML read (locales, frames, RSLs, ...).
     pub flex: super::flex_options::FlexOptions,
+    /// `-incremental`, `-swc-checksum`, `-disable-incremental-optimizations`.
+    pub incremental: bool,
+    pub swc_checksum: bool,
+    pub disable_incremental_optimizations: bool,
+    /// `-keep-generated-signatures` with its `-signature-directory`.
+    pub signature_directory: Option<String>,
+    /// The `ConfigurationBuffer` checksums: `checksum_ts()`, `link_checksum_ts()`.
+    pub checksum_ts: i32,
+    pub link_checksum_ts: i32,
+    /// The output SWF, whose `.cache` an incremental compile reads and writes.
+    pub output: Option<PathBuf>,
 }
 
 impl Default for Configuration {
@@ -117,6 +128,13 @@ impl Default for Configuration {
             generated_directory: None,
             css: Default::default(),
             flex: Default::default(),
+            incremental: false,
+            swc_checksum: true,
+            disable_incremental_optimizations: false,
+            signature_directory: None,
+            checksum_ts: 0,
+            link_checksum_ts: 0,
+            output: None,
         }
     }
 }

@@ -251,6 +251,7 @@ With a Flex SDK (FLEX_HOME, or +flexlib=<sdk>/frameworks) the SDK's flex-config.
 /// `flex-config.xml` applies first, as mxmlc's default `-load-config` does. Returns the options, the output path and
 /// the configuration files loaded.
 fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptions, PathBuf, Vec<PathBuf>)> {
+    let args_all = args;
     use lumen::asc::flex2::compiler::file_configurator;
     let mut flexlib: Option<PathBuf> = std::env::var_os("FLEX_HOME").map(|h| PathBuf::from(h).join("frameworks"));
     let mut configs: Option<Vec<PathBuf>> = None;
@@ -286,6 +287,8 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
     let mut output = None;
     let mut files = Vec::new();
     let mut keep_generated = false;
+    let mut keep_signatures = false;
+    let mut signature_directory: Option<String> = None;
     let args = &rest;
     let mut i = 0;
     let flag = |v: &str| -> Result<bool> {
@@ -416,9 +419,11 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
                 let v = on(inline)?;
                 o.flex.warn.push((n["warn-".len()..].to_string(), v));
             }
-            "incremental" => {
-                on(inline)?;
-            }
+            "incremental" => o.incremental = on(inline)?,
+            "swc-checksum" => o.swc_checksum = on(inline)?,
+            "disable-incremental-optimizations" => o.disable_incremental_optimizations = on(inline)?,
+            "keep-generated-signatures" => keep_signatures = on(inline)?,
+            "signature-directory" => signature_directory = take(1, false).pop(),
             "fonts.local-fonts-snapshot" => {
                 let p = take(1, false).pop().map(PathBuf::from).filter(|p| p.exists());
                 o.flex.fonts.local_fonts_snapshot = p.map(|p| lumen::asc::flex2::compiler::transcoder::local_name(&p));
@@ -464,7 +469,24 @@ fn mxmlc_options(args: &[String]) -> Result<(lumen::asc::flex2::ApplicationOptio
     if !flex_mode {
         o.playerglobal = o.external_library_path.is_empty();
     }
-    let output = output.unwrap_or_else(|| main.with_extension("swf"));
+    let output = output.unwrap_or_else(|| PathBuf::from(lumen::asc::flex2::compiler::source::canonical_path(&main)).with_extension("swf"));
+    if keep_signatures {
+        // ToolsConfiguration.createOutputDirectory: beside -output.
+        let dir = signature_directory.unwrap_or_else(|| "generated-signatures".to_string());
+        let dir = if Path::new(&dir).is_absolute() { PathBuf::from(&dir) } else { output.parent().map(Path::to_path_buf).unwrap_or_default().join(&dir) };
+        let _ = std::fs::create_dir_all(&dir);
+        o.signature_directory = Some(lumen::asc::flex2::compiler::source::canonical_path(&dir));
+    }
+    if o.incremental {
+        // FileUtil.openFile(name, true): the absolute, not canonical, path.
+        let abs = if output.is_absolute() { output.clone() } else { std::env::current_dir().unwrap_or_default().join(&output) };
+        o.output = Some(abs);
+        let fw = std::env::var_os("FLEX_HOME").map(|h| PathBuf::from(h).join("frameworks"));
+        if let Ok(b) = lumen::asc::flex2::compiler::configuration_buffer::ConfigurationBuffer::mxmlc(args_all, fw.as_deref()) {
+            o.checksum_ts = b.checksum_ts();
+            o.link_checksum_ts = b.link_checksum_ts();
+        }
+    }
     o.main = main;
     Ok((o, output, loaded))
 }
@@ -533,19 +555,33 @@ fn main() -> Result<()> {
                 let shown = std::fs::canonicalize(c).unwrap_or(c.clone());
                 println!("Loading configuration file {}", shown.display().to_string().trim_start_matches(r"\\?\"));
             }
+            let print = |d: &lumen::asc::flex2::Diagnostic| {
+                if d.level == lumen::asc::flex2::Level::Info {
+                    println!("{}", d.text);
+                } else {
+                    eprintln!("{}", d.text);
+                }
+            };
             let errors = match lumen::asc::flex2::compile_application(&opts) {
                 Ok(app) => {
                     for d in &app.diagnostics {
-                        eprintln!("{}", d.text);
+                        print(d);
                     }
-                    std::fs::write(&output, &app.swf).with_context(|| format!("writing {}", output.display()))?;
-                    let shown = std::fs::canonicalize(&output).unwrap_or(output.clone());
-                    println!("{} ({} bytes)", shown.display().to_string().trim_start_matches(r"\\?\"), app.swf.len());
+                    let shown = |p: &PathBuf| std::fs::canonicalize(p).unwrap_or(p.clone()).display().to_string().trim_start_matches(r"\\?\").to_string();
+                    if app.up_to_date {
+                        println!("{} is up-to-date and does not have to be rebuilt.", shown(&output));
+                    } else {
+                        std::fs::write(&output, &app.swf).with_context(|| format!("writing {}", output.display()))?;
+                        if let (Some(cache), Some(out)) = (&app.cache, &opts.output) {
+                            std::fs::write(format!("{}.cache", out.display()), cache).with_context(|| format!("writing {}.cache", out.display()))?;
+                        }
+                        println!("{} ({} bytes)", shown(&output), app.swf.len());
+                    }
                     0
                 }
                 Err(diagnostics) => {
                     for d in &diagnostics {
-                        eprintln!("{}", d.text);
+                        print(d);
                     }
                     diagnostics.iter().filter(|d| d.level == lumen::asc::flex2::Level::Error).count().max(1)
                 }

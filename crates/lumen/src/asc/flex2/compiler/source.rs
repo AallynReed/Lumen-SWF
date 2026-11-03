@@ -123,6 +123,8 @@ pub enum Owner {
     SourcePath,
     SourceList,
     ResourceContainer,
+    ResourceBundlePath,
+    CompilerSwcContext,
     SwcScript(Rc<SwcScript>),
 }
 
@@ -139,7 +141,8 @@ pub struct Source {
     unit: Option<UnitRef>,
     file_time: i64,
     logger: Option<Rc<LocalLogger>>,
-    file_includes: Vec<String>,
+    /// `fileIncludeTimes`, by file name.
+    file_include_times: crate::asc::util::jhash::JHashMap<String, i64>,
     /// The `BytecodeEmitter` view of this source, made on first use.
     emitter_view: Option<Rc<crate::asc::emit::bytecode_emitter::Source>>,
     delegate: Option<SourceRef>,
@@ -174,7 +177,7 @@ impl Source {
             unit: None,
             file_time,
             logger: None,
-            file_includes: Vec::new(),
+            file_include_times: crate::asc::util::jhash::JHashMap::with_capacity(4),
             emitter_view: None,
             delegate: None,
             fragments: None,
@@ -253,10 +256,67 @@ impl Source {
 
     /// `addFileIncludes(source)`.
     pub fn add_file_includes(&mut self, other: &Source) {
-        for f in &other.file_includes {
-            if !self.file_includes.contains(f) {
-                self.file_includes.push(f.clone());
+        for (f, t) in other.file_include_times.iter() {
+            if !self.file_include_times.contains_key(f) {
+                self.file_include_times.insert(f.clone(), *t);
             }
+        }
+    }
+
+    /// `getFileIncludes()` with `getFileIncludeTime(f)`.
+    pub fn get_file_includes(&self) -> Vec<(String, i64)> {
+        self.file_include_times.iter().map(|(f, t)| (f.clone(), *t)).collect()
+    }
+
+    /// `getUpdatedFileIncludes()`.
+    pub fn get_updated_file_includes(&self) -> Vec<String> {
+        self.file_include_times.iter().filter(|(f, t)| last_modified(Path::new(f.as_str())) != **t).map(|(f, _)| f.clone()).collect()
+    }
+
+    /// `Source.populateSource`/`newSource`'s include times.
+    pub fn set_file_include_times(&mut self, includes: Vec<(String, i64)>) {
+        for (f, t) in includes {
+            self.file_include_times.insert(f, t);
+        }
+    }
+
+    pub fn get_file_time(&self) -> i64 {
+        self.file_time
+    }
+
+    pub fn set_file_time(&mut self, t: i64) {
+        self.file_time = t;
+    }
+
+    pub fn set_path_root(&mut self, root: Option<String>) {
+        self.path_root = root;
+    }
+
+    pub fn set_flags(&mut self, relative_path: &str, short_name: &str, is_internal: bool, is_root: bool, is_debuggable: bool) {
+        self.relative_path = relative_path.to_string();
+        self.short_name = short_name.to_string();
+        self.is_internal = is_internal;
+        self.is_root = is_root;
+        self.is_debuggable = is_debuggable;
+    }
+
+    /// `removeCompilationUnit()`.
+    pub fn remove_compilation_unit(&mut self) {
+        if self.is_swc_script_owner() {
+            if let Some(u) = &self.unit {
+                u.borrow_mut().remove_type_info();
+            }
+        } else {
+            self.unit = None;
+        }
+        self.file_time = self.file.get_last_modified();
+        self.logger = None;
+        self.is_preprocessed = false;
+        self.file_include_times.clear();
+        self.delegate = None;
+        if self.fragments.is_some() {
+            self.fragments = Some(Default::default());
+            self.fragment_line_maps = Some(Default::default());
         }
     }
 
@@ -359,7 +419,7 @@ impl Source {
     }
 
     pub fn is_updated(&self) -> bool {
-        self.file.get_last_modified() != self.file_time
+        self.file.get_last_modified() != self.file_time || self.file_include_times.iter().any(|(f, t)| last_modified(Path::new(f.as_str())) != *t)
     }
 
     pub fn exists(&self) -> bool {
@@ -409,14 +469,28 @@ impl Source {
         self.path_root.as_deref()
     }
 
+    /// `addFileInclude(VirtualFile)`: a file by name, with its modification time.
     pub fn add_file_include(&mut self, path: String) {
-        if !self.file_includes.contains(&path) {
-            self.file_includes.push(path);
+        if !self.file_include_times.contains_key(&path) {
+            let t = last_modified(Path::new(&path));
+            self.file_include_times.insert(path, t);
         }
     }
 
     pub fn is_included_file(&self, name: &str) -> bool {
-        self.file_includes.iter().any(|f| f == name)
+        self.file_include_times.contains_key(name)
+    }
+
+    pub fn get_file_include_size(&self) -> usize {
+        self.file_include_times.len()
+    }
+
+    pub fn is_resource_bundle_path_owner(&self) -> bool {
+        matches!(self.owner, Owner::ResourceBundlePath)
+    }
+
+    pub fn is_compiler_swc_context_owner(&self) -> bool {
+        matches!(self.owner, Owner::CompilerSwcContext)
     }
 
     /// The fields `BytecodeEmitter` reads, as its own `Source` stub.
@@ -527,6 +601,8 @@ pub fn transfer_meta_data(from: &CompilationUnit, to: &mut CompilationUnit) {
     }
     to.swf_meta_data = from.swf_meta_data.clone();
     to.icon = from.icon.clone();
+    to.icon_file = from.icon_file.clone();
+    to.signature_checksum = from.signature_checksum;
     to.loader_class = from.loader_class.clone();
     for c in from.extra_classes.iter() {
         to.extra_classes.insert(c.clone());
@@ -580,4 +656,126 @@ pub fn transfer_bytecodes(from: &CompilationUnit, to: &mut CompilationUnit) {
 
 pub fn transfer_styles(from: &CompilationUnit, to: &mut CompilationUnit) {
     to.styles = from.styles.clone();
+}
+
+/// `source.resolve(include)` (`Source.Resolver`, then the global resolver) as the resolved file's name.
+pub fn resolve_from(source: &SourceRef, relative: &str) -> Option<String> {
+    let s = source.borrow();
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if !relative.starts_with('/') {
+        if let Some(p) = s.get_parent() {
+            candidates.push(Path::new(&p).join(relative));
+        }
+    }
+    if let (Some(root), Some(rest)) = (s.get_path_root(), relative.strip_prefix('/')) {
+        candidates.push(Path::new(root).join(rest));
+    }
+    candidates.push(std::path::PathBuf::from(relative));
+    candidates.into_iter().find(|c| c.is_file()).map(|c| canonical_path(&c))
+}
+
+/// `Source.copy()`: a finished source as its bytecode, with a fresh unit whose dependencies are the histories'
+/// multinames, to be resolved again.
+pub fn copy(this: &SourceRef) -> Option<SourceRef> {
+    let (unit, s) = {
+        let b = this.borrow();
+        let u = b.unit.clone().filter(|u| u.borrow().is_done())?;
+        let f = VirtualFile::InMemory { bytes: Rc::new(u.borrow().get_byte_codes().to_vec()), name: b.get_name().to_string(), mime_type: mime_mappings::ABC, last_modified: b.file_time };
+        let s = Source::new(f, b.path_root.clone(), &b.relative_path, &b.short_name, b.owner.clone(), b.is_internal, b.is_root, b.is_debuggable);
+        s.borrow_mut().file_time = b.file_time;
+        s.borrow_mut().file_include_times = b.file_include_times.clone();
+        s.borrow_mut().logger = b.logger.clone();
+        (u, s)
+    };
+    let nu = Source::new_compilation_unit(&s, None);
+    copy_compilation_unit(&unit.borrow(), &mut nu.borrow_mut(), true);
+    Some(s)
+}
+
+/// `Source.copyCompilationUnit(fromUnit, toUnit, useHistories)`.
+pub fn copy_compilation_unit(from: &CompilationUnit, to: &mut CompilationUnit, use_histories: bool) {
+    for q in from.top_level_definitions.0.iter() {
+        to.top_level_definitions.add(q.clone());
+    }
+    use super::util::Name;
+    if use_histories {
+        for (m, _) in from.inheritance_history.iter() {
+            to.inheritance.insert(Name::M(m.clone()));
+        }
+        for (m, _) in from.type_history.iter() {
+            to.types.insert(Name::M(m.clone()));
+        }
+        for (m, _) in from.namespace_history.iter() {
+            to.namespaces.insert(Name::M(m.clone()));
+        }
+        for (m, _) in from.expression_history.iter() {
+            to.expressions.insert(Name::M(m.clone()));
+        }
+    } else {
+        for n in from.inheritance.iter() {
+            to.inheritance.insert(n.clone());
+        }
+        for n in from.types.iter() {
+            to.types.insert(n.clone());
+        }
+        for n in from.namespaces.iter() {
+            to.namespaces.insert(n.clone());
+        }
+        for n in from.expressions.iter() {
+            to.expressions.insert(n.clone());
+        }
+    }
+    put_all(&mut to.inheritance_history, &from.inheritance_history);
+    put_all(&mut to.type_history, &from.type_history);
+    put_all(&mut to.namespace_history, &from.namespace_history);
+    put_all(&mut to.expression_history, &from.expression_history);
+    to.signature_checksum = from.signature_checksum;
+    if from.has_assets() {
+        to.assets.add_all(&from.assets);
+    }
+    to.aux_generate_info = from.aux_generate_info.clone();
+    to.icon = from.icon.clone();
+    to.icon_file = from.icon_file.clone();
+    if from.has_type_info {
+        to.styles = from.styles.clone();
+        to.type_info = from.type_info.clone();
+        to.has_type_info = true;
+        transfer_class_table(from, to);
+        to.swf_meta_data = from.swf_meta_data.clone();
+        to.loader_class = from.loader_class.clone();
+        to.loader_class_base = from.loader_class_base.clone();
+        for c in from.extra_classes.iter() {
+            to.extra_classes.insert(c.clone());
+        }
+        if let Some(a) = &from.accessibility_classes {
+            for c in a.iter() {
+                to.add_accessibility_class(c.clone());
+            }
+        }
+        for (k, v) in from.licensed_class_reqs.iter() {
+            to.licensed_class_reqs.insert(k.clone(), v.clone());
+        }
+        for (k, v) in from.remote_class_aliases.iter() {
+            to.remote_class_aliases.insert(k.clone(), v.clone());
+        }
+        for (k, v) in from.effect_triggers.iter() {
+            to.effect_triggers.insert(k.clone(), v.clone());
+        }
+        for m in from.mixins.iter() {
+            to.mixins.insert(m.clone());
+        }
+        for r in from.resource_bundle_history.iter() {
+            to.resource_bundle_history.insert(r.clone());
+        }
+        to.bytes = from.bytes.clone();
+    }
+}
+
+/// `Source.equals`: the same owner kind, name and relative path.
+pub fn java_equals(a: &SourceRef, b: &SourceRef) -> bool {
+    if Rc::ptr_eq(a, b) {
+        return true;
+    }
+    let (a, b) = (a.borrow(), b.borrow());
+    std::mem::discriminant(&a.owner) == std::mem::discriminant(&b.owner) && a.get_name() == b.get_name() && a.relative_path == b.relative_path
 }

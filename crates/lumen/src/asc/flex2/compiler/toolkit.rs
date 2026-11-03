@@ -52,11 +52,34 @@ pub struct LocalLogger {
     warning_count: Cell<i32>,
     connected: Cell<bool>,
     source: RefCell<Option<std::rc::Weak<RefCell<super::source::Source>>>>,
+    warnings: RefCell<Vec<Warning>>,
+}
+
+/// `LocalLogger.Warning`: a recorded warning, kept for the incremental cache.
+#[derive(Clone, Debug, Default)]
+pub struct Warning {
+    pub path: Option<String>,
+    pub warning: Option<String>,
+    pub source: Option<String>,
+    pub line: Option<i32>,
+    pub col: Option<i32>,
+    pub error_code: Option<i32>,
 }
 
 impl LocalLogger {
     pub fn new() -> Rc<LocalLogger> {
-        Rc::new(LocalLogger { error_count: Cell::new(0), warning_count: Cell::new(0), connected: Cell::new(true), source: RefCell::new(None) })
+        Rc::new(LocalLogger { error_count: Cell::new(0), warning_count: Cell::new(0), connected: Cell::new(true), source: RefCell::new(None), warnings: RefCell::new(Vec::new()) })
+    }
+
+    /// `recordWarning(path, line, col, warning, source, errorCode)`.
+    pub fn record_warning(&self, w: Warning) {
+        self.warnings.borrow_mut().push(w);
+        self.warning_count.set(self.warning_count.get() + 1);
+    }
+
+    /// `getWarnings()`.
+    pub fn get_warnings(&self) -> Vec<Warning> {
+        self.warnings.borrow().clone()
     }
 
     /// `new LocalLogger(original, source)`: the source whose messages it carries.
@@ -367,6 +390,28 @@ fn misroute_info(p: &str, line: i32, col: i32) -> String {
 /// The `LocalLogger` (counts, `checkPath` misrouting) and then the `ConsoleLogger`.
 pub fn deliver(call: LogCall) {
     let local = get_logger();
+    if let Some(l) = &local {
+        let w = |path: Option<&str>, line: Option<i32>, col: Option<i32>, msg: &str, source: Option<&str>, code: Option<i32>| Warning {
+            path: path.map(str::to_string),
+            warning: Some(msg.to_string()),
+            source: source.map(str::to_string),
+            line,
+            col,
+            error_code: code,
+        };
+        let recorded = match &call {
+            LogCall::Text { level: Level::Warning, msg } => Some(w(None, None, None, msg, None, None)),
+            LogCall::Path { level: Level::Warning, path, msg, code } => Some(w(Some(path), None, None, msg, None, *code)),
+            LogCall::PathLine { level: Level::Warning, path, line, msg, code } => Some(w(Some(path), Some(*line), None, msg, None, *code)),
+            LogCall::PathLineCol { level: Level::Warning, path, line, col, msg } => Some(w(Some(path), Some(*line), Some(*col), msg, None, None)),
+            LogCall::PathLineColSource { level: Level::Warning, path, line, col, msg, source, code } => Some(w(Some(path), Some(*line), Some(*col), msg, Some(source), *code)),
+            LogCall::Message { m, .. } if m.level == Level::Warning => Some(w(m.path.as_deref(), Some(m.line), Some(m.col), &m.text, None, None)),
+            _ => None,
+        };
+        if let Some(r) = recorded {
+            l.warnings.borrow_mut().push(r);
+        }
+    }
     let misrouted = |p: Option<&str>| local.as_ref().and_then(|l| l.misrouted_opt(p));
     match call {
         LogCall::Text { level, msg } => {
@@ -430,6 +475,11 @@ pub fn log_path(level: Level, path: &str, msg: &str, code: i32) {
     dispatch(LogCall::Path { level, path: path.into(), msg: msg.into(), code: (code != -1).then_some(code) });
 }
 
+/// `logInfo(info)`, and `ConsoleLogger`'s own lines (`needsCompilation`, `includedFileUpdated`).
+pub fn log_info(msg: &str) {
+    log_plain(Level::Info, msg);
+}
+
 /// `logError(error)`.
 pub fn log_plain(level: Level, msg: &str) {
     dispatch(LogCall::Text { level, msg: msg.into() });
@@ -458,4 +508,37 @@ pub fn log_path_line_col(level: Level, path: &str, line: i32, col: i32, msg: &st
 /// `ThreadLocalToolkit.getLogger().logX(...)` for an explicit call shape.
 pub fn log_call(call: LogCall) {
     dispatch(call);
+}
+
+impl LocalLogger {
+    /// A logger restored from the incremental cache: `new LocalLogger(null)`, so not connected.
+    pub fn restored(warnings: Vec<Warning>) -> Rc<LocalLogger> {
+        let l = LocalLogger::new();
+        l.connected.set(false);
+        for w in warnings {
+            l.record_warning(w);
+        }
+        l
+    }
+
+    /// `displayWarnings(ThreadLocalToolkit.getLogger())`.
+    pub fn display_warnings(&self) {
+        for w in self.get_warnings() {
+            let msg = w.warning.clone().unwrap_or_default();
+            let call = match &w.path {
+                None => LogCall::Text { level: Level::Warning, msg },
+                Some(path) => {
+                    let path = path.clone();
+                    match (w.line, w.col, &w.source, w.error_code) {
+                        (None, _, _, code) => LogCall::Path { level: Level::Warning, path, msg, code },
+                        (Some(line), None, _, code) => LogCall::PathLine { level: Level::Warning, path, line, msg, code },
+                        (Some(line), Some(col), None, None) => LogCall::PathLineCol { level: Level::Warning, path, line, col, msg },
+                        (Some(line), Some(_), None, Some(code)) => LogCall::PathLine { level: Level::Warning, path, line, msg, code: Some(code) },
+                        (Some(line), Some(col), Some(source), code) => LogCall::PathLineColSource { level: Level::Warning, path, line, col, msg, source: source.clone(), code },
+                    }
+                }
+            };
+            dispatch(call);
+        }
+    }
 }

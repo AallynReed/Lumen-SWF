@@ -1,6 +1,6 @@
 //! Port of the batch compilation in `flex2.compiler.CompilerAPI`: `compile`, `batch`/`batch2`, the `nextSource`
 //! scheduler and the multiname resolution that pulls dependencies in from the source path and the libraries.
-//! Only `batch2` is ported (mxmlc never uses a `FileSpec`); incremental validation and persistence are left out.
+//! Only `batch2` is ported (mxmlc never uses a `FileSpec`); incremental validation and persistence are in `incremental`.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -573,6 +573,10 @@ impl CompilerApi {
         if s.borrow().is_preprocessed() || s.borrow().is_compiled() {
             return;
         }
+        let old = s.borrow().get_logger();
+        if let Some(l) = old.filter(|l| l.warning_count() > 0 && !l.is_connected()) {
+            l.display_warnings();
+        }
         let local = LocalLogger::new();
         local.set_source(&s);
         s.borrow_mut().set_logger(Some(local.clone()));
@@ -1060,7 +1064,7 @@ impl CompilerApi {
             }
         }
         let s = s?;
-        match self.sources.iter().position(|x| Rc::ptr_eq(x, &s)) {
+        match self.sources.iter().position(|x| super::source::java_equals(x, &s)) {
             Some(w) => Some(w),
             None => {
                 self.sources.push(s);

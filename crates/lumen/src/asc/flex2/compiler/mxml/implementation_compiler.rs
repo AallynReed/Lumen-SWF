@@ -46,6 +46,9 @@ impl ImplementationCompiler {
         let mut asc = As3Compiler::new(configuration.clone());
         let gendir = if mxml_configuration.keep_generated_action_script() { mxml_configuration.get_generated_directory().map(str::to_string) } else { None };
         let generate_ast = mxml_configuration.get_generate_abstract_syntax_tree();
+        if !configuration.disable_incremental_optimizations {
+            asc.add_compiler_extension(Box::new(crate::asc::flex2::tools::mxmlc::signature_extension(&configuration)));
+        }
         asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::embed_extension::EmbedExtension::new(transcoders, gendir.clone(), mxml_configuration.show_deprecation_warnings())));
         asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::style_evaluator::StyleExtension));
         asc.add_compiler_extension(Box::new(crate::asc::flex2::compiler::as3::host_component_extension::HostComponentExtension::new(mxml_configuration.report_missing_required_skin_parts_as_warnings())));

@@ -109,3 +109,26 @@ pub fn encode(m: &Movie, compress: bool) -> crate::error::Result<Vec<u8>> {
     }
     Ok(out)
 }
+
+/// `PersistenceStore.writeAssets`' movie: one frame of a unit's assets, 100x100 pixels at 12 frames a second,
+/// exported with compression.
+pub fn encode_assets(version: i32, frame: &super::flash::swf::movie_encoder::FrameAssets) -> Vec<u8> {
+    let mut assets = super::flash::swf::movie_encoder::MovieEncoder::new(version, false);
+    let mut tags = parse_tags(&assets.frame_definitions(frame));
+    if frame.has_symbol_classes() {
+        tags.extend(parse_tags(&assets.symbol_class(frame, None)));
+    }
+    tags.push(Tag::new(code::SHOW_FRAME, Vec::new()));
+    tags.push(Tag::new(code::END, Vec::new()));
+    let rect = Rect { x_min: 0, x_max: 100 * 20, y_min: 0, y_max: 100 * 20 };
+    let swf = Swf::new(version as u8, rect, 12.0, 1, tags);
+    let Ok(mut out) = swf.save(&SaveOptions { compression: Compression::None, encrypt: false }) else { return Vec::new() };
+    let mut z = flate2::write::ZlibEncoder::new(out[..8].to_vec(), flate2::Compression::new(9));
+    if std::io::Write::write_all(&mut z, &out[8..]).is_ok() {
+        if let Ok(o) = z.finish() {
+            out = o;
+            out[0] = b'C';
+        }
+    }
+    out
+}

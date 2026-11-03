@@ -4,3 +4,4 @@ pub mod mxmlc;
 pub mod post_link;
 pub mod pre_link;
 pub mod pre_link_css;
+pub mod swc_checksums;

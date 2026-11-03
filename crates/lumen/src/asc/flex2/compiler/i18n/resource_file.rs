@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::asc::flex2::compiler::source::{canonical_path, Owner, Source, SourceRef, VirtualFile};
-use crate::asc::flex2::compiler::swc::Swc;
 use crate::asc::flex2::compiler::util::{mime_mappings, name_formatter, QName};
 use crate::asc::util::jhash::JHashMap;
 
@@ -153,6 +152,11 @@ impl ResourceFile {
         ts
     }
 
+    /// `getResourceFiles()` and `getResourcePathRoots()` as names, by locale.
+    pub fn get_resource_files(&self) -> (Vec<Option<String>>, Vec<Option<String>>) {
+        (self.files.borrow().iter().map(|(_, f)| f.as_ref().map(|f| f.get_name())).collect(), self.roots.borrow().iter().map(|(_, f)| f.as_ref().map(|f| f.get_name())).collect())
+    }
+
     pub fn complete(&self) -> bool {
         self.locales.iter().all(|l| self.file(l).is_some())
     }
@@ -174,10 +178,10 @@ pub fn resource_file_of(source: &SourceRef) -> Option<Rc<ResourceFile>> {
 }
 
 /// `new Source(new ResourceFile(...), pathRoot, relativePath, shortName, owner, false, false, false)`.
-fn new_resource_source(rf: ResourceFile, path_root: Option<String>, relative_path: &str, short_name: &str) -> SourceRef {
+fn new_resource_source(rf: ResourceFile, path_root: Option<String>, relative_path: &str, short_name: &str, owner: Owner) -> SourceRef {
     let name = rf.get_name().to_string();
     let file = VirtualFile::InMemory { bytes: Rc::new(Vec::new()), name: name.clone(), mime_type: mime_mappings::PROPERTIES, last_modified: rf.get_last_modified() };
-    let s = Source::new(file, path_root, relative_path, short_name, Owner::None, false, false, false);
+    let s = Source::new(file, path_root, relative_path, short_name, owner, false, false, false);
     REGISTRY.with(|r| r.borrow_mut().insert(name, Rc::new(rf)));
     s
 }
@@ -191,31 +195,10 @@ pub struct SwcResourceBundles {
     pub bundle_path: Option<ResourceBundlePath>,
 }
 
-/// DOS date and time as a monotonic stand-in for `ZipEntry.getTime()`.
-fn zip_time<R: Read>(f: &zip::read::ZipFile<'_, R>) -> i64 {
-    match f.last_modified() {
-        Some(t) => ((((t.year() as i64 * 13 + t.month() as i64) * 32 + t.day() as i64) * 24 + t.hour() as i64) * 60 + t.minute() as i64) * 60 + t.second() as i64,
-        None => 0,
-    }
-}
-
 impl SwcResourceBundles {
-    /// `SwcGroup.updateFiles()` then `updateResourceBundles(files, format)` over the `.properties` files.
-    pub fn update(&mut self, swcs: &[Rc<Swc>]) {
-        let mut files: HashMap<String, RbFile> = HashMap::new();
-        for swc in swcs {
-            let Ok(f) = std::fs::File::open(&swc.location) else { continue };
-            let Ok(mut z) = zip::ZipArchive::new(f) else { continue };
-            for i in 0..z.len() {
-                let Ok(e) = z.by_index(i) else { continue };
-                let name = e.name().to_string();
-                let t = zip_time(&e);
-                let newer = files.get(&name).is_none_or(|cur| t > cur.get_last_modified());
-                if newer {
-                    files.insert(name.clone(), RbFile::Zip { swc: swc.location.clone(), entry: name, last_modified: t });
-                }
-            }
-        }
+    /// `updateResourceBundles(files, format)` over the `.properties` files of `SwcGroup.files` (name, library, time).
+    pub fn update(&mut self, group_files: &[(String, String, i64)]) {
+        let files: Vec<(String, RbFile)> = group_files.iter().map(|(n, swc, t)| (n.clone(), RbFile::Zip { swc: swc.clone(), entry: n.clone(), last_modified: *t })).collect();
         for (name, file) in files {
             let Some(rest) = name.strip_prefix("locale/") else { continue };
             let Some(index) = rest.find('/') else { continue };
@@ -253,7 +236,7 @@ impl SwcResourceBundles {
         let rb_list = self.get_virtual_files(locales, namespace_uri, local_part)?;
         let name = rb_list.iter().flatten().next().map(|f| f.get_name())?;
         let n = rb_list.len();
-        let s = new_resource_source(ResourceFile::new(name, locales, rb_list, vec![None; n]), None, &namespace_uri.replace('.', "/"), local_part);
+        let s = new_resource_source(ResourceFile::new(name, locales, rb_list, vec![None; n]), None, &namespace_uri.replace('.', "/"), local_part, Owner::CompilerSwcContext);
         self.rb2source.insert(key, Some(s.clone()));
         Some(s)
     }
@@ -264,32 +247,45 @@ impl SwcResourceBundles {
 pub struct ResourceBundlePath {
     locales: Vec<String>,
     rb_directories: Vec<(String, Vec<PathBuf>)>,
-    sources: HashMap<String, SourceRef>,
+    sources: JHashMap<String, SourceRef>,
 }
 
 impl ResourceBundlePath {
+    /// `new ResourceBundlePath(config, appPath)`: per locale, the application's directory unless it lies under the
+    /// locale's source path, then that path, overlaps allowed.
     pub fn new(locales: &[String], source_path: &[PathBuf], app_path: Option<&Path>) -> ResourceBundlePath {
         let mut rb_directories = Vec::new();
+        let app = app_path.map(|a| VirtualFile::local(a));
         for l in locales {
+            let class_path: Vec<String> = source_path.iter().map(|p| PathBuf::from(p.to_string_lossy().replace("{locale}", l))).filter(|p| p.exists()).map(|p| canonical_path(&p)).collect();
             let mut dirs: Vec<PathBuf> = Vec::new();
-            let class_path: Vec<PathBuf> = source_path.iter().map(|p| PathBuf::from(p.to_string_lossy().replace("{locale}", l))).collect();
-            if let Some(parent) = app_path.and_then(|a| a.parent()) {
-                let pc = canonical_path(parent);
-                if !class_path.iter().any(|c| canonical_path(c) == pc) {
-                    dirs.push(PathBuf::from(pc));
-                }
-            }
-            for c in class_path {
-                if c.is_dir() {
-                    let cc = PathBuf::from(canonical_path(&c));
-                    if !dirs.contains(&cc) {
-                        dirs.push(cc);
-                    }
-                }
-            }
+            crate::asc::flex2::compiler::source_path::add_application_parent(app.as_ref(), &class_path, &mut dirs);
+            crate::asc::flex2::compiler::source_path::add_path_elements(&class_path, &mut dirs, true);
             rb_directories.push((l.clone(), dirs));
         }
-        ResourceBundlePath { locales: locales.to_vec(), rb_directories, sources: HashMap::new() }
+        ResourceBundlePath { locales: locales.to_vec(), rb_directories, sources: JHashMap::new() }
+    }
+
+    /// `readCompilationUnit` for a bundle: a `ResourceFile` over the recorded files, as the bundle's source.
+    pub fn restore_source(&mut self, bundle_name: &str, name: &str, files: &[(Option<String>, Option<String>)], path_root: Option<String>, relative_path: &str, short_name: &str) -> SourceRef {
+        let rb = |n: &Option<String>| n.as_ref().map(|n| RbFile::Local(n.clone()));
+        let rf = ResourceFile::new(name.to_string(), &self.locales, files.iter().map(|(f, _)| rb(f)).collect(), files.iter().map(|(_, r)| rb(r)).collect());
+        let s = new_resource_source(rf, path_root, relative_path, short_name, Owner::ResourceBundlePath);
+        self.sources.insert(bundle_name.to_string(), s.clone());
+        s
+    }
+
+    pub fn get_locales(&self) -> &[String] {
+        &self.locales
+    }
+
+    /// `getResourceBundlePaths()`, by locale.
+    pub fn get_resource_bundle_paths(&self) -> &[(String, Vec<PathBuf>)] {
+        &self.rb_directories
+    }
+
+    pub fn sources(&self) -> &JHashMap<String, SourceRef> {
+        &self.sources
     }
 
     /// `findSource(namespaceURI, localPart)`.
@@ -322,7 +318,7 @@ impl ResourceBundlePath {
             }
         }
         let files = files?;
-        let s = new_resource_source(ResourceFile::new(name.unwrap(), &self.locales, files, roots.unwrap()), path_root, &namespace_uri.replace('.', "/"), local_part);
+        let s = new_resource_source(ResourceFile::new(name.unwrap(), &self.locales, files, roots.unwrap()), path_root, &namespace_uri.replace('.', "/"), local_part, Owner::ResourceBundlePath);
         self.sources.insert(class_name, s.clone());
         Some(s)
     }

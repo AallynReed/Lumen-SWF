@@ -22,6 +22,21 @@ pub struct CompilerSwcContext {
     externs: JHashSet<String>,
     /// `rb2file`/`rb2source`: the libraries' `locale/<locale>/*.properties` bundles.
     pub resource_bundles: super::i18n::resource_file::SwcResourceBundles,
+    /// `ts`: the modification times of the libraries and themes, for `checksum()`.
+    ts: String,
+    /// The group's libraries in `SwcGroup.swcs` order, the themes' last.
+    file_swcs: Vec<Rc<Swc>>,
+    /// `SwcGroup.files`: each catalog file's newest copy, as (library, entry) indices into `file_swcs`.
+    files: JHashMap<String, ThemeStyle>,
+    /// `themeStyles`: the CSS themes and the style sheets in theme libraries.
+    theme_styles: Vec<ThemeStyle>,
+}
+
+/// A library file, or a theme style sheet: a CSS file or a `.css` entry of a theme library.
+#[derive(Clone)]
+pub enum ThemeStyle {
+    Local(String),
+    Zip(usize, usize),
 }
 
 impl CompilerSwcContext {
@@ -76,10 +91,40 @@ impl CompilerSwcContext {
         if swcs.is_empty() {
             return 0;
         }
+        self.ts.clear();
+        let mut groups: Vec<Rc<Swc>> = Vec::new();
+        for paths in [lib_path, rsl_path] {
+            let mut group: Vec<Rc<Swc>> = Vec::new();
+            for p in paths {
+                let loc = super::source::canonical_path(p);
+                if let Some(swc) = swcs.iter().find(|s| s.location == loc) {
+                    if !group.iter().any(|g| Rc::ptr_eq(g, swc)) {
+                        group.push(swc.clone());
+                    }
+                }
+            }
+            for swc in &group {
+                self.ts.push_str(&swc.last_modified.to_string());
+                if !groups.iter().any(|g| Rc::ptr_eq(g, swc)) {
+                    groups.push(swc.clone());
+                }
+            }
+        }
+        for swc in &swcs {
+            if !groups.iter().any(|g| Rc::ptr_eq(g, swc)) {
+                groups.push(swc.clone());
+            }
+        }
+        self.file_swcs = groups;
+        self.files = Self::swc_files(&self.file_swcs);
         let group = SwcGroup::new(swcs, &rsl_locations);
         crate::asc::flex2::compiler::util::name_mappings::set_swc_components(&group.swcs);
         super::css::css_file::set_swcs(group.swcs.clone());
-        self.resource_bundles.update(&group.swcs);
+        let files: Vec<(String, String, i64)> = self.files.iter().filter_map(|(n, f)| match f {
+            ThemeStyle::Zip(i, e) => Some((n.clone(), self.file_swcs[*i].location.clone(), self.file_swcs[*i].entry_time(&self.file_swcs[*i].entries[*e]))),
+            ThemeStyle::Local(_) => None,
+        }).collect();
+        self.resource_bundles.update(&files);
         for (def, script) in group.def2script.iter() {
             let q = QName::parse(def);
             self.package_names.insert(q.get_namespace().to_string());
@@ -88,6 +133,106 @@ impl CompilerSwcContext {
         let n = group.swcs.len();
         self.swc_group = Some(group);
         n
+    }
+
+    /// `load`'s theme half: CSS themes and theme libraries, whose files join the group.
+    pub fn load_themes(&mut self, theme_files: &[std::path::PathBuf]) {
+        for t in theme_files {
+            let name = super::source::canonical_path(t);
+            if name.ends_with(".css") {
+                self.ts.push_str(&VirtualFile::local(t).get_last_modified().to_string());
+                self.theme_styles.push(ThemeStyle::Local(name));
+            } else if let Ok(swc) = Swc::load(t) {
+                let index = match self.file_swcs.iter().position(|s| s.location == swc.location) {
+                    Some(i) => i,
+                    None => {
+                        self.file_swcs.push(swc);
+                        self.file_swcs.len() - 1
+                    }
+                };
+                let swc = self.file_swcs[index].clone();
+                for (_, f) in Self::swc_files(&[swc.clone()]).iter() {
+                    let ThemeStyle::Zip(_, e) = f else { continue };
+                    self.ts.push_str(&swc.entry_time(&swc.entries[*e]).to_string());
+                    if swc.entries[*e].name.ends_with(".css") {
+                        self.theme_styles.push(ThemeStyle::Zip(index, *e));
+                    }
+                }
+            }
+        }
+        self.files = Self::swc_files(&self.file_swcs);
+    }
+
+    /// `SwcGroup.updateFiles()`: per library, its archive's files in `HashMap` order; a name keeps its newest file.
+    fn swc_files(swcs: &[Rc<Swc>]) -> JHashMap<String, ThemeStyle> {
+        let mut files: JHashMap<String, ThemeStyle> = JHashMap::new();
+        for (i, swc) in swcs.iter().enumerate() {
+            let mut archive: JHashMap<String, usize> = JHashMap::new();
+            for (e, entry) in swc.entries.iter().enumerate() {
+                archive.insert(entry.name.clone(), e);
+            }
+            for (name, e) in archive.iter() {
+                let t = swc.entry_time(&swc.entries[*e]);
+                let newer = match files.get(name.as_str()) {
+                    Some(&ThemeStyle::Zip(ci, ce)) => t > swcs[ci].entry_time(&swcs[ci].entries[ce]),
+                    _ => true,
+                };
+                if newer {
+                    files.insert(name.clone(), ThemeStyle::Zip(i, *e));
+                }
+            }
+        }
+        files
+    }
+
+    /// `getFiles()` with each file's `getLastModified()`.
+    pub fn get_files(&self) -> Vec<(String, i64)> {
+        self.files.iter().map(|(n, f)| (n.clone(), self.file_time(f).1)).collect()
+    }
+
+    fn file_time(&self, t: &ThemeStyle) -> (String, i64) {
+        match t {
+            ThemeStyle::Local(n) => (n.clone(), VirtualFile::local(std::path::Path::new(n)).get_last_modified()),
+            ThemeStyle::Zip(i, e) => {
+                let swc = &self.file_swcs[*i];
+                (format!("{}${}", swc.location, swc.entries[*e].name), swc.entry_time(&swc.entries[*e]))
+            }
+        }
+    }
+
+    /// `getThemeStyleSheets()` as `getName()` and `getLastModified()`.
+    pub fn get_theme_style_sheets(&self) -> Vec<(String, i64)> {
+        self.theme_styles.iter().map(|t| self.file_time(t)).collect()
+    }
+
+    /// `SwcChecksums.areSwcFileChecksumsEqual` puts the theme style sheets into `getFiles()`'s map.
+    pub fn add_theme_style_sheets_to_files(&mut self) {
+        for t in self.theme_styles.clone() {
+            let (name, _) = self.file_time(&t);
+            self.files.insert(name, t);
+        }
+    }
+
+    /// `close()`: the archives are read again on next use, with new clock milliseconds in their entry times.
+    pub fn close(&self) {
+        for swc in &self.file_swcs {
+            swc.reopen();
+        }
+    }
+
+    /// `checksum()`.
+    pub fn checksum(&self) -> i32 {
+        super::configuration_buffer::calculate_checksum(&self.ts)
+    }
+
+    /// `getChecksum(def)`: the defining script's signature checksum.
+    pub fn get_checksum(&self, def: &QName) -> Option<i64> {
+        self.def2script.get(def).and_then(|s| s.get_signature_checksum())
+    }
+
+    /// The defining script of `def`, as `def2script` has it.
+    pub fn get_script(&self, def: &QName) -> Option<Rc<SwcScript>> {
+        self.def2script.get(def).cloned()
     }
 
     pub fn get_source(&mut self, namespace_uri: &str, local_part: &str) -> Option<SourceRef> {
@@ -133,6 +278,7 @@ fn create_source(script: &Rc<SwcScript>) -> SourceRef {
     let u = Source::new_compilation_unit(&s, None);
     {
         let mut u = u.borrow_mut();
+        u.signature_checksum = script.get_signature_checksum();
         for d in script.get_definitions() {
             u.top_level_definitions.add(QName::parse(d));
         }

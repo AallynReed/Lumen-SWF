@@ -38,6 +38,7 @@ pub struct SwcScript {
     defs: Vec<String>,
     deps: SwcDependencySet,
     modtime: i64,
+    signature_checksum: Option<i64>,
     abc: RefCell<Option<Rc<Vec<u8>>>>,
     symbol_classes: RefCell<Option<JHashSet<String>>>,
 }
@@ -57,6 +58,11 @@ impl SwcScript {
 
     pub fn get_last_modified(&self) -> i64 {
         self.modtime
+    }
+
+    /// `getSignatureChecksum()`: the catalog's `signatureChecksum`.
+    pub fn get_signature_checksum(&self) -> Option<i64> {
+        self.signature_checksum
     }
 
     pub fn get_definitions(&self) -> &[String] {
@@ -172,6 +178,154 @@ pub struct Swc {
     pub location: String,
     pub last_modified: i64,
     pub libraries: Vec<Rc<SwcLibrary>>,
+    /// The archive's entries in `SwcLazyReadArchive.getFiles()` insertion order.
+    pub entries: Vec<ZipEntryTime>,
+    /// The clock's millisecond when the archive's `ZipFile` was last opened (see `next_open_millis`).
+    open_millis: Cell<i64>,
+}
+
+/// A zip entry's `ZipEntry.getTime()` inputs, as `flex2.compiler.swc.zip.ZipFile` reads them.
+pub struct ZipEntryTime {
+    pub name: String,
+    /// The DOS date and time as Java milliseconds (UTC), less the milliseconds `fromDosTime` takes from the clock.
+    dos_time: i64,
+    /// The local header's NTFS or extended-timestamp modification time, which `ZipEntry.setExtra` prefers.
+    mtime: Option<i64>,
+}
+
+thread_local! {
+    static OPENS: Cell<i64> = const { Cell::new(0) };
+}
+
+/// The clock's millisecond as each `ZipFile` opens: archives open one after another, so a later one reads a later
+/// millisecond, which decides `SwcGroup.updateFiles` between entries of the same DOS time.
+fn next_open_millis() -> i64 {
+    OPENS.with(|o| {
+        o.set(o.get() + 1);
+        o.get()
+    })
+}
+
+/// `ZipFile.fromDosTime`: a `Calendar.getInstance()` with the date fields set, keeping the clock's milliseconds.
+fn from_dos_time(dos: u32) -> i64 {
+    let dos = dos as i64;
+    let year = ((dos >> 25) & 0x7f) + 1980;
+    let month = ((dos >> 21) & 0x0f) - 1;
+    let day = (dos >> 16) & 0x1f;
+    let (y, m) = (year + month.div_euclid(12), month.rem_euclid(12) + 1);
+    let days = days_from_civil(y, m, 1) + day - 1;
+    let secs = days * 86_400 + ((dos >> 11) & 0x1f) * 3600 + ((dos >> 5) & 0x3f) * 60 + ((dos << 1) & 0x3e);
+    secs * 1000
+}
+
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// `ZipEntry.setExtra0` for a local header: the NTFS (0x000a) or extended timestamp (0x5455) modification time.
+fn extra_mtime(extra: &[u8]) -> Option<i64> {
+    let mut mtime = None;
+    let mut off = 0;
+    while off + 4 <= extra.len() {
+        let tag = u16::from_le_bytes([extra[off], extra[off + 1]]);
+        let sz = u16::from_le_bytes([extra[off + 2], extra[off + 3]]) as usize;
+        off += 4;
+        if off + sz > extra.len() {
+            break;
+        }
+        let e = &extra[off..off + sz];
+        match tag {
+            0x000a if sz >= 32 => {
+                if u16::from_le_bytes([e[4], e[5]]) == 1 && u16::from_le_bytes([e[6], e[7]]) == 24 {
+                    let w = i64::from_le_bytes(e[8..16].try_into().unwrap());
+                    if w != i64::MIN {
+                        mtime = Some((w - 116_444_736_000_000_000).div_euclid(10_000));
+                    }
+                }
+            }
+            0x5455 if sz >= 5 && e[0] & 1 != 0 => {
+                mtime = Some(i32::from_le_bytes(e[1..5].try_into().unwrap()) as i64 * 1000);
+            }
+            _ => {}
+        }
+        off += sz;
+    }
+    mtime
+}
+
+/// The central directory in `Hashtable` enumeration order (Ant's `ZipFile.entries`, keyed by `ZipEntry`s whose
+/// `java.util.zip.ZipEntry` name is still "" when hashed, so all collide), with each entry's local header extra field.
+fn read_zip_entries(path: &str) -> std::io::Result<Vec<ZipEntryTime>> {
+    let data = std::fs::read(path)?;
+    let bad = || std::io::Error::other("bad zip");
+    let eocd = (0..data.len().saturating_sub(21)).rev().find(|&i| data[i..i + 4] == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(bad)?;
+    let u16at = |i: usize| u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+    let u32at = |i: usize| u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
+    let count = u16at(eocd + 10);
+    let mut p = u32at(eocd + 16) as usize;
+    let mut list = Vec::new();
+    for _ in 0..count {
+        if p + 46 > data.len() || data[p..p + 4] != [0x50, 0x4b, 0x01, 0x02] {
+            break;
+        }
+        let dos = u32at(p + 12);
+        let (nl, el, cl) = (u16at(p + 28), u16at(p + 30), u16at(p + 32));
+        let lfh = u32at(p + 42) as usize;
+        let name = String::from_utf8_lossy(&data[p + 46..p + 46 + nl]).into_owned();
+        p += 46 + nl + el + cl;
+        let mtime = if lfh + 30 <= data.len() {
+            let (lnl, lel) = (u16at(lfh + 26), u16at(lfh + 28));
+            let start = lfh + 30 + lnl;
+            data.get(start..start + lel).and_then(extra_mtime)
+        } else {
+            None
+        };
+        list.push(ZipEntryTime { name, dos_time: from_dos_time(dos), mtime });
+    }
+    Ok(hashtable_order(list, |_| 0))
+}
+
+/// `java.util.Hashtable`'s enumeration order for distinct keys put in sequence: buckets from the last, newest first.
+pub fn hashtable_order<T>(items: Vec<T>, hash: impl Fn(&T) -> i32) -> Vec<T> {
+    let hashes: Vec<i32> = items.iter().map(&hash).collect();
+    let mut table: Vec<Vec<usize>> = vec![Vec::new(); 11];
+    let mut threshold = (11.0f32 * 0.75) as usize;
+    for (i, h) in hashes.iter().enumerate() {
+        if i >= threshold {
+            let old = std::mem::take(&mut table);
+            let cap = old.len() * 2 + 1;
+            threshold = (cap as f32 * 0.75) as usize;
+            table = vec![Vec::new(); cap];
+            for bucket in old.iter().rev() {
+                for &e in bucket {
+                    let idx = (hashes[e] & 0x7fff_ffff) as usize % cap;
+                    table[idx].insert(0, e);
+                }
+            }
+        }
+        let idx = (*h & 0x7fff_ffff) as usize % table.len();
+        table[idx].insert(0, i);
+    }
+    let order: Vec<usize> = table.iter().rev().flat_map(|b| b.iter().copied()).collect();
+    let mut slots: Vec<Option<T>> = items.into_iter().map(Some).collect();
+    order.into_iter().map(|i| slots[i].take().unwrap()).collect()
+}
+
+impl Swc {
+    /// `VirtualZipFile.getLastModified()` of an entry.
+    pub fn entry_time(&self, e: &ZipEntryTime) -> i64 {
+        e.mtime.unwrap_or(e.dos_time + self.open_millis.get())
+    }
+
+    /// `ZipFileHolder.getZipFile()` after `close()`: the entries are read again, with the clock's milliseconds then.
+    pub fn reopen(&self) {
+        self.open_millis.set(next_open_millis());
+    }
 }
 
 fn read_zip_entry(zip_path: &str, name: &str) -> std::io::Result<Vec<u8>> {
@@ -212,6 +366,7 @@ impl Swc {
                 if child.has_tag_name("script") {
                     let name = child.attribute("name").unwrap_or("").to_string();
                     let modtime = child.attribute("mod").and_then(|m| m.parse().ok()).unwrap_or(0);
+                    let signature_checksum = child.attribute("signatureChecksum").and_then(|m| m.parse().ok());
                     let mut defs: Vec<String> = Vec::new();
                     let mut deps = SwcDependencySet::default();
                     for d in child.children().filter(|n| n.is_element()) {
@@ -232,6 +387,7 @@ impl Swc {
                         defs,
                         deps,
                         modtime,
+                        signature_checksum,
                         abc: RefCell::new(None),
                         symbol_classes: RefCell::new(None),
                     });
@@ -246,7 +402,8 @@ impl Swc {
             }
             libraries.push(library);
         }
-        Ok(Rc::new(Swc { location, last_modified, libraries }))
+        let entries = read_zip_entries(&location).unwrap_or_default();
+        Ok(Rc::new(Swc { location, last_modified, libraries, entries, open_millis: Cell::new(next_open_millis()) }))
     }
 }
 
@@ -264,10 +421,10 @@ impl Swc {
         });
         for (name, mut defs, deps, abc) in scripts {
             defs.sort_by(|a, b| java_compare(a, b));
-            let script = Rc::new(SwcScript { library: Rc::downgrade(&library), name, defs, deps, modtime: 0, abc: RefCell::new(Some(Rc::new(abc))), symbol_classes: RefCell::new(None) });
+            let script = Rc::new(SwcScript { library: Rc::downgrade(&library), name, defs, deps, modtime: 0, signature_checksum: None, abc: RefCell::new(Some(Rc::new(abc))), symbol_classes: RefCell::new(None) });
             library.scripts.borrow_mut().push(script);
         }
-        Rc::new(Swc { location: location.to_string(), last_modified: 0, libraries: vec![library] })
+        Rc::new(Swc { location: location.to_string(), last_modified: 0, libraries: vec![library], entries: Vec::new(), open_millis: Cell::new(0) })
     }
 }
 

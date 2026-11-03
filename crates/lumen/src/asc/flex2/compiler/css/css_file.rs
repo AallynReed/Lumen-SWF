@@ -78,7 +78,14 @@ impl CssFile {
     pub fn get_last_modified(&self) -> i64 {
         match self {
             CssFile::Local(n) => VirtualFile::local(Path::new(n)).get_last_modified(),
-            CssFile::Zip { swc, .. } => VirtualFile::local(Path::new(swc)).get_last_modified(),
+            // `VirtualZipFile.getLastModified()`: the entry's time.
+            CssFile::Zip { swc, entry } => {
+                let lib = swcs().into_iter().find(|s| s.location == *swc);
+                match lib.as_ref().and_then(|s| s.entries.iter().find(|e| e.name == *entry).map(|e| s.entry_time(e))) {
+                    Some(t) => t,
+                    None => VirtualFile::local(Path::new(swc)).get_last_modified(),
+                }
+            }
         }
     }
 

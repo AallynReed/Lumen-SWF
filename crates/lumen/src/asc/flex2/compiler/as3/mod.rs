@@ -14,6 +14,7 @@ pub mod host_component_extension;
 pub mod inheritance_evaluator;
 pub mod managed;
 pub mod reflect;
+pub mod signature_extension;
 pub mod skin_part_evaluator;
 pub mod skin_part_extension;
 pub mod style_evaluator;

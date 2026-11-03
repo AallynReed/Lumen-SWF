@@ -419,6 +419,8 @@ impl ComponentBuilder {
             generate_loader_class,
             base_loader_class,
             window_class,
+            preloader_class: doc.get_preloader(),
+            use_preloader: doc.get_use_preloader(),
             root_attributes: to_vec(&root_attribute_map),
             root_attribute_embed_vars: to_vec(&root_attribute_embed_vars_map),
             root_attribute_embed_names: to_vec(&root_attribute_embed_names_map),

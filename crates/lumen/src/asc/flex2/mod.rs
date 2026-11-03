@@ -48,6 +48,14 @@ pub struct ApplicationOptions {
     pub css: compiler::css::options::CssOptions,
     /// The Flex options: locales, accessibility, frames, RSLs, metadata, ...
     pub flex: compiler::flex_options::FlexOptions,
+    /// `-incremental` and the options it reads, with the output SWF beside which the `.cache` file goes.
+    pub incremental: bool,
+    pub swc_checksum: bool,
+    pub disable_incremental_optimizations: bool,
+    pub signature_directory: Option<String>,
+    pub checksum_ts: i32,
+    pub link_checksum_ts: i32,
+    pub output: Option<PathBuf>,
 }
 
 impl Default for ApplicationOptions {
@@ -75,6 +83,13 @@ impl Default for ApplicationOptions {
             generated_directory: None,
             css: Default::default(),
             flex: Default::default(),
+            incremental: false,
+            swc_checksum: true,
+            disable_incremental_optimizations: false,
+            signature_directory: None,
+            checksum_ts: 0,
+            link_checksum_ts: 0,
+            output: None,
         }
     }
 }
@@ -86,6 +101,10 @@ pub struct Application {
     pub diagnostics: Vec<Diagnostic>,
     /// Each compiled source with its ABC before linking, in compile order.
     pub units: Vec<(String, Vec<u8>)>,
+    /// `-incremental`: the cache file to write after the SWF.
+    pub cache: Option<Vec<u8>>,
+    /// `-incremental` found nothing to do: the SWF is up to date and `swf` is empty.
+    pub up_to_date: bool,
 }
 
 impl ApplicationOptions {
@@ -126,6 +145,13 @@ impl ApplicationOptions {
         c.verbose_stacktraces = self.flex.verbose_stacktraces;
         c.show_deprecation_warnings = self.flex.show_deprecation_warnings;
         c.keep_as3_metadata = self.flex.keep_as3_metadata.clone();
+        c.incremental = self.incremental;
+        c.swc_checksum = self.swc_checksum;
+        c.disable_incremental_optimizations = self.disable_incremental_optimizations;
+        c.signature_directory = self.signature_directory.clone();
+        c.checksum_ts = self.checksum_ts;
+        c.link_checksum_ts = self.link_checksum_ts;
+        c.output = self.output.clone();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
         c.metadata = self.flex.metadata.to_rdf(&compiler::flex_options::java_medium_date(now));
         c
@@ -170,9 +196,13 @@ pub fn compile_application(opts: &ApplicationOptions) -> Result<Application, Vec
                 (u.get_source().borrow().get_name().to_string(), u.get_byte_codes().to_vec())
             })
             .collect();
+        if compiled.up_to_date && !errors {
+            return Ok(Application { swf: Vec::new(), diagnostics, units, cache: None, up_to_date: true });
+        }
+        let cache = compiled.cache;
         match compiled.movie {
             Some(movie) if !errors => match swf::encode(&movie, opts.compress) {
-                Ok(swf) => Ok(Application { swf, diagnostics, units }),
+                Ok(swf) => Ok(Application { swf, diagnostics, units, cache, up_to_date: false }),
                 Err(e) => Err(vec![Diagnostic { level: Level::Error, path: None, line: -1, col: -1, message: e.to_string(), code: -1, text: e.to_string() }]),
             },
             _ => Err(diagnostics),
