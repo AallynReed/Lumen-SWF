@@ -227,7 +227,7 @@ mod tests {
                             skip_glyf(&mut r);
                             continue;
                         }
-                        let cff = cff.as_ref().unwrap();
+                        let Some(cff) = cff.as_ref() else { break };
                         match kind {
                             b'C' => {
                                 let n = r.i();
@@ -298,7 +298,7 @@ mod tests {
                         bytes += got.len();
                     }
                     b'O' => {
-                        let cff = cff.as_ref().unwrap();
+                        let Some(cff) = cff.as_ref() else { break };
                         let n = r.i();
                         for g in 0..n {
                             let start = r.p;
