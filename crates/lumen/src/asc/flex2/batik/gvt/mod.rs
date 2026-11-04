@@ -2,11 +2,14 @@
 //! `normalizeRectangle`), `CompositeGraphicsNode`, `CanvasGraphicsNode`, `RootGraphicsNode`, `ShapeNode`, and the
 //! `FillShapePainter`/`StrokeShapePainter`/`CompositeShapePainter` shape painters.
 
+pub mod filter;
+
 use std::rc::Rc;
 
 use crate::asc::flex2::batik::ext::awt::geom::{compute_arc, SEG_ARCTO};
 use crate::asc::flex2::flash::graphics::g2d::graphic_context::RenderingHints;
-use crate::asc::flex2::flash::graphics::g2d::sprite_graphics2d::SpriteGraphics2D;
+use crate::asc::flex2::fonts::java2d::java::awt::graphics2d::Graphics2D;
+use crate::asc::flex2::fonts::java2d::sun::java2d::marlin::d_marlin_rendering_engine::create_stroked_shape;
 use crate::asc::flex2::fonts::java2d::java::awt::geom::affine_transform::AffineTransform;
 use crate::asc::flex2::fonts::java2d::java::awt::geom::shapes::{create_transformed_shape, Rectangle2D, Shape, SEG_CLOSE, SEG_CUBICTO, SEG_LINETO, SEG_MOVETO, SEG_QUADTO};
 use crate::asc::flex2::fonts::java2d::java::awt::paint::{AlphaComposite, BasicStroke, Paint};
@@ -32,18 +35,18 @@ pub struct Marker {
 }
 
 impl ShapePainter {
-    fn paint(&self, shape: &Shape, g2d: &mut SpriteGraphics2D) -> Result<(), Unsupported> {
+    fn paint(&self, shape: &Shape, g2d: &mut dyn Graphics2D) -> Result<(), Unsupported> {
         match self {
             ShapePainter::Fill { paint } => {
                 if paint.is_some() {
-                    g2d.graphic_context.set_paint(paint.clone());
+                    g2d.set_paint(paint.clone());
                     g2d.fill(shape);
                 }
             }
             ShapePainter::Stroke { stroke, paint } => {
                 if let (Some(s), Some(_)) = (stroke, paint) {
-                    g2d.graphic_context.set_paint(paint.clone());
-                    g2d.graphic_context.set_stroke(s.clone());
+                    g2d.set_paint(paint.clone());
+                    g2d.set_stroke(s.clone());
                     g2d.draw(shape);
                 }
             }
@@ -84,15 +87,13 @@ impl ShapePainter {
         group
     }
 
-    /// `getPaintedBounds2D()`; a stroke's outline (`createStrokedShape`) is taken as the shape grown by half its width.
+    /// `getPaintedBounds2D()`.
     fn get_painted_bounds2d(&self, shape: &Shape) -> Option<Rectangle2D> {
         match self {
             ShapePainter::Fill { paint } => paint.as_ref().map(|_| shape.get_bounds2d()),
             ShapePainter::Stroke { stroke, paint } => {
                 let (s, _) = (stroke.as_ref()?, paint.as_ref()?);
-                let b = shape.get_bounds2d();
-                let hw = s.width as f64 / 2.0;
-                Some(Rectangle2D::float((b.x - hw) as f32, (b.y - hw) as f32, (b.w + 2.0 * hw) as f32, (b.h + 2.0 * hw) as f32))
+                Some(create_stroked_shape(&|t| shape.get_path_iterator(t), s.width, s.cap, s.join, s.miterlimit, s.dash.as_deref(), s.dash_phase).get_bounds2d())
             }
             ShapePainter::Marker { .. } => self.build_marker_group().get_primitive_bounds(),
             ShapePainter::Composite(ps) => {
@@ -114,6 +115,8 @@ impl ShapePainter {
 #[derive(Clone, Debug)]
 pub struct ClipRable {
     pub clip_path: Shape,
+    /// `Area.getBounds2D()` when the clip path is an `Area`.
+    pub area_bounds: Option<Rectangle2D>,
     pub use_aa: bool,
 }
 
@@ -135,8 +138,8 @@ pub struct GraphicsNode {
     pub transform: Option<AffineTransform>,
     pub composite: Option<AlphaComposite>,
     pub clip: Option<ClipRable>,
-    /// A filter: painting then goes through an offscreen raster, which this port does not render.
-    pub filter: bool,
+    /// `filter`: the chain painting goes through.
+    pub filter: Option<Rc<filter::Rable>>,
     /// A mask: its luminance conversion fails on JDK 17 (`CMMException`), as it does for mxmlc.
     pub mask: bool,
     pub hints: Option<RenderingHints>,
@@ -151,15 +154,13 @@ pub struct Unsupported(pub String);
 
 /// The first thing painting met that this port does not render; painting goes on past it, as a later exception
 /// would still end the transcoding the same way mxmlc's does.
-fn record_unsupported(g2d: &mut SpriteGraphics2D, what: &str) {
-    if g2d.unsupported.is_none() {
-        g2d.unsupported = Some(what.to_string());
-    }
+fn record_unsupported(g2d: &mut dyn Graphics2D, what: &str) {
+    g2d.record_unsupported(what);
 }
 
 impl GraphicsNode {
     pub fn new(kind: Kind) -> GraphicsNode {
-        GraphicsNode { kind, transform: None, composite: None, clip: None, filter: false, mask: false, hints: None, visible: true, is_image: false }
+        GraphicsNode { kind, transform: None, composite: None, clip: None, filter: None, mask: false, hints: None, visible: true, is_image: false }
     }
 
     pub fn composite() -> GraphicsNode {
@@ -340,7 +341,10 @@ impl GraphicsNode {
     /// `getTransformedBounds(txf)`.
     pub fn get_transformed_bounds(&self, txf: &AffineTransform) -> Option<Rectangle2D> {
         let t = self.concat_transform(txf);
-        let mut tb = self.get_transformed_primitive_bounds(txf)?;
+        let mut tb = match &self.filter {
+            None => self.get_transformed_primitive_bounds(txf)?,
+            Some(f) => create_transformed_shape(&t, &Shape::Rect(filter::Filter { rable: f, node: self }.get_bounds2d())).get_bounds2d(),
+        };
         if let Some(c) = &self.clip {
             let cb = create_transformed_shape(&t, &c.clip_path).get_bounds2d();
             tb = intersect(&tb, &cb);
@@ -348,11 +352,29 @@ impl GraphicsNode {
         Some(tb)
     }
 
+    /// `getPrimitiveBounds()` once `getBounds()` has run: without a filter, Batik's `getBounds` intersects the cached
+    /// primitive bounds with the clip in place, so a node's offscreen rendering sees them clipped.
+    pub fn primitive_bounds_after_get_bounds(&self) -> Option<Rectangle2D> {
+        let b = self.get_primitive_bounds()?;
+        if self.filter.is_none() {
+            if let Some(c) = &self.clip {
+                let cr = c.area_bounds.unwrap_or_else(|| c.clip_path.get_bounds2d());
+                if cr.intersects(b.x, b.y, b.w, b.h) {
+                    return Some(intersect(&b, &cr));
+                }
+            }
+        }
+        Some(b)
+    }
+
     /// `getBounds()`.
     pub fn get_bounds(&self) -> Option<Rectangle2D> {
-        let mut b = self.get_primitive_bounds()?;
+        let mut b = match &self.filter {
+            None => self.get_primitive_bounds()?,
+            Some(f) => filter::Filter { rable: f, node: self }.get_bounds2d(),
+        };
         if let Some(c) = &self.clip {
-            let cr = c.clip_path.get_bounds2d();
+            let cr = c.area_bounds.unwrap_or_else(|| c.clip_path.get_bounds2d());
             if cr.intersects(b.x, b.y, b.w, b.h) {
                 b = intersect(&b, &cr);
             }
@@ -375,7 +397,7 @@ impl GraphicsNode {
     }
 
     /// `paint(g2d)` (`ShapeNode.paint` adds the visibility test).
-    pub fn paint(&self, g2d: &mut SpriteGraphics2D) -> Result<(), Unsupported> {
+    pub fn paint(&self, g2d: &mut dyn Graphics2D) -> Result<(), Unsupported> {
         if (matches!(self.kind, Kind::Shape { .. }) || self.is_image) && !self.visible {
             return Ok(());
         }
@@ -385,53 +407,60 @@ impl GraphicsNode {
             }
         }
         let Some(bounds) = self.get_bounds() else { return Ok(()) };
-        let default_clip = g2d.graphic_context.get_clip();
-        let default_composite = g2d.graphic_context.get_composite();
-        let default_transform = g2d.graphic_context.get_transform();
+        let default_clip = g2d.get_clip();
+        let default_composite = g2d.get_composite();
+        let default_transform = g2d.get_transform();
         let mut default_hints = None;
         if let Some(h) = &self.hints {
-            default_hints = Some(g2d.graphic_context.get_rendering_hints());
-            g2d.graphic_context.add_rendering_hints(h);
+            default_hints = Some(g2d.get_rendering_hints());
+            g2d.add_rendering_hints(h);
         }
         if let Some(t) = &self.transform {
-            g2d.graphic_context.transform(t);
+            g2d.transform(t);
         }
         if let Some(c) = &self.composite {
-            g2d.graphic_context.set_composite(*c);
+            g2d.set_composite(*c);
         }
         if let Some(c) = &self.clip {
-            g2d.graphic_context.clip(Some(&c.clip_path));
+            g2d.clip(&c.clip_path);
         }
         let mut paint_needed = true;
-        if let Some(cb) = g2d.graphic_context.get_clip_bounds2d() {
+        if let Some(cb) = g2d.get_clip().map(|c| c.to_shape().get_bounds2d()) {
             if !bounds.intersects(cb.x, cb.y, cb.w, cb.h) {
                 paint_needed = false;
             }
         }
         let mut result = Ok(());
         if paint_needed {
-            let antialiased_clip = self.clip.as_ref().is_some_and(|c| c.use_aa && !(matches!(c.clip_path, Shape::Rect(_)) && g2d.graphic_context.get_transform().get_shear_x() == 0.0 && g2d.graphic_context.get_transform().get_shear_y() == 0.0));
-            let offscreen = self.filter || self.mask || self.composite.is_some_and(|c| c != AlphaComposite::SRC_OVER) || antialiased_clip;
+            let antialiased_clip = self.clip.as_ref().is_some_and(|c| c.use_aa && !(matches!(c.clip_path, Shape::Rect(_)) && g2d.get_transform().get_shear_x() == 0.0 && g2d.get_transform().get_shear_y() == 0.0));
+            let offscreen = self.filter.is_some() || self.mask || self.composite.is_some_and(|c| c != AlphaComposite::SRC_OVER) || antialiased_clip;
             if !offscreen {
                 result = self.primitive_paint(g2d);
-            } else if self.mask && !self.filter {
+            } else if self.mask && self.filter.is_none() {
                 result = Err(Unsupported("Invalid image layout".into()));
+            } else if self.mask {
+                record_unsupported(g2d, "a filtered mask");
+            } else if antialiased_clip {
+                record_unsupported(g2d, "an antialiased clip");
             } else {
-                record_unsupported(g2d, "an offscreen (rasterized) node: opacity, a filter or an antialiased clip");
+                let filtered = filter::Filter { rable: self.filter.as_deref().unwrap_or(&filter::Rable::SourceGraphic), node: self };
+                let filter_bounds = filtered.get_bounds2d();
+                g2d.clip(&Shape::Rect(filter_bounds));
+                result = filter::draw_image_filter(g2d, &filtered);
             }
         }
         if let Some(h) = default_hints {
-            g2d.graphic_context.set_rendering_hints(h);
+            g2d.set_rendering_hints(h);
         }
-        g2d.graphic_context.set_transform(&default_transform);
-        g2d.graphic_context.set_clip(default_clip.as_ref());
+        g2d.set_transform(&default_transform);
+        g2d.set_clip(default_clip.as_ref());
         if self.composite.is_some() {
-            g2d.graphic_context.set_composite(default_composite);
+            g2d.set_composite(default_composite);
         }
         result
     }
 
-    fn primitive_paint(&self, g2d: &mut SpriteGraphics2D) -> Result<(), Unsupported> {
+    pub fn primitive_paint(&self, g2d: &mut dyn Graphics2D) -> Result<(), Unsupported> {
         match &self.kind {
             Kind::Shape { shape, painter } => {
                 if let (Some(s), Some(p)) = (shape, painter) {

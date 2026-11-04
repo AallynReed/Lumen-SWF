@@ -7,7 +7,13 @@ use crate::asc::flex2::flash::swf::builder::fill_style_builder::{build_matrix, g
 use crate::asc::flex2::flash::swf::tags::{codes, Body, PlaceObject, Tag, TagRef};
 use crate::asc::flex2::flash::swf::types::Rect;
 use crate::asc::flex2::fonts::java2d::java::awt::geom::shapes::{create_transformed_shape, Shape};
-use crate::asc::flex2::fonts::java2d::java::awt::paint::Paint;
+use super::graphic_context::RenderingHints;
+use crate::asc::flex2::flash::swf::builder::image_shape_builder::build_image;
+use crate::asc::flex2::flash::swf::builder::tags::build_lossless;
+use crate::asc::flex2::fonts::java2d::java::awt::geom::affine_transform::AffineTransform;
+use crate::asc::flex2::fonts::java2d::java::awt::graphics2d::Graphics2D;
+use crate::asc::flex2::fonts::java2d::java::awt::paint::{AlphaComposite, BasicStroke, Paint};
+use crate::asc::flex2::fonts::java2d::sun::java2d::sun_graphics2d::{IntImage, UsrClip};
 
 pub struct SpriteGraphics2D {
     pub graphic_context: GraphicContext,
@@ -119,4 +125,88 @@ fn is_gradient_fill(_paint: Option<&Paint>) -> bool {
 fn get_shape_start(shape: &Shape) -> (f64, f64) {
     let b = shape.get_bounds2d();
     (b.get_min_x(), b.get_min_y())
+}
+
+impl SpriteGraphics2D {
+    /// `drawImage(image, at, obs)`: a DefineBitsLossless2 and its image shape, placed at `at`.
+    pub fn draw_image_at(&mut self, image: &IntImage, at: &AffineTransform) {
+        let define_bits = build_lossless(&image.data, image.width, image.height);
+        self.define_tags.push(define_bits.clone());
+        let ds3 = build_image(&define_bits, image.width, image.height);
+        self.define_tags.push(ds3.clone());
+        let b = match &ds3.borrow().body {
+            Body::DefineShape(d) => d.bounds,
+            _ => unreachable!(),
+        };
+        self.apply_bounds(b.x_min, b.y_min, b.x_max, b.y_max);
+        let mut po2 = PlaceObject::default();
+        po2.set_matrix(Some(build_matrix(at)));
+        po2.set_ref(ds3);
+        po2.depth = self.depth;
+        self.depth += 1;
+        self.define_tags.push(Tag::new_ref(codes::PLACE_OBJECT2, Body::PlaceObject(po2)));
+    }
+}
+
+impl Graphics2D for SpriteGraphics2D {
+    fn get_clip(&self) -> Option<UsrClip> {
+        self.graphic_context.get_clip().map(UsrClip::Shape)
+    }
+    fn set_clip(&mut self, c: Option<&UsrClip>) {
+        let s = c.map(|c| c.to_shape());
+        self.graphic_context.set_clip(s.as_ref());
+    }
+    fn clip(&mut self, s: &Shape) {
+        self.graphic_context.clip(Some(s));
+    }
+    fn get_composite(&self) -> AlphaComposite {
+        self.graphic_context.get_composite()
+    }
+    fn set_composite(&mut self, c: AlphaComposite) {
+        self.graphic_context.set_composite(c);
+    }
+    fn get_transform(&self) -> AffineTransform {
+        self.graphic_context.get_transform()
+    }
+    fn set_transform(&mut self, t: &AffineTransform) {
+        self.graphic_context.set_transform(t);
+    }
+    fn transform(&mut self, t: &AffineTransform) {
+        self.graphic_context.transform(t);
+    }
+    fn get_rendering_hints(&self) -> RenderingHints {
+        self.graphic_context.get_rendering_hints()
+    }
+    fn add_rendering_hints(&mut self, h: &RenderingHints) {
+        self.graphic_context.add_rendering_hints(h);
+    }
+    fn set_rendering_hints(&mut self, h: RenderingHints) {
+        self.graphic_context.set_rendering_hints(h);
+    }
+    fn set_paint(&mut self, p: Option<Paint>) {
+        self.graphic_context.set_paint(p);
+    }
+    fn set_stroke(&mut self, s: BasicStroke) {
+        self.graphic_context.set_stroke(s);
+    }
+    fn fill(&mut self, s: &Shape) {
+        SpriteGraphics2D::fill(self, s);
+    }
+    fn draw(&mut self, s: &Shape) {
+        SpriteGraphics2D::draw(self, s);
+    }
+    /// `drawImage(image, x, y, observer)`: the current transform translated by `(x, y)`.
+    fn draw_image(&mut self, img: &IntImage, x: i32, y: i32) {
+        let mut at = self.graphic_context.get_transform();
+        at.translate(x as f64, y as f64);
+        self.draw_image_at(img, &at);
+    }
+    fn destination_size(&self) -> (i32, i32) {
+        (self.width, self.height)
+    }
+    fn record_unsupported(&mut self, what: &str) {
+        if self.unsupported.is_none() {
+            self.unsupported = Some(what.to_string());
+        }
+    }
 }

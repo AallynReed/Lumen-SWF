@@ -2,6 +2,9 @@
 //! SWF builders read; painting them is Java2D's).
 
 pub mod geom;
+pub mod linear_gradient_paint_context;
+pub mod multiple_gradient_paint_context;
+pub mod radial_gradient_paint_context;
 
 use crate::asc::flex2::fonts::java2d::java::awt::geom::affine_transform::AffineTransform;
 use crate::asc::flex2::fonts::java2d::java::awt::paint::Color;

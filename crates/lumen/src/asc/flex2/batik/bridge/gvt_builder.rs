@@ -19,7 +19,8 @@ use crate::asc::flex2::batik::gvt::{ClipRable, GraphicsNode, Kind, Marker, Shape
 use crate::asc::flex2::batik::parser;
 use crate::asc::flex2::flash::graphics::g2d::graphic_context::{RenderingHints, KEY_ANTIALIASING};
 use crate::asc::flex2::fonts::java2d::java::awt::geom::affine_transform::AffineTransform;
-use crate::asc::flex2::fonts::java2d::java::awt::geom::shapes::{create_transformed_shape, Rectangle2D, Shape};
+use crate::asc::flex2::fonts::java2d::java::awt::geom::area::Area;
+use crate::asc::flex2::fonts::java2d::java::awt::geom::shapes::{create_transformed_shape, Path2D, Rectangle2D, Shape};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Bridge {
@@ -230,22 +231,22 @@ impl GvtBuilder<'_> {
     fn convert_filter_and_mask(&self, e: &NodeRef, node: &mut GraphicsNode) -> BResult<()> {
         for (idx, local) in [(FILTER_INDEX, "filter"), (MASK_INDEX, "mask")] {
             if let Some(uri) = cu::uri_property(e, idx, self.ctx) {
+                if idx == FILTER_INDEX {
+                    node.filter = super::filter_bridge::create_filter(self.ctx, e, &uri, node)?;
+                    continue;
+                }
                 let target = self.ctx.get_referenced_element(e, &uri)?;
                 if !target.is_svg(local) {
                     return Err(bridge_exception(e, ERR_CSS_URI_BAD_TARGET, &[&uri]));
                 }
-                if idx == FILTER_INDEX {
-                    node.filter = true;
-                } else {
-                    node.mask = true;
-                }
+                node.mask = true;
             }
         }
         Ok(())
     }
 
-    /// `CSSUtilities.convertClipPath` with `SVGClipPathElementBridge.createClip`; the clip `Area` is kept as the
-    /// bounds of its outlines, which is all painting reads of it.
+    /// `CSSUtilities.convertClipPath` with `SVGClipPathElementBridge.createClip`: the `Area` of the children's outlines;
+    /// an outline that is not a shape (text) is kept as its bounds.
     fn convert_clip_path(&self, e: &NodeRef, clipped: &GraphicsNode) -> BResult<Option<ClipRable>> {
         let Some(uri) = cu::uri_property(e, CLIP_PATH_INDEX, self.ctx) else { return Ok(None) };
         let cp = self.ctx.get_referenced_element(e, &uri)?;
@@ -259,7 +260,7 @@ impl GvtBuilder<'_> {
         if units == OBJECT_BOUNDING_BOX {
             tx = su::to_object_bbox(&tx, clipped);
         }
-        let mut area: Option<Rectangle2D> = None;
+        let mut clip_path = Area::new();
         let mut has_children = false;
         for child in cp.child_elements() {
             let Some(clip_node) = self.build(&child)? else { continue };
@@ -268,21 +269,38 @@ impl GvtBuilder<'_> {
             if clip_node.transform.is_some() {
                 at.pre_concatenate(&tx);
             }
-            if let Some(ob) = outline_bounds(&clip_node) {
-                let b = create_transformed_shape(&at, &Shape::Rect(ob)).get_bounds2d();
-                area = Some(match area {
-                    None => b,
-                    Some(a) => a.create_union(&b),
-                });
+            let mut path = match outline_path(&clip_node) {
+                Some(p) => p,
+                None => {
+                    let mut p = Path2D::new_float(1);
+                    if let Some(ob) = outline_bounds(&clip_node) {
+                        p.append(&Shape::Rect(ob).get_path_iterator(None), false);
+                    }
+                    p
+                }
+            };
+            path.winding_rule = cu::convert_clip_rule(&child, self.ctx);
+            let outline = Shape::Path(create_transformed_shape(&at, &Shape::Path(path)));
+            let mut area = Area::from_path(&outline.get_path_iterator(None), outline.get_winding_rule());
+            let mut outline_node = GraphicsNode::new(Kind::Shape { shape: Some(outline), painter: None });
+            outline_node.visible = true;
+            if let Some(c) = self.convert_clip_path(&child, &outline_node)? {
+                area.subtract(&Area::from_path(&c.clip_path.get_path_iterator(None), c.clip_path.get_winding_rule()));
             }
+            clip_path.add(&area);
         }
         if !has_children {
             return Ok(None);
         }
-        let r = area.unwrap_or_else(|| Rectangle2D::double(0.0, 0.0, 0.0, 0.0));
+        let mut clip_path_node = GraphicsNode::new(Kind::Shape { shape: Some(area_shape(&clip_path)), painter: None });
+        clip_path_node.visible = true;
+        if let Some(c) = self.convert_clip_path(&cp, &clip_path_node)? {
+            clip_path.subtract(&Area::from_path(&c.clip_path.get_path_iterator(None), c.clip_path.get_winding_rule()));
+        }
         let hints: Option<RenderingHints> = cu::convert_shape_rendering(&cp, None, self.ctx);
         let use_aa = hints.as_ref().and_then(|h| h.get(KEY_ANTIALIASING)).is_some_and(|v| *v == "VALUE_ANTIALIAS_ON");
-        Ok(Some(ClipRable { clip_path: Shape::Path(create_transformed_shape(&AffineTransform::new(), &Shape::Rect(r))), use_aa }))
+        let (x, y, w, h) = clip_path.get_bounds2d();
+        Ok(Some(ClipRable { clip_path: area_shape(&clip_path), area_bounds: Some(Rectangle2D::double(x, y, w, h)), use_aa }))
     }
 
     fn create_shape_painter(&self, bridge: Bridge, e: &NodeRef, node: &GraphicsNode) -> BResult<Option<ShapePainter>> {
@@ -474,7 +492,7 @@ impl GvtBuilder<'_> {
             at.concatenate(&viewing_transform);
             if let Ok(inv) = at.create_inverse() {
                 let clip = create_transformed_shape(&inv, &Shape::Rect(r));
-                cgn.clip = Some(ClipRable { clip_path: Shape::Path(clip), use_aa: false });
+                cgn.clip = Some(ClipRable { clip_path: Shape::Path(clip), area_bounds: None, use_aa: false });
             }
         }
         cgn.hints = cu::convert_color_rendering(e, None, ctx);
@@ -682,7 +700,7 @@ impl GvtBuilder<'_> {
                 Some(o) => Rectangle2D::float(x + o[3], y + o[0], w - o[1] - o[3], h - o[2] - o[0]),
             };
             if let Ok(inv) = at.create_inverse() {
-                result.clip = Some(ClipRable { clip_path: Shape::Path(create_transformed_shape(&inv, &Shape::Rect(r))), use_aa: false });
+                result.clip = Some(ClipRable { clip_path: Shape::Path(create_transformed_shape(&inv, &Shape::Rect(r))), area_bounds: None, use_aa: false });
             }
         }
         Ok(result)
@@ -795,7 +813,7 @@ impl GvtBuilder<'_> {
             };
             let mut comp = GraphicsNode::composite();
             comp.children_mut().push(content);
-            comp.clip = Some(ClipRable { clip_path: Shape::Rect(r), use_aa: false });
+            comp.clip = Some(ClipRable { clip_path: Shape::Rect(r), area_bounds: None, use_aa: false });
             content = comp;
         }
         let s = marker.get_attribute_ns(None, "refX");
@@ -834,4 +852,37 @@ fn outline_bounds(n: &GraphicsNode) -> Option<Rectangle2D> {
             out
         }
     }
+}
+
+/// `new GeneralPath(node.getOutline())`: a shape's outline, or a composite's children's outlines appended through
+/// their transforms; `None` where the outline is not a plain shape (text, images).
+fn outline_path(n: &GraphicsNode) -> Option<Path2D> {
+    match &n.kind {
+        Kind::Shape { shape, .. } => {
+            let s = shape.as_ref()?;
+            let mut p = Path2D::new_float(s.get_winding_rule());
+            p.append(&s.get_path_iterator(None), false);
+            Some(p)
+        }
+        Kind::Composite(ch) | Kind::Canvas { children: ch, .. } => {
+            let mut p = Path2D::new_float(1);
+            for c in ch {
+                let o = outline_path(c)?;
+                let segs = match &c.transform {
+                    Some(t) => Shape::Path(create_transformed_shape(t, &Shape::Path(o))).get_path_iterator(None),
+                    None => Shape::Path(o).get_path_iterator(None),
+                };
+                p.append(&segs, false);
+            }
+            Some(p)
+        }
+        _ => None,
+    }
+}
+
+/// An `Area` as the shape its path iterator draws.
+fn area_shape(a: &Area) -> Shape {
+    let mut p = Path2D::new_double(1);
+    p.append(&a.get_path_iterator(None), false);
+    Shape::Path(p)
 }

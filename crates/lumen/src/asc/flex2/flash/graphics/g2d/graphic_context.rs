@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::asc::flex2::fonts::java2d::java::awt::geom::affine_transform::AffineTransform;
+use crate::asc::flex2::fonts::java2d::java::awt::geom::area::Area;
 use crate::asc::flex2::fonts::java2d::java::awt::geom::shapes::{create_transformed_shape, Path2D, Rectangle2D, Shape, WIND_NON_ZERO};
 use crate::asc::flex2::fonts::java2d::java::awt::paint::{AlphaComposite, BasicStroke, Color, Paint};
 
@@ -97,20 +98,15 @@ impl GraphicContext {
         self.hints = h;
     }
 
-    /// `clip(s)`: an `Area` intersection; only its bounds matter here, so it is kept as the intersected bounds.
+    /// `clip(s)`: `new GeneralPath(new Area(clip).intersect(new Area(s)))`.
     pub fn clip(&mut self, s: Option<&Shape>) {
         let s = s.map(|s| Shape::Path(create_transformed_shape(&self.transform, s)));
         match (&self.clip, s) {
             (Some(c), Some(s)) => {
-                let r = c.get_bounds2d().create_intersection(&s.get_bounds2d());
+                let mut a = Area::from_path(&c.get_path_iterator(None), c.get_winding_rule());
+                a.intersect(&Area::from_path(&s.get_path_iterator(None), s.get_winding_rule()));
                 let mut p = Path2D::new_float(WIND_NON_ZERO);
-                if !r.is_empty() {
-                    p.move_to(r.x, r.y);
-                    p.line_to(r.x + r.w, r.y);
-                    p.line_to(r.x + r.w, r.y + r.h);
-                    p.line_to(r.x, r.y + r.h);
-                    p.close_path();
-                }
+                p.append(&a.get_path_iterator(None), false);
                 self.clip = Some(Shape::Path(p));
             }
             (_, s) => self.clip = s,

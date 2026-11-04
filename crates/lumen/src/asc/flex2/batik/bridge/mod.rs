@@ -4,6 +4,7 @@
 
 pub mod bridge_context;
 pub mod css_utilities;
+pub mod filter_bridge;
 pub mod gvt_builder;
 pub mod paint_server;
 pub mod svg_utilities;

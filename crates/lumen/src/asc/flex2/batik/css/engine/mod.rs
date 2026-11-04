@@ -35,6 +35,7 @@ pub const CLIP_PATH_INDEX: usize = 3;
 pub const CLIP_RULE_INDEX: usize = 4;
 pub const COLOR_INDEX: usize = 5;
 pub const COLOR_INTERPOLATION_INDEX: usize = 6;
+pub const COLOR_INTERPOLATION_FILTERS_INDEX: usize = 7;
 pub const COLOR_RENDERING_INDEX: usize = 9;
 pub const DISPLAY_INDEX: usize = 12;
 pub const ENABLE_BACKGROUND_INDEX: usize = 14;

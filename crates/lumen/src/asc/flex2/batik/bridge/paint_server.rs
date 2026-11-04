@@ -244,8 +244,9 @@ fn build_linear(e: &NodeRef, node: &GraphicsNode, spread: i32, cs: i32, mut tran
     Ok(Some(Paint::LinearGradient(Rc::new(LinearGradientPaint::new(p1, p2, base).map_err(runtime)?))))
 }
 
+/// `SVGRadialGradientElementBridge.buildGradient`, which always passes `SRGB` whatever `color-interpolation` says.
 #[allow(clippy::too_many_arguments)]
-fn build_radial(e: &NodeRef, node: &GraphicsNode, spread: i32, cs: i32, mut transform: AffineTransform, colors: &[Color], offsets: &[f32], ctx: &BridgeContext) -> BResult<Option<Paint>> {
+fn build_radial(e: &NodeRef, node: &GraphicsNode, spread: i32, _cs: i32, mut transform: AffineTransform, colors: &[Color], offsets: &[f32], ctx: &BridgeContext) -> BResult<Option<Paint>> {
     let cx = chain(e, "cx", "50%", ctx)?;
     let cy = chain(e, "cy", "50%", ctx)?;
     let r = chain(e, "r", "50%", ctx)?;
@@ -262,7 +263,7 @@ fn build_radial(e: &NodeRef, node: &GraphicsNode, spread: i32, cs: i32, mut tran
     }
     let c = su::convert_point(&cx, "cx", &cy, "cy", units, &uctx)?;
     let f = su::convert_point(&fx, "fx", &fy, "fy", units, &uctx)?;
-    let base = MultipleGradientPaint::new(offsets, colors, spread, cs, transform).map_err(runtime)?;
+    let base = MultipleGradientPaint::new(offsets, colors, spread, ext::SRGB, transform).map_err(runtime)?;
     Ok(Some(Paint::RadialGradient(Rc::new(RadialGradientPaint::new(c, r, f, base).map_err(runtime)?))))
 }
 
