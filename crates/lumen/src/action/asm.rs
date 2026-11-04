@@ -415,7 +415,8 @@ fn push_value(lx: &mut Lexer, pool: &[String], expected: bool, count: usize) -> 
     }))
 }
 
-fn parse_action(name: &str, lx: &mut Lexer, pool: &[String]) -> R<Parsed> {
+fn parse_action(name: &str, lx: &mut Lexer, shared: Option<&Arc<Vec<String>>>) -> R<Parsed> {
+    let pool: &[String] = shared.map_or(&[], |p| p.as_slice());
     let lower = name.to_ascii_lowercase();
     let simple = (0..=0xffu8).find(|&c| simple_name(c).is_some_and(|n| n.eq_ignore_ascii_case(name)));
     let named = NAMED.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|&(_, c)| c);
@@ -545,8 +546,7 @@ fn parse_action(name: &str, lx: &mut Lexer, pool: &[String]) -> R<Parsed> {
                             None => break,
                         }
                     }
-                    let pool = (!pool.is_empty()).then(|| Arc::new(pool.to_vec()));
-                    Op::Push { values, pool }
+                    Op::Push { values, pool: shared.cloned() }
                 }
                 0x99 | 0x9d => {
                     label = Some(lx.ident()?);
@@ -675,7 +675,7 @@ pub fn parse_pcode(text: &str, version: u8) -> Result<ActionList, ParseError> {
                 }
                 Sym::Instr(n) if n.eq_ignore_ascii_case("nop") => {}
                 Sym::Instr(n) => {
-                    let a = parse_action(&n, &mut lx, &[])?.action;
+                    let a = parse_action(&n, &mut lx, None)?.action;
                     match a.op {
                         Op::ConstantPool(c) => pool.extend(c),
                         _ if a.container_sizes().is_some() => open.push(a),
@@ -693,6 +693,7 @@ pub fn parse_pcode(text: &str, version: u8) -> Result<ActionList, ParseError> {
     let mut labels: Vec<(String, u64)> = Vec::new();
     let mut containers: Vec<usize> = Vec::new();
     let mut address = 0u64;
+    let shared = (!pool.is_empty()).then(|| Arc::new(pool.clone()));
     if !pool.is_empty() {
         let mut a = Action::new(0x88, Op::ConstantPool(pool.clone()));
         a.length = a.content_len(cs);
@@ -713,7 +714,7 @@ pub fn parse_pcode(text: &str, version: u8) -> Result<ActionList, ParseError> {
             Sym::Instr(n) if n.eq_ignore_ascii_case("nop") => {}
             Sym::Instr(n) => {
                 let line = lx.line;
-                let p = parse_action(&n, &mut lx, &pool)?;
+                let p = parse_action(&n, &mut lx, shared.as_ref())?;
                 let mut a = p.action;
                 if matches!(a.op, Op::ConstantPool(_)) {
                     continue;
