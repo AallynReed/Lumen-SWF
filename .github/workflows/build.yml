@@ -80,8 +80,31 @@ jobs:
           path: target/release/lumen-swf-cli.exe
           if-no-files-found: error
 
+  cli-linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-linux
+
+      - name: Build CLI
+        run: cargo build --release -p lumen-cli
+        env:
+          LUMEN_VERSION: ${{ needs.version.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-linux
+          path: target/release/lumen-swf-cli
+          if-no-files-found: error
+
   publish:
-    needs: [version, msi, cli]
+    needs: [version, msi, cli, cli-linux]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -99,3 +122,4 @@ jobs:
           files: |
             dist/*.msi
             dist/lumen-swf-cli.exe
+            dist/lumen-swf-cli
