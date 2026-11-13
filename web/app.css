@@ -19,6 +19,8 @@
     --syn-number: #a14d00;
     --syn-comment: #6b7380;
     --syn-regex: #b4233c;
+    --find-hit: #fde68a;
+    --find-current: #f59e0b;
     --mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
     --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     color-scheme: light;
@@ -380,3 +382,36 @@ mark { background: none; color: var(--accent); font-weight: 650; }
 .tk-comment { color: var(--syn-comment); font-style: italic; }
 .tk-regex { color: var(--syn-regex); }
 
+.code-find {
+    position: sticky;
+    top: -12px;
+    z-index: 2;
+    align-self: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 5px 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgb(0 0 0 / .12);
+}
+.code-find input[type="search"] {
+    flex: 0 1 220px;
+    min-width: 120px;
+    padding: 3px 7px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font: 12px var(--mono);
+}
+.code-find.bad input[type="search"] { border-color: var(--warn); }
+.code-find label { display: flex; align-items: center; gap: 3px; color: var(--muted); font: 12px var(--mono); }
+.code-find .btn { padding: 2px 8px; }
+.code-find .btn.icon { min-width: 28px; padding: 3px 6px; display: inline-flex; justify-content: center; }
+.code-find-count { color: var(--muted); font-size: 12px; min-width: 64px; text-align: right; }
+::highlight(code-find) { background-color: var(--find-hit); }
+::highlight(code-find-current) { background-color: var(--find-current); color: #000; }

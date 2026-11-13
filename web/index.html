@@ -118,6 +118,16 @@
                 </div>
             </div>
             <div id="tab-preview" class="tab-body preview-body" hidden>
+                <form id="code-find" class="code-find" hidden>
+                    <input id="code-find-text" type="search" placeholder="Find in script" spellcheck="false" aria-label="Find in script">
+                    <span id="code-find-count" class="code-find-count"></span>
+                    <button type="button" class="btn icon" data-find="prev" title="Previous match (Shift+Enter)" aria-label="Previous match"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg></button>
+                    <button type="submit" class="btn icon" title="Next match (Enter)" aria-label="Next match"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+                    <label title="Match case"><input type="checkbox" id="code-find-case"> Aa</label>
+                    <label title="Regular expression"><input type="checkbox" id="code-find-regex"> .*</label>
+                    <button type="button" class="btn" data-find="all" title="Search every script (Ctrl+Shift+F)">All scripts</button>
+                    <button type="button" class="btn icon" data-find="close" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+                </form>
                 <div id="preview"></div>
                 <p id="preview-note" class="preview-note"></p>
             </div>

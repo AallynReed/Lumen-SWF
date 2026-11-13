@@ -765,6 +765,7 @@ function setTab(tab, remember = true) {
     if (tab === 'hex') drawHex();
     if (tab === 'play') playMovie();
     else stopMovie();
+    syncFind();
 }
 
 // ---- Ruffle player ----
@@ -1100,7 +1101,173 @@ for (const b of document.querySelectorAll('[data-doc-export]')) {
     });
 }
 
+// ---- find in script ----
+
+const codeFind = { open: false, current: 0, count: 0 };
+
+function findTarget() {
+    if ($('tab-preview').hidden) return null;
+    return $('preview').querySelector('.code-edit, .code-view, .text-preview');
+}
+
+// Start and end offsets of each match in the text, or null for a bad pattern.
+function findMatches(text) {
+    const q = $('code-find-text').value;
+    if (!q) return [];
+    let re;
+    try {
+        re = new RegExp($('code-find-regex').checked ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $('code-find-case').checked ? 'g' : 'gi');
+    } catch (_) {
+        return null;
+    }
+    const out = [];
+    for (let m; out.length < 20000 && (m = re.exec(text));) {
+        if (m[0]) out.push([m.index, m.index + m[0].length]);
+        else re.lastIndex++;
+    }
+    return out;
+}
+
+// DOM ranges for text offsets in an element whose text is split across coloured spans.
+function textRanges(el, spans) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    let base = 0;
+    const seek = (pos, isEnd) => {
+        while (node && (isEnd ? base + node.length < pos : base + node.length <= pos)) {
+            base += node.length;
+            node = walker.nextNode();
+        }
+        return node;
+    };
+    return spans.map(([a, b]) => {
+        const r = document.createRange();
+        r.setStart(seek(a, false), a - base);
+        r.setEnd(seek(b, true), b - base);
+        return r;
+    });
+}
+
+function revealRange(r) {
+    for (let box = r.startContainer.parentElement; box && box !== document.body; box = box.parentElement) {
+        const cs = getComputedStyle(box);
+        if (!/auto|scroll/.test(cs.overflowX + cs.overflowY)) continue;
+        const a = r.getBoundingClientRect();
+        const b = box.getBoundingClientRect();
+        if (a.top < b.top + 50 || a.bottom > b.bottom - 10) box.scrollTop += a.top - b.top - box.clientHeight / 2;
+        if (a.left < b.left || a.right > b.right) box.scrollLeft += a.left - b.left - box.clientWidth / 3;
+    }
+}
+
+function revealInArea(area, [a, b]) {
+    const before = area.value.slice(0, a);
+    const line = before.split('\n').length - 1;
+    const col = a - before.lastIndexOf('\n') - 1;
+    const cs = getComputedStyle(area);
+    area.setSelectionRange(a, b);
+    area.scrollTop = Math.max(0, line * parseFloat(cs.lineHeight) - area.clientHeight / 2);
+    area.scrollLeft = Math.max(0, col * parseFloat(cs.fontSize) * 0.6 - area.clientWidth / 3);
+}
+
+// Marks every match in the shown script and scrolls to the current one, `step` matches on.
+function refreshFind(step = 0, reveal = true) {
+    const el = findTarget();
+    if (window.CSS && CSS.highlights) {
+        CSS.highlights.delete('code-find');
+        CSS.highlights.delete('code-find-current');
+    }
+    if (!el) return;
+    const area = el.tagName === 'TEXTAREA';
+    const spans = findMatches(area ? el.value : el.textContent);
+    $('code-find').classList.toggle('bad', spans === null);
+    const n = spans ? spans.length : 0;
+    codeFind.count = n;
+    codeFind.current = n ? (((codeFind.current + step) % n) + n) % n : 0;
+    $('code-find-count').textContent = spans === null ? 'Bad pattern' : !$('code-find-text').value ? '' : n ? `${codeFind.current + 1} of ${n}` : 'No results';
+    if (!n) return;
+    if (area) {
+        if (reveal) revealInArea(el, spans[codeFind.current]);
+        return;
+    }
+    const ranges = textRanges(el, spans);
+    if (window.CSS && CSS.highlights) {
+        CSS.highlights.set('code-find', new Highlight(...ranges));
+        CSS.highlights.set('code-find-current', new Highlight(ranges[codeFind.current]));
+    }
+    if (reveal) revealRange(ranges[codeFind.current]);
+}
+
+function syncFind() {
+    const show = codeFind.open && !!findTarget();
+    const was = !$('code-find').hidden;
+    $('code-find').hidden = !show;
+    if (show) {
+        if (!was) codeFind.current = 0;
+        refreshFind(0, true);
+    } else if (window.CSS && CSS.highlights) {
+        CSS.highlights.delete('code-find');
+        CSS.highlights.delete('code-find-current');
+    }
+}
+
+function openCodeFind(text, opts) {
+    const el = findTarget();
+    const input = $('code-find-text');
+    if (text != null) {
+        input.value = text;
+        $('code-find-case').checked = !!opts?.matchCase;
+        $('code-find-regex').checked = !!opts?.regex;
+    } else if (el) {
+        const picked = el.tagName === 'TEXTAREA' ? el.value.slice(el.selectionStart, el.selectionEnd) : String(window.getSelection());
+        if (picked && !picked.includes('\n')) input.value = picked;
+    }
+    codeFind.open = true;
+    codeFind.current = 0;
+    $('code-find').hidden = true;
+    syncFind();
+    if (text == null) {
+        input.focus();
+        input.select();
+    }
+}
+
+function closeCodeFind() {
+    codeFind.open = false;
+    syncFind();
+    findTarget()?.focus();
+}
+
+$('code-find').addEventListener('submit', (e) => {
+    e.preventDefault();
+    refreshFind(1);
+});
+$('code-find-text').addEventListener('input', () => {
+    codeFind.current = 0;
+    refreshFind();
+});
+['code-find-case', 'code-find-regex'].forEach((id) => $(id).addEventListener('change', () => refreshFind()));
+$('code-find').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeCodeFind(); }
+    else if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); refreshFind(-1); }
+});
+$('code-find').addEventListener('click', (e) => {
+    const act = e.target.closest('[data-find]')?.dataset.find;
+    if (act === 'prev') refreshFind(-1);
+    else if (act === 'close') closeCodeFind();
+    else if (act === 'all' && state.docs.length) {
+        $('find-text').value = $('code-find-text').value;
+        $('find-case').checked = $('code-find-case').checked;
+        $('find-regex').checked = $('code-find-regex').checked;
+        if (state.selected?.node.kind === 'script') $('find-in').value = state.codeView === 'pcode' ? 'pcode' : 'scripts';
+        toggleFind(true);
+        if ($('find-text').value) $('find').requestSubmit();
+    }
+});
+new MutationObserver(syncFind).observe($('preview'), { childList: true });
+
 // ---- search ----
+
+let lastSearch = null;
 
 function toggleFind(show = $('find').hidden) {
     $('find').hidden = !show;
@@ -1138,6 +1305,11 @@ function showHit(li) {
     }
     const key = revealNode(doc, JSON.parse(li.dataset.hit));
     render();
+    if (lastSearch) {
+        if (lastSearch.mode !== 'texts') state.codeView = lastSearch.mode === 'pcode' ? 'pcode' : 'as';
+        state.tabPref = 'preview';
+        openCodeFind(lastSearch.text, lastSearch);
+    }
     $('find-results').querySelectorAll('li.active').forEach((x) => x.classList.remove('active'));
     li.classList.add('active');
     const sel = key && nodeIndex.get(key);
@@ -1152,6 +1324,7 @@ $('find').addEventListener('submit', async (e) => {
     const swfs = state.docs.filter((d) => d.kind !== 'sol');
     const docs = $('find-all').checked ? swfs : [selectedDoc() || swfs[0]].filter((d) => d && d.kind !== 'sol');
     const out = [];
+    lastSearch = { text, mode, matchCase: $('find-case').checked, regex: $('find-regex').checked };
     status(`Searching for "${text}"…`);
     for (const doc of docs) {
         const hits = await call('search', { id: doc.id, text, ignoreCase: !$('find-case').checked, regex: $('find-regex').checked, pcode: mode === 'pcode', texts: mode === 'texts' }).catch(() => null);
@@ -1178,12 +1351,17 @@ $('find').addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+    if (e.key === 'F3' && codeFind.open) {
+        e.preventDefault();
+        refreshFind(e.shiftKey ? -1 : 1);
+        return;
+    }
     if (!e.ctrlKey) return;
     if (e.key === 'o') openDialog();
     else if (e.key.toLowerCase() === 's' && e.shiftKey) { if (selectedDoc()) $('btn-save-as').click(); }
     else if (e.key === 's') saveSelected();
     else if (e.key.toLowerCase() === 'f' && e.shiftKey) { if (state.docs.length) toggleFind(true); }
-    else if (e.key === 'f') $('filter').focus();
+    else if (e.key === 'f') { if (findTarget()) openCodeFind(); else $('filter').focus(); }
     else return;
     e.preventDefault();
 });
