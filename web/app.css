@@ -12,6 +12,13 @@
     --focus: #ea580c;
     --hex-offset: #8a6d3b;
     --warn: #a15c00;
+    --syn-keyword: #8a2fb8;
+    --syn-type: #0e7490;
+    --syn-function: #1d4ed8;
+    --syn-string: #2f7d32;
+    --syn-number: #a14d00;
+    --syn-comment: #6b7380;
+    --syn-regex: #b4233c;
     --mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
     --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     color-scheme: light;
@@ -32,6 +39,15 @@
         --focus: #fb923c;
         --hex-offset: #c9a86a;
         --warn: #f0b252;
+        --syn-keyword: #c792ea;
+        --syn-type: #56c7d4;
+        --syn-function: #7aa9f5;
+        --syn-string: #9ccc7a;
+        --syn-number: #e2a36a;
+        --syn-comment: #7d8692;
+        --syn-regex: #f07b8c;
+        --find-hit: #5c4a12;
+        --find-current: #b7791f;
         color-scheme: dark;
     }
 }
@@ -356,3 +372,11 @@ mark { background: none; color: var(--accent); font-weight: 650; }
     border-radius: 6px;
     tab-size: 3;
 }
+.tk-keyword { color: var(--syn-keyword); }
+.tk-type { color: var(--syn-type); }
+.tk-function { color: var(--syn-function); }
+.tk-string { color: var(--syn-string); }
+.tk-number { color: var(--syn-number); }
+.tk-comment { color: var(--syn-comment); font-style: italic; }
+.tk-regex { color: var(--syn-regex); }
+

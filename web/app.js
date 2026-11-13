@@ -434,7 +434,7 @@ async function showSol(sel, doc) {
     const el = $('preview');
     $('preview-note').textContent = 'Variables as AMF text';
     el.innerHTML = '<div class="code-bar"><button class="btn" data-act="edit" title="Edit the variables">Edit</button></div>'
-        + `<pre class="code-view">${esc(info.text)}</pre>`;
+        + `<pre class="code-view">${colourCode(info.text, false)}</pre>`;
     el.querySelector('[data-act="edit"]').addEventListener('click', () => editInPlace(el, {
         title: 'Editing variables',
         label: 'AMF text',
@@ -481,6 +481,77 @@ function textEditButton(el) {
     el.querySelector('[data-act="edit-text"]').addEventListener('click', () => openTextEditor(el));
 }
 
+// ---- syntax colouring ----
+
+const AS_KEYWORDS = new Set(('as break case catch class const continue default delete do dynamic else extends false final finally for '
+    + 'function if implements import in instanceof interface internal is namespace native new null override package private protected '
+    + 'public return static super switch this throw true try typeof undefined use var void while with').split(' '));
+const AS_TYPE_AFTER = new Set(['class', 'interface']);
+const AS_REGEX_AFTER = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^', 'return', 'typeof', 'in', 'case']);
+const AS_TOKEN = /(\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)|(0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|([A-Za-z_$][\w$]*|§(?:[^§\\\n]|\\.)*§)|(\s+)|([\s\S])/y;
+const AS_REGEX = /\/(?:[^/\\\n[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[a-z]*/y;
+const PCODE_TOKEN = /(;[^\n]*)|("(?:[^"\\\n]|\\.)*"?)|(-?(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?))|([A-Za-z_$][\w$]*)|(\s+)|([\s\S])/y;
+const COLOUR_LIMIT = 4_000_000;
+
+// HTML for ActionScript or p-code with a span around each coloured token.
+function colourCode(text, pcode) {
+    if (text.length > COLOUR_LIMIT) return esc(text);
+    const out = [];
+    const put = (cls, s) => out.push(cls ? `<span class="tk-${cls}">${esc(s)}</span>` : esc(s));
+    let i = 0;
+    let prev = '';
+    let prev2 = '';
+    let lineStart = true;
+    const re = pcode ? PCODE_TOKEN : AS_TOKEN;
+    while (i < text.length) {
+        if (!pcode && text[i] === '/' && (prev === '' || AS_REGEX_AFTER.has(prev)) && text[i + 1] !== '/' && text[i + 1] !== '*') {
+            AS_REGEX.lastIndex = i;
+            const r = AS_REGEX.exec(text);
+            if (r) {
+                put('regex', r[0]);
+                i = AS_REGEX.lastIndex;
+                prev2 = prev;
+                prev = 'regex';
+                continue;
+            }
+        }
+        re.lastIndex = i;
+        const m = re.exec(text);
+        const tok = m[0];
+        i = re.lastIndex;
+        if (m[5]) {
+            put('', tok);
+            if (tok.includes('\n')) lineStart = true;
+            continue;
+        }
+        let cls = '';
+        if (m[1]) cls = 'comment';
+        else if (m[2]) cls = 'string';
+        else if (m[3]) cls = 'number';
+        else if (m[4] && pcode) {
+            if (text[i] === ':' && lineStart) cls = 'function';
+            else if (lineStart) cls = 'keyword';
+            else if (/^(true|false|null|undefined|NaN|register\d+)$/.test(tok)) cls = 'number';
+            else if (/^[A-Z]/.test(tok)) cls = 'type';
+        } else if (m[4]) {
+            const member = prev === '.';
+            if (!member && AS_KEYWORDS.has(tok)) cls = 'keyword';
+            else if (!member && (tok === 'get' || tok === 'set') && prev === 'function') cls = 'keyword';
+            else if (!member && tok === 'each' && prev === 'for') cls = 'keyword';
+            else if (prev === 'function' || ((prev === 'get' || prev === 'set') && prev2 === 'function')) cls = 'function';
+            else if (/^[A-Z]/.test(tok) || tok === 'int' || tok === 'uint' || AS_TYPE_AFTER.has(prev)) cls = 'type';
+            else if (/^\s*\(/.test(text.slice(i, i + 8))) cls = 'function';
+        }
+        put(cls, tok);
+        lineStart = false;
+        if (!m[1]) {
+            prev2 = prev;
+            prev = m[4] || m[6] || (m[2] ? 'string' : 'number');
+        }
+    }
+    return out.join('');
+}
+
 // Decompiled ActionScript, which compiles back when edited, with a switch to p-code, which can
 // be edited too: AS1/2 scripts whole, AS3 scripts one method at a time.
 async function renderCode(el, info) {
@@ -502,7 +573,7 @@ async function renderCode(el, info) {
         + methods.map((m) => `<option${m === state.method ? ' selected' : ''}>${esc(m)}</option>`).join('') + '</select>' : '';
     const edit = editable ? `<button class="btn" data-act="edit" title="Edit this ${pcode ? 'p-code' : 'ActionScript'}">Edit</button>` : '';
     const hint = pcode && methods.length && !editable ? '<span class="code-hint">Pick a method to edit it.</span>' : '';
-    el.innerHTML = `<div class="code-bar">${seg}${pick}${edit}${hint}</div><pre class="code-view">${esc(text)}</pre>`;
+    el.innerHTML = `<div class="code-bar">${seg}${pick}${edit}${hint}</div><pre class="code-view">${colourCode(text, pcode)}</pre>`;
     el.querySelectorAll('.seg-btn').forEach((b) => b.addEventListener('click', () => {
         state.codeView = b.dataset.view;
         renderCode(el, info);
