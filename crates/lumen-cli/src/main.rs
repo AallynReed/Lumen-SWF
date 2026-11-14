@@ -150,6 +150,19 @@ With a Flex SDK (FLEX_HOME, or +flexlib=<sdk>/frameworks) the SDK's flex-config.
         #[arg(long)]
         chars: Option<String>,
     },
+    /// Add a new AS3 class (or other definition) by full name, compiled from ActionScript
+    #[command(after_help = "Examples:
+  lumen-swf-cli add-script in.swf out.swf ui.Panel Panel.as
+  lumen-swf-cli add-script in.swf out.swf Helper Helper.as --tag 12")]
+    AddScript {
+        input: PathBuf,
+        output: PathBuf,
+        name: String,
+        source: PathBuf,
+        /// The DoABC tag to add it to, by path such as 12; by default the one with the most scripts
+        #[arg(long)]
+        tag: Option<String>,
+    },
     /// List the SWFs in a ZIP, SWC or any other file, or extract them into OUTDIR
     #[command(after_help = "Examples:
   lumen-swf-cli bundle game.exe
@@ -781,6 +794,13 @@ fn main() -> Result<()> {
             } else {
                 return Err(anyhow!("no character or script '{target}'"));
             }
+            save(&swf, &output)?;
+        }
+        Cmd::AddScript { input, output, name, source, tag } => {
+            let mut swf = open(&input)?;
+            let bytes = std::fs::read(&source).with_context(|| format!("reading {}", source.display()))?;
+            let tag = tag.map(|t| tree::parse_path(&t).ok_or_else(|| anyhow!("bad tag path '{t}'"))).transpose()?;
+            lumen::edit::add_as3_script(&mut swf, tag.as_deref(), &name, &String::from_utf8_lossy(&bytes)).map_err(|e| anyhow!("line {}: {}", e.line, e.message))?;
             save(&swf, &output)?;
         }
         Cmd::Bundle { file, outdir } => {

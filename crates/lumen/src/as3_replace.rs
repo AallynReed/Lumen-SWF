@@ -52,16 +52,6 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         _ => (String::new(), format!("script_{script}")),
     };
     let (package, name) = (names.to_placeholder(&package).unwrap_or(package), names.to_placeholder(&name).unwrap_or(name));
-
-    let root = std::env::temp_dir().join("lumen-as3");
-    let mut file = root.clone();
-    let mut shown = PathBuf::new();
-    for p in package.split('.').filter(|p| !p.is_empty()) {
-        file.push(p);
-        shown.push(p);
-    }
-    file.push(format!("{name}.as"));
-    shown.push(format!("{name}.as"));
     // The pack's classes are already bound to their symbols in this SWF, so a decompile's [Embed] on them is kept as it is.
     let keep_embedded: Vec<String> = pack
         .iter()
@@ -75,18 +65,44 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         })
         .collect();
     let plan = Plan::new(abc, script, &pack, simple)?;
+    let unit = compile_source(abcs, selected, &plan, source, &package, &name, keep_embedded, &names)?;
+    plan.link(script, &unit)
+}
+
+/// Compiles `text`, the new definition `package.name`, into a script added to `abcs[selected]` before its last script,
+/// the one the player runs when the ABC loads.
+pub fn add_script(abcs: &[Abc], selected: usize, text: &str, package: &str, name: &str) -> Result<Vec<u8>, ParseError> {
+    let abc = abcs.get(selected).ok_or_else(|| fail("not an ABC tag"))?;
+    let plan = Plan::whole(abc);
+    let unit = compile_source(abcs, selected, &plan, text.to_string(), package, name, Vec::new(), &Renames::default())?;
+    plan.link(abc.scripts.len().saturating_sub(1), &unit)
+}
+
+/// Compiles `source`, the file of `package.name`, against the plan's kept scripts and the SWF's other ABCs.
+#[allow(clippy::too_many_arguments)]
+fn compile_source(abcs: &[Abc], selected: usize, plan: &Plan, source: String, package: &str, name: &str, keep_embedded: Vec<String>, names: &Renames) -> Result<Abc, ParseError> {
+    let abc = &abcs[selected];
+    let root = std::env::temp_dir().join("lumen-as3");
+    let mut file = root.clone();
+    let mut shown = PathBuf::new();
+    for p in package.split('.').filter(|p| !p.is_empty()) {
+        file.push(p);
+        shown.push(p);
+    }
+    file.push(format!("{name}.as"));
+    shown.push(format!("{name}.as"));
     let opts = UnitOptions {
         source,
         path: file.clone(),
         root,
-        abcs: context(abcs, selected, plan.script_blocks(), &names),
+        abcs: context(abcs, selected, plan.script_blocks(), names),
         same_build: true,
         keep_embedded,
         several_definitions: true,
         app: ApplicationOptions { playerglobal: true, omit_trace_statements: !keeps_traces(abc), ..Default::default() },
         ..Default::default()
     };
-    let unit = compile_unit(&opts).map_err(|d| report(&d, &canonical_path(&file), &names.to_written(&shown.to_string_lossy()), &names))?;
+    let unit = compile_unit(&opts).map_err(|d| report(&d, &canonical_path(&file), &names.to_written(&shown.to_string_lossy()), names))?;
 
     let mut bytes = unit.abc;
     if !names.names.is_empty() {
@@ -98,8 +114,7 @@ pub fn replace_script(abcs: &[Abc], selected: usize, script: usize, trait_index:
         }
         bytes = a.to_bytes();
     }
-    let unit = optimize(bytes, &metadata_names(abc))?;
-    plan.link(script, &unit)
+    optimize(bytes, &metadata_names(abc))
 }
 
 /// Whether the ABC was built with trace calls kept: a `-debug` build, or code that still names `trace`.
@@ -363,6 +378,14 @@ impl Plan {
             _ => None,
         };
         Ok(Plan { base, kept, code, keep })
+    }
+
+    /// Every script kept, for a unit added beside them.
+    fn whole(abc: &Abc) -> Plan {
+        let dialect = Dialect::of(abc.major, abc.minor);
+        let code: Vec<Option<Vec<Instruction>>> = abc.bodies.iter().map(|b| decode(&b.code, dialect).ok()).collect();
+        let keep = Reach::of(abc, &code, abc.scripts.iter(), &[]).map(|(m, c)| (vec![true; m.len()], vec![true; c.len()]));
+        Plan { base: abc.clone(), kept: (0..abc.scripts.len()).collect(), code, keep }
     }
 
     /// The ABC without the replaced pack. When nothing can be renumbered the old definitions stay behind unreferenced.

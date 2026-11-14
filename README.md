@@ -89,6 +89,7 @@ lumen-swf-cli replace in.swf out.swf frame_1/DoAction script.pcode
 lumen-swf-cli replace in.swf out.swf com.example.Main Main.as
 lumen-swf-cli replace in.swf out.swf com.example.Main method.pcode --method foo
 lumen-swf-cli replace in.swf out.swf 12/3 body.bin --raw
+lumen-swf-cli add-script in.swf out.swf com.example.Helper Helper.as [--tag 12]
 lumen-swf-cli bundle game.exe [outdir]
 lumen-swf-cli mxmlc -load-config= -external-library-path=playerglobal.swc -target-player=11.2 -swf-version=15 -default-size 601 502 -default-frame-rate 24 -source-path src lib -output out.swf src/Main.as
 lumen-swf-cli swc movie.swf movie.swc [--no-deps]

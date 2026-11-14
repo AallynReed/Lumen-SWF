@@ -167,6 +167,32 @@ fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Re
     swf.set_abc_bytes(path, &abc).map_err(|e| fail(e.to_string()))
 }
 
+/// Compiles ActionScript defining `name` (a full name such as `ui.Panel`) as a new script of the ABC tag at `path`,
+/// by default the one with the most scripts. Returns that tag's path.
+pub fn add_as3_script(swf: &mut Swf, path: Option<&[usize]>, name: &str, text: &str) -> Result<Vec<usize>, ParseError> {
+    let mut abcs = Vec::new();
+    let mut paths: Vec<Vec<usize>> = Vec::new();
+    swf.walk(|p, tag| {
+        if let Some((d, _)) = crate::abc::tag_abc(tag) {
+            if let Ok(a) = Abc::parse(d) {
+                abcs.push(a);
+                paths.push(p.to_vec());
+            }
+        }
+    });
+    let sel = match path {
+        Some(path) => paths.iter().position(|p| p == path).ok_or_else(|| fail("not an ABC tag"))?,
+        None => (0..abcs.len()).rev().max_by_key(|&i| abcs[i].scripts.len()).ok_or_else(|| fail("the file has no AS3 code"))?,
+    };
+    if abcs.iter().any(|a| entries(a).iter().any(|e| e.full_name() == name)) {
+        return Err(fail(format!("{name} is already defined; replace its script instead")));
+    }
+    let (package, local) = name.rsplit_once('.').unwrap_or(("", name));
+    let abc = crate::as3_replace::add_script(&abcs, sel, text, package, local)?;
+    swf.set_abc_bytes(&paths[sel], &abc).map_err(|e| fail(e.to_string()))?;
+    Ok(paths[sel].clone())
+}
+
 /// The editable text of a text tag: formatted text for DefineText/2, the initial text
 /// (HTML when the field is HTML) for DefineEditText. None for other tags.
 pub fn text_source(swf: &Swf, path: &[usize]) -> Result<Option<String>, ParseError> {
