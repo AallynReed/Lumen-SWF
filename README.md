@@ -1,5 +1,7 @@
 # Lumen-SWF
 
+[![Discord](https://img.shields.io/badge/Discord-Foxhearth-5865F2?logo=discord&logoColor=white)](https://discord.gg/mE6MjKxBDf)
+
 A Flash SWF decompiler and editor written in Rust, shipped as a standalone Windows installer. No Java required.
 
 Opens, inspects, edits and re-saves SWF files: asset export, rendering, ActionScript 1/2 and 3 decompiling and compiling, p-code editing, SWC/ZIP bundles, XFL/FLA and SWC export, Iggy files and AMF/shared objects.
