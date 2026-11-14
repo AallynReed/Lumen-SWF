@@ -152,7 +152,10 @@ fn set_as3_source(swf: &mut Swf, path: &[usize], script: &str, text: &str) -> Re
     });
     let sel = paths.iter().position(|p| p == path).ok_or_else(|| fail("not an ABC tag"))?;
     let entry = entries(&abcs[sel]).into_iter().find(|e| e.script == s && e.trait_index == t);
+    // Only `Name$hex-digits` identifiers are printed renamed, so most files skip decompiling the pack again.
+    let renamed = abcs.iter().any(|a| a.constants.strings.iter().any(|s| s.contains('$') && s.contains('-')));
     let renames = match &entry {
+        Some(_) if !renamed => Vec::new(),
         Some(e) => {
             let index = crate::abc::decomp::index::AbcIndex::for_abcs(&abcs.iter().collect::<Vec<_>>());
             crate::abc::decomp::entry_renames(&index, &abcs[sel], e, &crate::abc::decomp::SwfContext::of(swf))

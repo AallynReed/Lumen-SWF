@@ -7,11 +7,12 @@
 //! existing scripts carry none, as `PostLink` leaves them; anything else gets the unit appended without touching the
 //! other scripts.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::abc::opcodes::{decode, Dialect, Instruction, Operand};
-use crate::abc::{method_flags, ns_kind, Abc, Exception, Multiname, Namespace, Script, Trait, TraitData, ValueKind};
+use crate::abc::{method_flags, ns_kind, Abc, Constants, Exception, Multiname, Namespace, Script, Trait, TraitData, ValueKind};
 use crate::action::asm::ParseError;
 use crate::asc::flex2::compiler::abc_library;
 use crate::asc::flex2::compiler::source::canonical_path;
@@ -386,11 +387,13 @@ impl Plan {
             let Some((m, c)) = self.keep.as_ref().and_then(|_| Reach::of(&self.base, &self.code, std::iter::once(&self.base.scripts[s]), &[])) else {
                 return vec![self.kept_abc()];
             };
-            let block = subset(&self.base, &[s], &m, &c, dialect);
+            let block = subset_compact(&self.base, &[s], &m, &c, dialect);
             let keep = metadata_names(&block);
             let mut one = vec![DoAbc { name: String::new(), flag: 1, abc: block.to_bytes() }];
             post_link::merge(&mut one, false, false, "block", &keep);
-            out.push(if one[0].name == "block" { Abc::parse(&one[0].abc).unwrap_or(block) } else { block });
+            // A block the encoder rejects is kept as it was before compacting.
+            let merged = (one[0].name == "block").then(|| Abc::parse(&one[0].abc).ok()).flatten();
+            out.push(merged.unwrap_or_else(|| subset(&self.base, &[s], &m, &c, dialect)));
         }
         out
     }
@@ -618,29 +621,35 @@ fn is_ns_value(kind: u8) -> bool {
     matches!(kind, 0x05 | 0x08 | 0x16..=0x1a)
 }
 
-fn index_map(keep: &[bool]) -> Vec<Option<usize>> {
-    let mut next = 0;
-    keep.iter()
-        .map(|&k| {
-            k.then(|| {
-                next += 1;
-                next - 1
-            })
-        })
-        .collect()
-}
-
 /// The ABC with only `scripts` and the kept methods and classes, renumbered in their order. Constants and metadata
 /// are copied whole; the encoder writes only what is used.
 fn subset(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialect: Dialect) -> Abc {
-    let mmap = index_map(keep_m);
-    let cmap = index_map(keep_c);
-    let m = |i: usize| mmap.get(i).copied().flatten().unwrap_or(i);
+    let mut out = subset_shape(abc, scripts, keep_m, keep_c, dialect);
+    out.constants = abc.constants.clone();
+    out
+}
+
+/// `subset` with only the constants it uses, so that splitting a large ABC into its scripts does not copy its
+/// whole constant pool once per script.
+fn subset_compact(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialect: Dialect) -> Abc {
+    let mut out = subset_shape(abc, scripts, keep_m, keep_c, dialect);
+    compact(&mut out, &abc.constants, dialect);
+    out
+}
+
+/// `subset` without constants: its indexes still point into `abc`'s pools.
+fn subset_shape(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialect: Dialect) -> Abc {
+    // Kept indexes in order, so that splitting a large ABC into its scripts only touches what each one keeps.
+    let kept = |keep: &[bool]| -> Vec<usize> { keep.iter().enumerate().filter(|(_, k)| **k).map(|(i, _)| i).collect() };
+    let (km, kc) = (kept(keep_m), kept(keep_c));
+    let mm = |i: usize| km.binary_search(&i).ok();
+    let cm = |i: usize| kc.binary_search(&i).ok();
+    let m = |i: usize| mm(i).unwrap_or(i);
     let fix = |ts: &[Trait]| -> Vec<Trait> {
         let mut ts = ts.to_vec();
         for t in &mut ts {
             match &mut t.data {
-                TraitData::Class { class, .. } => *class = cmap.get(*class).copied().flatten().unwrap_or(*class),
+                TraitData::Class { class, .. } => *class = cm(*class).unwrap_or(*class),
                 TraitData::Method { method, .. } | TraitData::Getter { method, .. } | TraitData::Setter { method, .. } | TraitData::Function { method, .. } => *method = m(*method),
                 _ => {}
             }
@@ -650,8 +659,8 @@ fn subset(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialec
     let mut out = Abc {
         minor: abc.minor,
         major: abc.major,
-        constants: abc.constants.clone(),
-        methods: abc.methods.iter().zip(keep_m).filter(|(_, k)| **k).map(|(x, _)| x.clone()).collect(),
+        constants: Default::default(),
+        methods: km.iter().map(|&i| abc.methods[i].clone()).collect(),
         metadata: abc.metadata.clone(),
         instances: Vec::new(),
         classes: Vec::new(),
@@ -659,7 +668,7 @@ fn subset(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialec
         bodies: Vec::new(),
         body_of: Vec::new(),
     };
-    for (c, _) in keep_c.iter().enumerate().filter(|(_, k)| **k) {
+    for &c in &kc {
         let mut i = abc.instances[c].clone();
         i.iinit = m(i.iinit);
         i.traits = fix(&i.traits);
@@ -669,13 +678,15 @@ fn subset(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialec
         cl.traits = fix(&cl.traits);
         out.classes.push(cl);
     }
-    for b in abc.bodies.iter().filter(|b| keep_m.get(b.method).copied().unwrap_or(false)) {
-        let mut b = b.clone();
+    let mut bodies: Vec<usize> = km.iter().filter_map(|&i| abc.body_of.get(i).copied().flatten()).collect();
+    bodies.sort_unstable();
+    for bi in bodies {
+        let mut b = abc.bodies[bi].clone();
         b.method = m(b.method);
         b.traits = fix(&b.traits);
         remap_code(&mut b, dialect, &|kind, v| match kind {
-            Operand::MethodIndex => mmap.get(v as usize).copied().flatten().map(|x| x as i64),
-            Operand::ClassIndex => cmap.get(v as usize).copied().flatten().map(|x| x as i64),
+            Operand::MethodIndex => mm(v as usize).map(|x| x as i64),
+            Operand::ClassIndex => cm(v as usize).map(|x| x as i64),
             _ => None,
         });
         out.bodies.push(b);
@@ -687,6 +698,167 @@ fn subset(abc: &Abc, scripts: &[usize], keep_m: &[bool], keep_c: &[bool], dialec
         }
     }
     out
+}
+
+#[derive(Clone, Copy)]
+enum Ref {
+    Str,
+    Int,
+    Uint,
+    Double,
+    Float,
+    Decimal,
+    Ns,
+    Mn,
+}
+
+/// Replaces every constant index `abc` holds with what `f` returns for it. Multinames, namespace sets and namespaces
+/// are not followed into the pools.
+fn map_refs(abc: &mut Abc, dialect: Dialect, f: &dyn Fn(Ref, usize) -> usize) {
+    let decimal = abc.minor >= 17;
+    let value = |v: &mut ValueKind| {
+        let r = match v.kind {
+            0x01 => Ref::Str,
+            0x02 if decimal => Ref::Decimal,
+            0x02 => Ref::Float,
+            0x03 => Ref::Int,
+            0x04 => Ref::Uint,
+            0x06 => Ref::Double,
+            k if is_ns_value(k) => Ref::Ns,
+            _ => return,
+        };
+        v.index = f(r, v.index);
+    };
+    let traits = |ts: &mut [Trait]| {
+        for t in ts {
+            t.name = f(Ref::Mn, t.name);
+            if let TraitData::Slot { type_name, value: v, .. } | TraitData::Const { type_name, value: v, .. } = &mut t.data {
+                *type_name = f(Ref::Mn, *type_name);
+                if let Some(v) = v {
+                    value(v);
+                }
+            }
+        }
+    };
+    for m in &mut abc.methods {
+        m.return_type = f(Ref::Mn, m.return_type);
+        m.param_types.iter_mut().for_each(|t| *t = f(Ref::Mn, *t));
+        m.name = f(Ref::Str, m.name);
+        m.optional.iter_mut().for_each(value);
+        m.param_names.iter_mut().for_each(|n| *n = f(Ref::Str, *n));
+    }
+    for md in &mut abc.metadata {
+        md.name = f(Ref::Str, md.name);
+        md.keys.iter_mut().chain(md.values.iter_mut()).for_each(|k| *k = f(Ref::Str, *k));
+    }
+    for i in &mut abc.instances {
+        i.name = f(Ref::Mn, i.name);
+        i.super_name = f(Ref::Mn, i.super_name);
+        i.protected_ns = f(Ref::Ns, i.protected_ns);
+        i.interfaces.iter_mut().for_each(|n| *n = f(Ref::Mn, *n));
+        traits(&mut i.traits);
+    }
+    for c in &mut abc.classes {
+        traits(&mut c.traits);
+    }
+    for s in &mut abc.scripts {
+        traits(&mut s.traits);
+    }
+    for b in &mut abc.bodies {
+        traits(&mut b.traits);
+        for e in &mut b.exceptions {
+            e.type_name = f(Ref::Mn, e.type_name);
+            e.var_name = f(Ref::Mn, e.var_name);
+        }
+        remap_code(b, dialect, &|kind, v| {
+            let r = match kind {
+                Operand::StringIndex => Ref::Str,
+                Operand::IntIndex => Ref::Int,
+                Operand::UintIndex => Ref::Uint,
+                Operand::DoubleIndex => Ref::Double,
+                Operand::FloatIndex => Ref::Float,
+                Operand::DecimalIndex => Ref::Decimal,
+                Operand::NamespaceIndex => Ref::Ns,
+                Operand::MultinameIndex => Ref::Mn,
+                _ => return None,
+            };
+            Some(f(r, v as usize) as i64)
+        });
+    }
+}
+
+/// Gives `abc`, whose indexes point into `pool`, its own pools with only the constants it uses, in `pool`'s order.
+fn compact(abc: &mut Abc, pool: &Constants, dialect: Dialect) {
+    let used: RefCell<[Vec<usize>; 8]> = RefCell::default();
+    map_refs(abc, dialect, &|r, i| {
+        if i != 0 {
+            used.borrow_mut()[r as usize].push(i);
+        }
+        i
+    });
+    let mut used = used.into_inner();
+    let mut sets = Vec::new();
+    let mut todo = std::mem::take(&mut used[Ref::Mn as usize]);
+    let mut seen = HashSet::new();
+    while let Some(m) = todo.pop() {
+        if m == 0 || !seen.insert(m) {
+            continue;
+        }
+        used[Ref::Mn as usize].push(m);
+        match pool.multinames.get(m) {
+            Some(Multiname::QName { ns, name, .. }) => {
+                used[Ref::Ns as usize].push(*ns);
+                used[Ref::Str as usize].push(*name);
+            }
+            Some(Multiname::RtqName { name, .. }) => used[Ref::Str as usize].push(*name),
+            Some(Multiname::Multiname { name, ns_set, .. }) => {
+                used[Ref::Str as usize].push(*name);
+                sets.push(*ns_set);
+            }
+            Some(Multiname::MultinameL { ns_set, .. }) => sets.push(*ns_set),
+            Some(Multiname::TypeName { name, params }) => {
+                todo.push(*name);
+                todo.extend(params);
+            }
+            _ => {}
+        }
+    }
+    sets.sort_unstable();
+    sets.dedup();
+    sets.retain(|&s| s != 0 && s < pool.ns_sets.len());
+    used[Ref::Ns as usize].extend(sets.iter().flat_map(|&s| pool.ns_sets[s].iter().copied()));
+    let ns_names: Vec<usize> = used[Ref::Ns as usize].iter().filter_map(|&n| pool.namespaces.get(n).map(|n| n.name)).collect();
+    used[Ref::Str as usize].extend(ns_names);
+    let lens = [pool.strings.len(), pool.ints.len(), pool.uints.len(), pool.doubles.len(), pool.floats.len(), pool.decimals.len(), pool.namespaces.len(), pool.multinames.len()];
+    for (u, len) in used.iter_mut().zip(lens) {
+        u.retain(|&i| i != 0 && i < len);
+        u.sort_unstable();
+        u.dedup();
+    }
+    let at = |r: Ref, i: usize| used[r as usize].binary_search(&i).map_or(0, |p| p + 1);
+    let set_at = |i: usize| sets.binary_search(&i).map_or(0, |p| p + 1);
+    let take = |r: Ref| used[r as usize].iter().copied();
+    let mut c = Constants::default();
+    c.strings = pool.strings.first().cloned().into_iter().chain(take(Ref::Str).map(|i| pool.strings[i].clone())).collect();
+    c.ints = pool.ints.first().copied().into_iter().chain(take(Ref::Int).map(|i| pool.ints[i])).collect();
+    c.uints = pool.uints.first().copied().into_iter().chain(take(Ref::Uint).map(|i| pool.uints[i])).collect();
+    c.doubles = pool.doubles.first().copied().into_iter().chain(take(Ref::Double).map(|i| pool.doubles[i])).collect();
+    c.floats = pool.floats.first().copied().into_iter().chain(take(Ref::Float).map(|i| pool.floats[i])).collect();
+    c.decimals = pool.decimals.first().copied().into_iter().chain(take(Ref::Decimal).map(|i| pool.decimals[i])).collect();
+    c.namespaces = pool.namespaces.first().copied().into_iter().chain(take(Ref::Ns).map(|i| Namespace { kind: pool.namespaces[i].kind, name: at(Ref::Str, pool.namespaces[i].name) })).collect();
+    c.ns_sets = pool.ns_sets.first().cloned().into_iter().chain(sets.iter().map(|&s| pool.ns_sets[s].iter().map(|&n| at(Ref::Ns, n)).collect())).collect();
+    c.multinames = pool.multinames.first().cloned().into_iter()
+        .chain(take(Ref::Mn).map(|i| match &pool.multinames[i] {
+            Multiname::QName { attr, ns, name } => Multiname::QName { attr: *attr, ns: at(Ref::Ns, *ns), name: at(Ref::Str, *name) },
+            Multiname::RtqName { attr, name } => Multiname::RtqName { attr: *attr, name: at(Ref::Str, *name) },
+            Multiname::RtqNameL { attr } => Multiname::RtqNameL { attr: *attr },
+            Multiname::Multiname { attr, name, ns_set } => Multiname::Multiname { attr: *attr, name: at(Ref::Str, *name), ns_set: set_at(*ns_set) },
+            Multiname::MultinameL { attr, ns_set } => Multiname::MultinameL { attr: *attr, ns_set: set_at(*ns_set) },
+            Multiname::TypeName { name, params } => Multiname::TypeName { name: at(Ref::Mn, *name), params: params.iter().map(|&p| at(Ref::Mn, p)).collect() },
+        }))
+        .collect();
+    map_refs(abc, dialect, &|r, i| at(r, i));
+    abc.constants = c;
 }
 
 /// Finds or adds constants of another ABC; private namespaces are always added.
