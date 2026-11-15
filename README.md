@@ -1,12 +1,30 @@
-<p align="center"><img src="src-tauri/icons/icon.png" width="128" alt="Lumen-SWF icon"></p>
+<div align="center">
+
+<img src="src-tauri/icons/icon.png" width="128" alt="Lumen-SWF icon">
 
 # Lumen-SWF
 
-[![Discord](https://img.shields.io/badge/Discord-Foxhearth-5865F2?logo=discord&logoColor=white)](https://discord.gg/mE6MjKxBDf)
-[![Release](https://img.shields.io/github/v/release/AallynReed/Lumen-SWF)](https://github.com/AallynReed/Lumen-SWF/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/AallynReed/Lumen-SWF/total)](https://github.com/AallynReed/Lumen-SWF/releases)
-[![License](https://img.shields.io/github/license/AallynReed/Lumen-SWF)](LICENSE)
-[![foxhearth.com](https://img.shields.io/badge/foxhearth.com-project_page-e8702a)](https://foxhearth.com/projects/lumen-swf)
+<!-- Project status -->
+[![GitHub Release](https://img.shields.io/github/v/release/AallynReed/Lumen-SWF?style=for-the-badge&color=blue&cacheSeconds=21600)](https://github.com/AallynReed/Lumen-SWF/releases/latest)
+![GitHub Repo stars](https://img.shields.io/github/stars/AallynReed/Lumen-SWF?style=for-the-badge&color=gold&cacheSeconds=21600)
+[![GitHub Downloads](https://img.shields.io/github/downloads/AallynReed/Lumen-SWF/total?style=for-the-badge&cacheSeconds=21600)](https://github.com/AallynReed/Lumen-SWF/releases)
+![GitHub last commit](https://img.shields.io/github/last-commit/AallynReed/Lumen-SWF?style=for-the-badge&color=green&cacheSeconds=21600)
+![GitHub issues](https://img.shields.io/github/issues/AallynReed/Lumen-SWF?style=for-the-badge&cacheSeconds=21600)
+
+<!-- Platforms -->
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+
+<!-- Tech stack -->
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri_2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)
+
+<!-- Project meta -->
+![License](https://img.shields.io/badge/License-GPL--3.0-8A2BE2?style=for-the-badge)
+[![Discord](https://img.shields.io/badge/Discord-Foxhearth-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mE6MjKxBDf)
+[![foxhearth.com](https://img.shields.io/badge/foxhearth.com-project_page-E8702A?style=for-the-badge)](https://foxhearth.com/projects/lumen-swf)
+
+</div>
 
 A Flash SWF decompiler and editor written in Rust, shipped as a standalone Windows installer. No Java required.
 
