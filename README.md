@@ -3,6 +3,10 @@
 # Lumen-SWF
 
 [![Discord](https://img.shields.io/badge/Discord-Foxhearth-5865F2?logo=discord&logoColor=white)](https://discord.gg/mE6MjKxBDf)
+[![Release](https://img.shields.io/github/v/release/AallynReed/Lumen-SWF)](https://github.com/AallynReed/Lumen-SWF/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/AallynReed/Lumen-SWF/total)](https://github.com/AallynReed/Lumen-SWF/releases)
+[![License](https://img.shields.io/github/license/AallynReed/Lumen-SWF)](LICENSE)
+[![foxhearth.com](https://img.shields.io/badge/foxhearth.com-project_page-e8702a)](https://foxhearth.com/projects/lumen-swf)
 
 A Flash SWF decompiler and editor written in Rust, shipped as a standalone Windows installer. No Java required.
 
