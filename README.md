@@ -1,3 +1,5 @@
+<p align="center"><img src="src-tauri/icons/icon.png" width="128" alt="Lumen-SWF icon"></p>
+
 # Lumen-SWF
 
 [![Discord](https://img.shields.io/badge/Discord-Foxhearth-5865F2?logo=discord&logoColor=white)](https://discord.gg/mE6MjKxBDf)
