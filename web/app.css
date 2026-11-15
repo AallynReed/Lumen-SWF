@@ -21,6 +21,7 @@
     --syn-regex: #b4233c;
     --find-hit: #fde68a;
     --find-current: #f59e0b;
+    --heart: #db2777;
     --mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
     --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     color-scheme: light;
@@ -50,6 +51,7 @@
         --syn-regex: #f07b8c;
         --find-hit: #5c4a12;
         --find-current: #b7791f;
+        --heart: #f472b6;
         color-scheme: dark;
     }
 }
@@ -116,6 +118,10 @@ button { font: inherit; color: inherit; }
 }
 .menu label { display: flex; gap: 8px; align-items: center; padding: 3px 2px; cursor: pointer; }
 .menu-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 2px 4px; }
+.menu.right { left: auto; right: 0; min-width: 180px; }
+.btn.icon-text { display: inline-flex; align-items: center; gap: 6px; }
+.btn.support svg { color: var(--heart); transition: transform .15s; }
+.btn.support:hover svg { transform: scale(1.12); }
 .menu-sep { height: 1px; background: var(--border); margin: 6px 0; }
 
 .seg { display: flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }

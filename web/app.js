@@ -906,6 +906,7 @@ $('btn-save-as').addEventListener('click', async (e) => {
         return;
     }
     $('export-menu').hidden = true;
+    $('support-menu').hidden = true;
     $('save-menu').hidden = !$('save-menu').hidden;
 });
 
@@ -928,8 +929,23 @@ document.addEventListener('click', (e) => {
         $('save-menu').hidden = true;
         $('export-menu').hidden = true;
         $('deob-menu').hidden = true;
+        $('support-menu').hidden = true;
     }
 });
+
+$('btn-discord').addEventListener('click', () => call('open_link', { name: 'discord' }).catch(() => {}));
+$('btn-support').addEventListener('click', () => {
+    $('save-menu').hidden = true;
+    $('export-menu').hidden = true;
+    $('deob-menu').hidden = true;
+    $('support-menu').hidden = !$('support-menu').hidden;
+});
+for (const b of document.querySelectorAll('[data-link]')) {
+    b.addEventListener('click', () => {
+        $('support-menu').hidden = true;
+        call('open_link', { name: b.dataset.link }).catch(() => {});
+    });
+}
 
 $('btn-save-go').addEventListener('click', async () => {
     $('save-menu').hidden = true;
@@ -1031,6 +1047,7 @@ $('btn-export-all').addEventListener('click', (e) => {
     e.stopPropagation();
     $('save-menu').hidden = true;
     $('deob-menu').hidden = true;
+    $('support-menu').hidden = true;
     $('export-menu').hidden = !$('export-menu').hidden;
 });
 
@@ -1051,6 +1068,7 @@ $('btn-deob').addEventListener('click', (e) => {
     e.stopPropagation();
     $('save-menu').hidden = true;
     $('export-menu').hidden = true;
+    $('support-menu').hidden = true;
     $('deob-menu').hidden = !$('deob-menu').hidden;
 });
 

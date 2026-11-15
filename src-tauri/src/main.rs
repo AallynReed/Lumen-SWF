@@ -763,6 +763,27 @@ async fn confirm_discard(app: tauri::AppHandle, name: String) -> bool {
     discard_dialog(&app, &name).blocking_show()
 }
 
+#[tauri::command]
+fn open_link(name: String) -> Res<()> {
+    let url = match name.as_str() {
+        "discord" => "https://discord.gg/mE6MjKxBDf",
+        "kofi" => "https://ko-fi.com/aallyn",
+        "paypal" => "https://paypal.me/waterin",
+        _ => return Err("unknown link".into()),
+    };
+    #[cfg(windows)]
+    let mut c = std::process::Command::new("rundll32");
+    #[cfg(windows)]
+    c.args(["url.dll,FileProtocolHandler", url]);
+    #[cfg(target_os = "macos")]
+    let mut c = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut c = std::process::Command::new("xdg-open");
+    #[cfg(not(windows))]
+    c.arg(url);
+    c.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -802,7 +823,8 @@ fn main() {
             search,
             sol_info,
             apply_sol,
-            startup_files
+            startup_files,
+            open_link
         ])
         .run(tauri::generate_context!())
         .expect("error while running Lumen-SWF");
