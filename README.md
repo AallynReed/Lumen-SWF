@@ -50,6 +50,7 @@ Every feature is regression-tested on a corpus of 332 SWFs.
 - Previews of shapes, sprites, buttons, texts, images and sounds, with a frame player.
 - Play the whole file, edits included, in the bundled [Ruffle](https://ruffle.rs) player.
 - Search through ActionScript, p-code or texts, plain or by regular expression, across all open files.
+- ActionScript and p-code are coloured, with find in the open script (Ctrl+F).
 
 ### Export
 
@@ -74,6 +75,7 @@ Every feature is regression-tested on a corpus of 332 SWFs.
 - Redraw fonts from a TrueType or OpenType file and add characters.
 - Edit the SWF version, frame rate, stage size and background colour, and remove tags.
 - Edits stay in memory until saved, and the app asks before unsaved changes are lost.
+- AS3 edits stay quick in large SWFs.
 - Edited AS3 methods get stack, scope and register limits that fit their code, and AS3 code that would fail Flash Player's verifier is refused.
 - Compiling one class of a multi-class AS3 script leaves the rest of the script working, and Flex embed classes keep their names.
 - Re-imported static texts keep their letter spacing.
@@ -83,7 +85,7 @@ Every feature is regression-tested on a corpus of 332 SWFs.
 
 ## Download
 
-Grab the MSI from [Releases](https://github.com/AallynReed/Lumen-SWF/releases). Every push to `main` publishes a release.
+Grab the MSI from [Releases](https://github.com/AallynReed/Lumen-SWF/releases). The command-line tool comes for Windows and Linux. Every push to `main` publishes a release.
 
 ## Command line
 
